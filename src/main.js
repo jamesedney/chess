@@ -182,13 +182,13 @@ function openSettings() {
     applyTheme(e.target.value);
   };
   const pick = (attr, key) =>
-    document.querySelectorAll(`#modal [data-${attr}]`).forEach(
+    $$(`#modal [data-${attr}]`).forEach(
       b =>
         (b.onclick = () => {
           s.settings[key] = b.dataset[attr.replace(/-(.)/g, (_, c) => c.toUpperCase())];
           app.save();
           applySettings();
-          document.querySelectorAll(`#modal [data-${attr}]`).forEach(x => x.setAttribute('aria-checked', String(x === b)));
+          $$(`#modal [data-${attr}]`).forEach(x => x.setAttribute('aria-checked', String(x === b)));
           redrawBehindModal();
         }),
     );
@@ -277,7 +277,7 @@ function openSettings() {
 
 /** Swap the pieces on any board behind the settings dialog to the chosen set. */
 function redrawBehindModal() {
-  document.querySelectorAll('#main img[src*="pieces/"]').forEach(img => {
+  $$('#main img[src*="pieces/"]').forEach(img => {
     const m = img.getAttribute('src').match(/([wb])([KQRBNP])\.svg$/);
     if (m) img.src = pieceUrl(m[1], m[2].toLowerCase());
   });

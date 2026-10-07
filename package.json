@@ -9,7 +9,9 @@
     "start": "node tools/serve.mjs",
     "test": "node --test \"test/unit/*.test.mjs\"",
     "test:e2e": "playwright test",
-    "test:all": "npm test && npm run test:e2e",
+    "test:all": "npm run typecheck && npm test && npm run test:e2e",
+    "typecheck": "tsc -p tsconfig.json",
+    "test:browsers": "PW_ALL_BROWSERS=1 playwright test --project firefox --project safari --project iphone --project ipad",
     "puzzles:generate": "node tools/generate-puzzles.mjs --minutes 30",
     "puzzles:lichess": "node tools/import-lichess.mjs --download",
     "puzzles:build": "node tools/build-puzzles.mjs",
@@ -22,7 +24,8 @@
     "@playwright/test": "1.56.1",
     "chess.js": "1.4.0",
     "prettier": "3.9.9",
-    "stockfish": "17.1.0"
+    "stockfish": "17.1.0",
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=22.15"

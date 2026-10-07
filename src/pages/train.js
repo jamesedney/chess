@@ -3,7 +3,7 @@ import { Chess } from '../../vendor/chess.js';
 import { app } from '../app-context.js';
 import { engine, BUDGET } from '../engine.js';
 import { BoardView, turnLabel } from '../board.js';
-import { $, esc, choosePromotion, plural, showModal, closeModal, settle } from '../ui.js';
+import { $, $$, esc, choosePromotion, plural, showModal, closeModal, settle } from '../ui.js';
 import { schedule, choosePuzzle, dueCount, isMistake } from '../srs.js';
 import { updateRating, pushHistory, weakestTheme } from '../rating.js';
 import { judgeAlternative, rejectionMessage } from '../verify.js';
@@ -154,14 +154,14 @@ function openMenu() {
     </div>
     ${session.theme ? `<p class="small">Theme filter: ${esc(session.theme)}. Choosing a mode clears it.</p>` : ''}
     <div class="actions"><button type="button" id="menu-flip">⇅ Flip board</button><button type="button" id="menu-progress">See progress</button></div>`);
-  document.querySelectorAll('#modal [data-mode]').forEach(
+  $$('#modal [data-mode]').forEach(
     b =>
       (b.onclick = () => {
         closeModal();
         startSession(b.dataset.mode);
       }),
   );
-  document.querySelectorAll('#modal [data-drill]').forEach(
+  $$('#modal [data-drill]').forEach(
     b =>
       (b.onclick = () => {
         closeModal();

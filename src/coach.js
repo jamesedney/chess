@@ -109,6 +109,8 @@ const scaled = (base, level) => Math.max(1, Math.round(base * level));
  */
 export function buildPlan(state, diagnosis, week, level = 1) {
   const focusTheme = diagnosis.focus ? KINDS[diagnosis.focus].theme : weakTheme(state) || 'Tactics';
+  /** @typedef {{ id: string, label: string, detail?: string, metric: string, theme?: string, target: number, action: { page: string, params?: Record<string, string> } }} PlanItem */
+  /** @type {PlanItem[]} */
   const items = [
     {
       id: 'days',
@@ -146,6 +148,7 @@ export function buildPlan(state, diagnosis, week, level = 1) {
     target: scaled(2, level),
     action: { page: 'review' },
   });
+  /** @type {PlanItem} */
   const drill =
     diagnosis.weakPhase === 'endgame'
       ? {

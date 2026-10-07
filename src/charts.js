@@ -72,7 +72,12 @@ function attachReadout(wrap, { count, xAt, describe, onPick = null, width = W })
  * Line chart for one series of {date, value}.
  * Returns HTML; call `hydrate(root)` afterwards to enable the readout.
  */
-export function lineChart(id, points, { title, unit = '', height = 200 } = {}) {
+/**
+ * @param {string} id
+ * @param {{ date: string, value: number }[]} points
+ * @param {{ title?: string, unit?: string, height?: number }} [options]
+ */
+export function lineChart(id, points, { title = '', unit = '', height = 200 } = {}) {
   if (points.length < 2) {
     return `<p class="muted small">${esc(title)}: the trend appears after two days of data.</p>`;
   }

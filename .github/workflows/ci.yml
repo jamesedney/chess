@@ -19,6 +19,8 @@ jobs:
       - run: npm ci
       - name: Formatting
         run: npm run lint
+      - name: Type check
+        run: npm run typecheck
       - name: Unit tests
         run: npm test
       - name: Install Chromium for Playwright
@@ -30,5 +32,28 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  browsers:
+    # The same end-to-end suite in Firefox and WebKit (desktop Safari, iPhone, iPad).
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install Firefox and WebKit for Playwright
+        run: npx playwright install --with-deps firefox webkit
+      - name: End-to-end tests across browsers
+        run: npm run test:browsers
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-browsers
           path: playwright-report/
           retention-days: 7

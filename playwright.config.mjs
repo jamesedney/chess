@@ -22,5 +22,14 @@ export default defineConfig({
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'] }, grepInvert: /@mobile/ },
     { name: 'mobile', use: { ...devices['Pixel 7'] }, grep: /@mobile/ },
+    // The wider device matrix runs in CI, where every browser is installed.
+    ...(process.env.PW_ALL_BROWSERS
+      ? [
+          { name: 'firefox', use: { ...devices['Desktop Firefox'] }, grepInvert: /@mobile/ },
+          { name: 'safari', use: { ...devices['Desktop Safari'] }, grepInvert: /@mobile/ },
+          { name: 'iphone', use: { ...devices['iPhone 14'] }, grep: /@mobile/ },
+          { name: 'ipad', use: { ...devices['iPad (gen 7)'] }, grep: /@mobile/ },
+        ]
+      : []),
   ],
 });

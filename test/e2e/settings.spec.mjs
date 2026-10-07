@@ -105,7 +105,8 @@ for (const name of ['train', 'coach', 'path', 'play', 'review', 'progress', 'dri
 
 test.describe('offline', () => {
   test.use({ serviceWorkers: 'allow' });
-  test('works offline after the first visit, including the engine', async ({ page, context }) => {
+  test('works offline after the first visit, including the engine', async ({ page, context, browserName }) => {
+    test.skip(browserName !== 'chromium', 'Playwright drives service workers fully only in Chromium');
     await open(page);
     await expect(page.locator('#offline')).toHaveText('Offline training ready', { timeout: 60000 });
     await context.setOffline(true);

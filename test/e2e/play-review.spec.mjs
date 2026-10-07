@@ -196,7 +196,8 @@ test.describe('board interaction', () => {
   });
 });
 
-test('pieces can be dragged with a finger on a touch screen @mobile', async ({ page }) => {
+test('pieces can be dragged with a finger on a touch screen @mobile', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Touch input is injected through the Chrome DevTools protocol');
   await open(page, 'play');
   const centre = async s => {
     const b = await sq(page, s).boundingBox();

@@ -58,7 +58,7 @@ function forkTargets(game, move, solver) {
     if (VALUES[p.type] > VALUES[attacker.type] || !defended) targets.push(p);
   }
   // Read the king first, then the most valuable targets.
-  return targets.sort((a, b) => (b.type === 'k') - (a.type === 'k') || VALUES[b.type] - VALUES[a.type]);
+  return targets.sort((a, b) => Number(b.type === 'k') - Number(a.type === 'k') || VALUES[b.type] - VALUES[a.type]);
 }
 
 /** A pin the moved slider creates: the pinned piece and what stands behind it. */

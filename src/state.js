@@ -246,7 +246,7 @@ export function streaks(days, today = new Date()) {
   let prev = null;
   for (const k of keys) {
     const d = new Date(k + 'T12:00:00');
-    run = prev && Math.round((d - prev) / 86400000) === 1 ? run + 1 : 1;
+    run = prev && Math.round((d.getTime() - prev.getTime()) / 86400000) === 1 ? run + 1 : 1;
     best = Math.max(best, run);
     prev = d;
   }

@@ -16,7 +16,13 @@ export class BoardView {
    * el: container element. options.onMove({from, to, promotion}) is called for
    * legal moves; options.askPromotion(color) resolves to a piece letter.
    */
-  constructor(el, { onMove = null, onSquare = null, askPromotion = async () => 'q', label = 'Chess board' } = {}) {
+  /**
+   * @param {HTMLElement} el
+   * @param {{ onMove?: ((move: { from: string, to: string, promotion?: string }) => any) | null,
+   *   onSquare?: ((square: string) => void) | null,
+   *   askPromotion?: (color: string) => Promise<string>, label?: string }} [options]
+   */
+  constructor(el, { onMove = null, onSquare = null, askPromotion = async color => 'q', label = 'Chess board' } = {}) {
     this.el = el;
     this.onMove = onMove;
     this.onSquare = onSquare; // when set, any tapped square is reported instead of selecting pieces
@@ -137,7 +143,7 @@ export class BoardView {
   }
 
   squareAt(x, y) {
-    const b = document.elementFromPoint(x, y)?.closest?.('[data-square]');
+    const b = /** @type {HTMLElement | null} */ (document.elementFromPoint(x, y)?.closest?.('[data-square]'));
     return b && this.grid.contains(b) ? b.dataset.square : null;
   }
 

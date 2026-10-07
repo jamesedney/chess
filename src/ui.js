@@ -1,6 +1,8 @@
 // DOM helpers: escaping, toasts, dialogs and downloads.
 import { pieceUrl } from './appearance.js';
+/** @type {(sel: string, root?: ParentNode) => any} */
 export const $ = (sel, root = document) => root.querySelector(sel);
+/** @type {(sel: string, root?: ParentNode) => any[]} */
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
 export const esc = s =>
@@ -114,7 +116,7 @@ export function settle(el) {
 export function formatDate(key) {
   if (!key) return '';
   const d = new Date(key.length === 10 ? key + 'T12:00:00' : key);
-  return isNaN(d) ? key : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  return isNaN(d.getTime()) ? key : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 export function pageHead(eyebrow, title, sub, right = '') {

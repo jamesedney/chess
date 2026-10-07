@@ -29,6 +29,7 @@ export const app = {
   recovered: loaded.recovered,
   builtIn: puzzles,
   page: null,
+  /** @type {(name: string, params?: Record<string, any>) => void} */
   navigate: () => {},
 
   save() {
