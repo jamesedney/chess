@@ -6,6 +6,7 @@ import { puzzles } from '../../data/puzzles.js';
 import { lessons, SECTIONS } from '../../data/lessons.js';
 import { THEMES, PERSONAL } from '../../src/themes.js';
 import { playUci } from '../../src/chess-utils.js';
+import { expectedTargets } from '../../src/lesson-checks.js';
 
 test('every puzzle is legal, tagged and rated', () => {
   const ids = new Set();
@@ -86,6 +87,8 @@ test('every lesson is well formed and every position is legal', () => {
       const g = new Chess(s.fen);
       if (s.kind === 'tap') {
         assert.ok(s.targets.length && s.targets.every(t => /^[a-h][1-8]$/.test(t)), where);
+        assert.ok(s.verify, where + ': tap steps must say how to verify the targets');
+        assert.deepEqual([...expectedTargets(s)].sort(), [...s.targets].sort(), `${where}: the rules disagree with the targets`);
       } else if (s.kind === 'move') {
         if (s.mate) {
           const mates = g.moves({ verbose: true }).filter(m => {

@@ -9,7 +9,7 @@ import * as play from './pages/play.js';
 import * as review from './pages/review.js';
 import * as progress from './pages/progress.js';
 
-export const VERSION = '1.3.0';
+export const VERSION = '1.3.1';
 const PAGES = { train, path, play, review, progress };
 const THEME_KEY = 'rankup-theme';
 let pendingParams = null;

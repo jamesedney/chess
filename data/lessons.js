@@ -34,16 +34,18 @@ export const lessons = [
       },
       {
         kind: 'tap',
-        fen: 'r2qkb1r/ppp2ppp/2np1n2/4p3/2B1P1b1/2NP1N2/PPP2PPP/R1BQK2R w KQkq - 0 6',
-        targets: ['g4'],
+        fen: '2r2rk1/pp3ppp/2n5/3b4/8/2N2N2/PP3PPP/R2R2K1 w - - 0 1',
+        targets: ['d5'],
+        verify: 'undefended',
         text: 'Tap the black piece (not a pawn) that no other black piece defends.',
         explain:
-          'The bishop on g4 is loose. It is not attacked yet, but a move like h3 would ask it a question, and a tactic later could win it for nothing.',
+          'The bishop on d5. The knight on c6 does not cover d5 and no pawn does. White already attacks it twice, so Nxd5 wins it for nothing.',
       },
       {
         kind: 'tap',
         fen: 'rnbqkb1r/pppp1ppp/5n2/4p3/3PP3/8/PPP2PPP/RNBQKBNR b KQkq - 0 3',
         targets: ['e4'],
+        verify: 'free-capture',
         text: 'Now the other side. It is Black to move. Tap the white pawn that Black can take for free.',
         explain:
           'The e4 pawn is attacked by the knight on f6 and defended by nothing. Looking at your own loose pieces is as important as spotting theirs.',
@@ -124,6 +126,7 @@ export const lessons = [
         kind: 'tap',
         fen: 'r1bqk2r/pppp1ppp/2n5/2b1p3/2B1P1n1/5N2/PPPP1PPP/RNBQ1RK1 w kq - 0 6',
         targets: ['f2'],
+        verify: 'attacked-twice',
         text: 'Threats last, and their threats before yours. Tap the square Black is attacking twice.',
         explain: 'The bishop on c5 and the knight on g4 both aim at f2, which only the king defends. Black threatens Bxf2+ or Nxf2.',
       },
@@ -156,6 +159,7 @@ export const lessons = [
         kind: 'tap',
         fen: '4R1k1/5p1p/8/8/8/8/5PPP/6K1 b - - 0 1',
         targets: ['g7'],
+        verify: 'escape-square',
         text: 'Here the g-pawn has gone. The rook gives check. Tap the only square the black king can escape to.',
         explain: 'g7. The rook covers f8, and h8 is still on the rook’s line. With one hole in the pawn wall, the check is not mate.',
       },
@@ -355,8 +359,9 @@ export const lessons = [
       },
       {
         kind: 'tap',
-        fen: 'r1bqk2r/pppp1ppp/2n2n2/4p3/1bB1P3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 6 5',
+        fen: 'r1bqk2r/pppp1ppp/2n2n2/4p3/1bB1P3/2NP1N2/PPP2PPP/R1BQK2R w KQkq - 0 5',
         targets: ['c3'],
+        verify: 'pinned',
         text: 'Tap the white piece that is pinned.',
         explain:
           'The knight on c3 is pinned by the bishop on b4 against the king on e1. It can still move, because the king is not in check, but moving it would be illegal.',
@@ -677,6 +682,7 @@ export const lessons = [
         kind: 'tap',
         fen: 'rnbqkb1r/ppp1pppp/5n2/3p4/4P3/2N5/PPPP1PPP/R1BQKBNR w KQkq - 2 3',
         targets: ['f6'],
+        verify: 'defender-of:d5,q',
         text: 'Tap the piece, other than the queen, that defends d5.',
         explain: 'The knight on f6. To win d5, White would need a third attacker or a way to remove this defender.',
       },
