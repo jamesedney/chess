@@ -156,17 +156,9 @@ function drawFinished(body) {
   const change = app.state.puzzle.rating - session.ratingStart;
   body.innerHTML = `<div class="panel dark-panel"><div class="eyebrow">SESSION COMPLETE</div><h2>Good work. Let it settle.</h2>
     <p>${session.clean} of ${session.done} positions solved without help.${change ? ` Puzzle rating ${change > 0 ? '+' : '−'}${Math.abs(change)} this session.` : ''} Missed and hinted positions return sooner.</p>
-    <div class="actions"><button type="button" id="again" class="lime">Train another session</button><button type="button" id="to-progress">See progress</button></div></div>
-    <div class="panel"><h3>Put it into practice</h3><p>Play a thoughtful rapid game, then bring it back to Review. A puzzle rating is not a game rating.</p></div>`;
+    <div class="actions"><button type="button" id="again" class="lime">Train another session</button><button type="button" id="to-progress">See progress</button></div></div>`;
   $('#again', body).onclick = () => startSession(session.mode, session.theme);
   $('#to-progress', body).onclick = () => app.navigate('progress');
-}
-
-function sourceNote(p) {
-  if (isMistake(p)) return `From your own game: you played ${esc(p.played || 'a weaker move')}. Find the improvement.`;
-  if (p.source === 'lichess') return 'From the Lichess puzzle database.';
-  if (p.source === 'generated') return 'From a computer-played game, checked by Stockfish.';
-  return 'A composed position or a moment from a classic game.';
 }
 
 function drawPuzzle(body) {
@@ -174,16 +166,14 @@ function drawPuzzle(body) {
   const p = c.puzzle;
   const tags = c.complete ? displayTags(p.tags || []) : [];
   const ratingText = isMistake(p) ? 'YOUR GAME' : p.rating ? `RATED ${p.rating}` : '';
+  const position = `${Math.min(session.done + 1, app.state.goal)} OF ${app.state.goal}`;
   body.innerHTML = `<div class="workspace">
     ${boardCard({ title: esc(c.complete ? 'Position complete' : p.goal), chip: '' })}
     <div>
       <section class="panel">
-        <div class="eyebrow">${esc(p.theme.toUpperCase())}${ratingText ? ' · ' + ratingText : ''}</div>
-        <h2>${esc(p.goal || 'Find the strongest move.')}</h2>
-        <p class="muted">${sourceNote(p)}</p>
+        <div class="eyebrow">${esc(p.theme.toUpperCase())}${ratingText ? ' · ' + ratingText : ''} · ${position}</div>
+        ${isMistake(p) ? `<p class="muted">From your own game: you played ${esc(p.played || 'a weaker move')}.</p>` : ''}
         ${tags.length ? `<div class="tag-row">${tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
-        <div class="session-line" aria-hidden="true"><span style="width:${Math.min(100, (session.done / app.state.goal) * 100)}%"></span></div>
-        <div class="skill-row"><span>Session progress</span><strong>${session.done} / ${app.state.goal}</strong></div>
         <div id="feedback" class="status ${c.tone}" role="status" aria-live="polite">${esc(c.message)}</div>
         <div class="actions">
           ${
@@ -194,13 +184,6 @@ function drawPuzzle(body) {
               : `<button type="button" id="hint">${c.hint ? 'More help' : 'Hint'}</button><button type="button" id="solution">Show solution</button>`
           }
         </div>
-      </section>
-      <section class="panel dark-panel">
-        <div class="eyebrow">THE PAUSE BEFORE THE MOVE</div>
-        <h2>See it. Check it. Play it.</h2>
-        <p>What is under attack? What will your opponent do after your move?</p>
-        <div class="callout">“Find their best reply, not the reply you hope for.”</div>
-        <small class="muted">Other strong moves are accepted too: Stockfish checks any move that differs from the stored line.</small>
       </section>
     </div>
   </div>`;
@@ -480,7 +463,6 @@ function drawVision(body) {
              <p class="small">Best score: ${best} · Sprints: ${app.state.vision.runs}</p>`
         }
       </section>
-      <section class="panel dark-panel"><div class="eyebrow">WHY THIS HELPS</div><h2>Most games below 1500 are decided by loose pieces.</h2><p>Spotting what is undefended, for both sides, is the habit behind not blundering and not missing free material.</p></section>
     </div></div>`;
   board = new BoardView($('#board', body), { onMove: visionMove, askPromotion: async () => 'q', label: 'Vision sprint board' });
   $('#board-flip', body).onclick = () => board.set({ orientation: opposite(board.orientation) });
