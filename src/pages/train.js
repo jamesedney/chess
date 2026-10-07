@@ -87,6 +87,8 @@ export function render(main, params = {}) {
 }
 
 export function leave() {
+  // A sprint cannot pause: leaving the page abandons it.
+  if (vision?.phase === 'running') vision = { phase: 'ready', score: 0, misses: 0 };
   stopVisionTimer();
 }
 

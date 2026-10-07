@@ -15,7 +15,8 @@
     "puzzles:build": "node tools/build-puzzles.mjs",
     "site": "node tools/stage-site.mjs",
     "format": "prettier --write .",
-    "lint": "prettier --check ."
+    "lint": "prettier --check .",
+    "puzzles:verify": "node tools/verify-puzzles.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",

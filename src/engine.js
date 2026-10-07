@@ -117,7 +117,8 @@ export class Engine {
   }
 
   newGame() {
-    if (this.status === 'ready') this.worker.postMessage('ucinewgame');
+    // Clearing the hash mid-search is unsafe; the next search simply reuses it.
+    if (this.status === 'ready' && !this.searching) this.worker.postMessage('ucinewgame');
   }
 }
 

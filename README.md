@@ -74,6 +74,7 @@ npm run test:e2e       # end-to-end tests in Chromium, desktop and phone sizes
 ```sh
 node tools/generate-puzzles.mjs --minutes 60   # mine more puzzles from self-play (appends)
 node tools/build-puzzles.mjs                   # tag, rate, balance and write data/puzzles.js
+node tools/verify-puzzles.mjs --sample 50      # re-check a sample with a deeper search
 ```
 
 To use real, crowd-rated Lichess puzzles (CC0) instead of the generated ones:

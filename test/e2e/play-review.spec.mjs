@@ -91,3 +91,9 @@ test('recent games can be fetched from Lichess and Chess.com', async ({ page }) 
   await expect(page.locator('.picker-item')).toHaveCount(1);
   await expect(page.locator('#analyse')).toHaveText('Analyse selected game');
 });
+
+test('pieces can be dragged, and a drag does not also count as a tap', async ({ page }) => {
+  await open(page, 'train?puzzle=p001');
+  await sq(page, 'e1').dragTo(sq(page, 'e8'));
+  await expect(page.locator('#feedback')).toContainText('Solved without help');
+});

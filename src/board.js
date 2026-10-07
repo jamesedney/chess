@@ -23,6 +23,7 @@ export class BoardView {
     this.arrows = [];
     this.focusSquare = null;
     this.id = 'board' + ++uid;
+    this.lastDrag = 0;
 
     el.classList.add('board');
     el.setAttribute('role', 'group');
@@ -40,8 +41,8 @@ export class BoardView {
 
     this.grid.addEventListener('click', e => {
       const b = e.target.closest('[data-square]');
-      if (b && !this.suppressClick) this.tap(b.dataset.square);
-      this.suppressClick = false;
+      // A drag already made its move; ignore the click the browser sends after it.
+      if (b && Date.now() - this.lastDrag > 300) this.tap(b.dataset.square);
     });
     this.grid.addEventListener('keydown', e => this.key(e));
     this.grid.addEventListener('pointerdown', e => this.dragStart(e));
@@ -108,15 +109,20 @@ export class BoardView {
       this.selected = from;
       this.render();
     }
-    const up = ev => {
+    const done = () => {
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', done);
+    };
+    const up = ev => {
+      done();
       const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.('[data-square]');
       if (target && this.grid.contains(target) && target.dataset.square !== from) {
-        this.suppressClick = true;
+        this.lastDrag = Date.now();
         this.tap(target.dataset.square);
       }
     };
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', done);
   }
 
   key(e) {
