@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.0.0
+
+### Coaching
+- New Coach page. It diagnoses your recurring mistakes from your own games: allowed mating attacks, material left en prise, missed mates, missed tactics and quieter slips, plus the game phase and whether clock trouble or rushing played a part.
+- A weekly plan aimed at that weakness, with progress tracked from your training and targets that adapt to how the last week went.
+- Lessons built from your own mistakes, played in the lesson player. Moves Stockfish rates as just as good are accepted.
+- Trends compare the last 30 days with the 30 before for puzzle accuracy, puzzle rating, mistakes per game and your real rating. Changes within normal variation are reported as steady, and thin data as not enough data.
+
+### Chess
+- About 3,500 puzzles from the Lichess puzzle database (CC0) replace the self-play set, imported by a GitHub Actions workflow.
+- Human-like opponents: Maia networks at about 1100, 1500 and 1900, run on your device. The 1100 level is the new default opponent.
+- Endgame drills against Stockfish: seven endings with goals and move limits, each verified with Stockfish.
+- Calculation drills: visualisation and find every check.
+- Review: opening names and per-opening results, time spent per move from clock data, rushed critical moves flagged, and deeper idle-time re-checks that correct or clear marked moves. Background analysis always gives way to anything you are waiting for.
+
+### Look and feel
+- Seven board colours and five piece sets (cburnett, merida, chessnut, kiwen-suwi, mpchess).
+- Synthesised move, capture, check, success and error sounds, and vibration on supported phones. Both can be turned off.
+
+### Engineering
+- Saved data moves to version 3 through a chain of versioned migrations. Every older backup upgrades step by step.
+- The app source is type-checked with TypeScript (`npm run typecheck`), using JSDoc so there is still no build step.
+- CI runs the browser tests in Chromium, Firefox and WebKit, at desktop, iPhone, iPad and Android sizes.
+
 ## 1.4.0
 
 - Motion: pieces slide to their squares, captured pieces fade out, a piece dropped off target glides back, and highlights and legal-move dots ease in. Pages, dialogs, toasts and status messages fade rather than flash. Everything is disabled when the device asks for reduced motion.

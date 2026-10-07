@@ -14,7 +14,7 @@ import * as drills from './pages/drills.js';
 import * as coach from './pages/coach.js';
 import { scheduleDeepAnalysis } from './deep.js';
 
-export const VERSION = '1.4.0';
+export const VERSION = '2.0.0';
 const PAGES = { train, coach, path, play, review, progress, drills };
 // Parameters that are part of a page's address, so reloads and the back button return to them.
 const ADDRESS_KEYS = ['lesson', 'drill', 'id'];
@@ -152,8 +152,8 @@ function openSettings() {
     <p id="storage-state" class="small">${app.storageOK ? 'Local storage available.' : 'Local storage unavailable. Progress will not survive a reload; keep a backup.'}</p>
     <div class="actions"><button type="button" id="reset" class="danger">Reset all progress</button></div>
     <hr>
-    <p class="small">Rankup ${VERSION} · chess.js (BSD-2-Clause) · Stockfish.js 17.1 lite (GPLv3). <a href="./THIRD-PARTY.md" target="_blank" rel="noopener">Licences and source</a></p>
-    <p class="small">Install: on Android, use the browser’s “Install app” or “Add to Home screen”. On iPhone, open in Safari and use Share → Add to Home Screen. The first online visit downloads about 9 MB for offline training.</p>`);
+    <p class="small">Rankup ${VERSION} · chess.js (BSD-2-Clause) · Stockfish.js 17.1 lite (GPLv3) · Maia networks (GPLv3) · Lichess puzzles and openings (CC0). <a href="./THIRD-PARTY.md" target="_blank" rel="noopener">Licences and source</a></p>
+    <p class="small">Install: on Android, use the browser’s “Install app” or “Add to Home screen”. On iPhone, open in Safari and use Share → Add to Home Screen. The first online visit downloads about 10 MB for offline training. Each human-like opponent level adds about 1.7 MB the first time you play it.</p>`);
   $('#session-goal').value = s.goal;
   $('#difficulty-offset').value = s.difficulty;
   $('#appearance').value = themeChoice();
