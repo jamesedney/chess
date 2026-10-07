@@ -120,3 +120,77 @@ test('arrow keys in the viewer do not pile up or leak into other pages', async (
   await page.keyboard.press('ArrowLeft');
   await expect(page.locator('h1')).toContainText('Make your next move count');
 });
+
+test.describe('board interaction', () => {
+  test('tap to select, tap again to deselect, tap another piece to switch', async ({ page }) => {
+    await open(page, 'play');
+    const e2 = await sq(page, 'e2').elementHandle();
+    await sq(page, 'e2').click();
+    await expect(sq(page, 'e2')).toHaveClass(/selected/);
+    await expect(sq(page, 'e4')).toHaveClass(/dot/);
+    expect(await e2.evaluate(el => el.isConnected), 'squares are updated in place, not rebuilt').toBe(true);
+    await sq(page, 'e2').click();
+    await expect(sq(page, 'e2')).not.toHaveClass(/selected/);
+    await sq(page, 'g1').click();
+    await sq(page, 'd2').click();
+    await expect(sq(page, 'd2')).toHaveClass(/selected/);
+    await expect(sq(page, 'g1')).not.toHaveClass(/selected/);
+    // An illegal square quietly clears the selection.
+    await sq(page, 'd6').click();
+    await expect(sq(page, 'd2')).not.toHaveClass(/selected/);
+    await expect(page.locator('#history')).toContainText('Your first move awaits');
+    // A quick select-and-place still moves.
+    await sq(page, 'g1').click();
+    await sq(page, 'f3').click();
+    await expect(page.locator('#history')).toContainText('1. Nf3', { timeout: 60000 });
+  });
+
+  test('a dragged piece follows the pointer and snaps back when dropped off target', async ({ page }) => {
+    await open(page, 'play');
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await page.locator('#board').scrollIntoViewIfNeeded();
+    const box = async s => {
+      const b = await sq(page, s).boundingBox();
+      return [b.x + b.width / 2, b.y + b.height / 2];
+    };
+    const [x1, y1] = await box('e2');
+    const [x2, y2] = await box('e5');
+    await page.mouse.move(x1, y1);
+    await page.mouse.down();
+    await page.mouse.move(x2, y2, { steps: 8 });
+    await expect(page.locator('.drag-ghost')).toBeVisible();
+    await expect(sq(page, 'e2')).toHaveClass(/drag-origin/);
+    await page.mouse.up();
+    await expect(page.locator('.drag-ghost')).toHaveCount(0);
+    await expect(sq(page, 'e2')).toHaveClass(/selected/);
+    await expect(page.locator('#history')).toContainText('Your first move awaits');
+    const [x3, y3] = await box('e4');
+    await page.mouse.move(x1, y1);
+    await page.mouse.down();
+    await page.mouse.move(x3, y3, { steps: 8 });
+    await expect(sq(page, 'e4')).toHaveClass(/drag-over/);
+    await page.mouse.up();
+    await expect(page.locator('#history')).toContainText('1. e4', { timeout: 60000 });
+  });
+});
+
+test('pieces can be dragged with a finger on a touch screen @mobile', async ({ page }) => {
+  await open(page, 'play');
+  const centre = async s => {
+    const b = await sq(page, s).boundingBox();
+    return { x: Math.round(b.x + b.width / 2), y: Math.round(b.y + b.height / 2) };
+  };
+  const from = await centre('d2');
+  const to = await centre('d4');
+  const cdp = await page.context().newCDPSession(page);
+  const touch = (type, p) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [p] : [] });
+  await touch('touchStart', from);
+  for (let i = 1; i <= 8; i++) await touch('touchMove', { x: from.x + ((to.x - from.x) * i) / 8, y: from.y + ((to.y - from.y) * i) / 8 });
+  await touch('touchEnd');
+  await expect(page.locator('#history')).toContainText('1. d4', { timeout: 60000 });
+  // Tap-to-move works on touch too.
+  await expect(page.locator('#play-status')).toContainText('Your move', { timeout: 60000 });
+  await sq(page, 'g1').tap();
+  await sq(page, 'f3').tap();
+  await expect(page.locator('#history')).toContainText(/2\. Nf3/, { timeout: 60000 });
+});

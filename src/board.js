@@ -23,7 +23,10 @@ export class BoardView {
     this.arrows = [];
     this.focusSquare = null;
     this.id = 'board' + ++uid;
-    this.lastDrag = 0;
+    this.handled = null; // the square a pointer gesture just handled itself
+    this.drag = null;
+    this.squares = null;
+    this.builtFor = null;
 
     el.classList.add('board');
     el.setAttribute('role', 'group');
@@ -39,18 +42,21 @@ export class BoardView {
     this.live.setAttribute('aria-live', 'polite');
     el.replaceChildren(this.grid, this.svg, this.live);
 
-    this.grid.addEventListener('click', e => {
-      const b = e.target.closest('[data-square]');
-      // A drag already made its move; ignore the click the browser sends after it.
-      if (b && Date.now() - this.lastDrag > 300) this.tap(b.dataset.square);
-    });
+    this.grid.addEventListener('click', e => this.click(e));
     this.grid.addEventListener('keydown', e => this.key(e));
-    this.grid.addEventListener('pointerdown', e => this.dragStart(e));
+    this.grid.addEventListener('pointerdown', e => this.pointerDown(e));
+    this.grid.addEventListener('pointermove', e => this.pointerMove(e));
+    this.grid.addEventListener('pointerup', e => this.pointerUp(e));
+    this.grid.addEventListener('pointercancel', () => this.endDrag());
+    this.grid.addEventListener('contextmenu', e => e.preventDefault());
   }
 
   set(options) {
     Object.assign(this, options);
-    if ('game' in options || 'interactive' in options) this.selected = null;
+    if ('game' in options || 'interactive' in options) {
+      this.selected = null;
+      this.endDrag();
+    }
     this.render();
   }
 
@@ -70,6 +76,11 @@ export class BoardView {
     );
   }
 
+  legalTargets(from) {
+    return from ? new Set(this.game.moves({ square: from, verbose: true }).map(m => m.to)) : new Set();
+  }
+
+  /** Select, switch selection, deselect, or move to `sq` — the same rules for taps, keys and drops. */
   async tap(sq) {
     if (!this.game) return;
     this.focusSquare = sq;
@@ -83,9 +94,8 @@ export class BoardView {
     const moves = this.game.moves({ square: from, verbose: true }).filter(m => m.to === sq);
     this.selected = null;
     if (!moves.length) {
+      // Tapping elsewhere just clears the selection, as on Lichess.
       this.render();
-      this.announce('That move is not legal.');
-      this.flash(sq);
       return;
     }
     let promotion;
@@ -94,35 +104,109 @@ export class BoardView {
     await this.onMove?.({ from, to: sq, ...(promotion ? { promotion } : {}) });
   }
 
+  click(e) {
+    const sq = e.target.closest('[data-square]')?.dataset.square;
+    if (!sq) return;
+    // pointerUp already handled the gesture on this square; skip the click the browser adds.
+    if (sq === this.handled?.square && Date.now() - this.handled.at < 400) {
+      this.handled = null;
+      return;
+    }
+    this.tap(sq);
+  }
+
   flash(sq) {
-    const b = this.grid.querySelector(`[data-square="${sq}"]`);
+    const b = this.squares?.get(sq);
     if (!b) return;
     b.classList.add('wrong');
     setTimeout(() => b.classList.remove('wrong'), 450);
   }
 
-  dragStart(e) {
-    const b = e.target.closest('[data-square]');
-    if (!b || e.button > 0 || !this.canPick(b.dataset.square)) return;
-    const from = b.dataset.square;
-    if (this.selected !== from) {
-      this.selected = from;
-      this.render();
+  squareAt(x, y) {
+    const b = document.elementFromPoint(x, y)?.closest?.('[data-square]');
+    return b && this.grid.contains(b) ? b.dataset.square : null;
+  }
+
+  pointerDown(e) {
+    if (e.button > 0 || this.drag) return;
+    const sq = e.target.closest('[data-square]')?.dataset.square;
+    // Taps on destination squares are left to the click handler.
+    if (!sq || !this.canPick(sq)) return;
+    e.preventDefault();
+    this.drag = {
+      from: sq,
+      x: e.clientX,
+      y: e.clientY,
+      id: e.pointerId,
+      moved: false,
+      wasSelected: this.selected === sq,
+      touch: e.pointerType !== 'mouse',
+    };
+    this.selected = sq;
+    this.focusSquare = sq;
+    this.render();
+    try {
+      this.grid.setPointerCapture(e.pointerId);
+    } catch {}
+  }
+
+  pointerMove(e) {
+    const d = this.drag;
+    if (!d || e.pointerId !== d.id) return;
+    if (!d.moved) {
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 6) return;
+      d.moved = true;
+      const origin = this.squares.get(d.from);
+      d.size = origin.getBoundingClientRect().width;
+      d.ghost = document.createElement('img');
+      d.ghost.src = origin.querySelector('img').src;
+      d.ghost.alt = '';
+      d.ghost.className = 'drag-ghost';
+      d.ghost.style.width = d.ghost.style.height = d.size + 'px';
+      document.body.append(d.ghost);
+      origin.classList.add('drag-origin');
+      d.legal = this.legalTargets(d.from);
     }
-    const done = () => {
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', done);
-    };
-    const up = ev => {
-      done();
-      const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.('[data-square]');
-      if (target && this.grid.contains(target) && target.dataset.square !== from) {
-        this.lastDrag = Date.now();
-        this.tap(target.dataset.square);
+    // On touch screens, lift the piece above the finger so it stays visible.
+    const lift = d.touch ? d.size * 0.6 : 0;
+    const scale = d.touch ? 1.35 : 1.1;
+    d.ghost.style.transform = `translate(${e.clientX - d.size / 2}px, ${e.clientY - d.size / 2 - lift}px) scale(${scale})`;
+    const over = this.squareAt(e.clientX, e.clientY);
+    if (over !== d.over) {
+      if (d.over) this.squares.get(d.over)?.classList.remove('drag-over');
+      if (over && d.legal.has(over)) this.squares.get(over)?.classList.add('drag-over');
+      d.over = over;
+    }
+  }
+
+  pointerUp(e) {
+    const d = this.drag;
+    if (!d || e.pointerId !== d.id) return;
+    this.handled = { square: d.from, at: Date.now() };
+    const target = d.moved ? this.squareAt(e.clientX, e.clientY) : null;
+    this.endDrag();
+    if (!d.moved) {
+      // A tap on your own piece: a second tap on the same piece deselects it.
+      if (d.wasSelected) {
+        this.selected = null;
+        this.render();
       }
-    };
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', done);
+      return;
+    }
+    if (target && target !== d.from && this.legalTargets(d.from).has(target)) this.tap(target);
+    else this.render(); // dropped off target: snap back and stay selected
+  }
+
+  endDrag() {
+    const d = this.drag;
+    if (!d) return;
+    this.drag = null;
+    d.ghost?.remove();
+    this.squares?.get(d.from)?.classList.remove('drag-origin');
+    if (d.over) this.squares?.get(d.over)?.classList.remove('drag-over');
+    try {
+      this.grid.releasePointerCapture(d.id);
+    } catch {}
   }
 
   key(e) {
@@ -145,8 +229,9 @@ export class BoardView {
   }
 
   updateFocus(move) {
-    for (const b of this.grid.querySelectorAll('[data-square]')) b.tabIndex = b.dataset.square === this.focusTarget() ? 0 : -1;
-    if (move) this.grid.querySelector(`[data-square="${this.focusTarget()}"]`)?.focus({ preventScroll: true });
+    const target = this.focusTarget();
+    for (const [sq, b] of this.squares || []) b.tabIndex = sq === target ? 0 : -1;
+    if (move) this.squares?.get(target)?.focus({ preventScroll: true });
   }
 
   focusTarget() {
@@ -161,43 +246,66 @@ export class BoardView {
     return label;
   }
 
-  render() {
-    if (!this.game) {
-      this.grid.innerHTML = '';
-      return;
-    }
-    const hadFocus = this.grid.contains(document.activeElement);
-    const legal = this.selected ? new Set(this.game.moves({ square: this.selected, verbose: true }).map(m => m.to)) : new Set();
+  /** Create the 64 squares once per orientation; later renders update them in place. */
+  build() {
     const files = this.orientation === 'w' ? FILES : [...FILES].reverse().join('');
     const ranks = this.orientation === 'w' ? [8, 7, 6, 5, 4, 3, 2, 1] : [1, 2, 3, 4, 5, 6, 7, 8];
+    this.squares = new Map();
+    const frag = document.createDocumentFragment();
+    ranks.forEach((rank, ri) => {
+      [...files].forEach((file, fi) => {
+        const sq = file + rank;
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.dataset.square = sq;
+        b.dataset.shade = (FILES.indexOf(file) + rank) % 2 === 1 ? 'dark' : 'light';
+        if (fi === 0) b.insertAdjacentHTML('beforeend', `<span class="coord rank">${rank}</span>`);
+        if (ri === 7) b.insertAdjacentHTML('beforeend', `<span class="coord file">${file}</span>`);
+        this.squares.set(sq, b);
+        frag.append(b);
+      });
+    });
+    this.grid.replaceChildren(frag);
+    this.builtFor = this.orientation;
+  }
+
+  render() {
+    if (!this.game) {
+      this.grid.replaceChildren();
+      this.builtFor = null;
+      return;
+    }
+    if (this.builtFor !== this.orientation) this.build();
+    const hadFocus = this.grid.contains(document.activeElement);
+    const legal = this.legalTargets(this.selected);
     let checked = null;
     if (this.game.isCheck()) {
       for (const row of this.game.board()) for (const p of row) if (p && p.type === 'k' && p.color === this.game.turn()) checked = p.square;
     }
     const target = this.focusTarget();
-    let html = '';
-    ranks.forEach((rank, ri) => {
-      [...files].forEach((file, fi) => {
-        const sq = file + rank;
-        const p = this.game.get(sq);
-        const dark = (FILES.indexOf(file) + rank) % 2 === 1;
-        const cls = ['square', dark ? 'dark' : 'light'];
-        if (this.selected === sq) cls.push('selected');
-        if (legal.has(sq)) cls.push(p ? 'capture' : 'dot');
-        if (this.lastMove.includes(sq)) cls.push('last');
-        if (checked === sq) cls.push('check');
-        if (this.marks[sq]) cls.push('mark-' + this.marks[sq]);
-        html += `<button type="button" class="${cls.join(' ')}" data-square="${sq}" tabindex="${sq === target ? 0 : -1}" aria-label="${this.squareLabel(sq, p, legal.has(sq))}">`;
-        if (fi === 0) html += `<span class="coord rank">${rank}</span>`;
-        if (ri === 7) html += `<span class="coord file">${file}</span>`;
-        if (p) html += `<img src="./pieces/${p.color}${p.type}.png" alt="" draggable="false">`;
-        html += '</button>';
-      });
-    });
-    this.grid.innerHTML = html;
+    for (const [sq, b] of this.squares) {
+      const p = this.game.get(sq);
+      const cls = ['square', b.dataset.shade];
+      if (this.selected === sq) cls.push('selected');
+      if (legal.has(sq)) cls.push(p ? 'capture' : 'dot');
+      if (this.lastMove.includes(sq)) cls.push('last');
+      if (checked === sq) cls.push('check');
+      if (this.marks[sq]) cls.push('mark-' + this.marks[sq]);
+      if (this.canPick(sq)) cls.push('movable');
+      if (this.drag?.from === sq && this.drag.moved) cls.push('drag-origin');
+      b.className = cls.join(' ');
+      b.tabIndex = sq === target ? 0 : -1;
+      b.setAttribute('aria-label', this.squareLabel(sq, p, legal.has(sq)));
+      const piece = p ? p.color + p.type : '';
+      if (b.dataset.piece !== piece) {
+        b.querySelector('img')?.remove();
+        if (piece) b.insertAdjacentHTML('beforeend', `<img src="./pieces/${piece}.png" alt="" draggable="false">`);
+        b.dataset.piece = piece;
+      }
+    }
     this.el.dataset.fen = this.game.fen();
     this.drawArrows();
-    if (hadFocus) this.grid.querySelector(`[data-square="${target}"]`)?.focus({ preventScroll: true });
+    if (hadFocus && document.activeElement !== this.squares.get(target)) this.squares.get(target)?.focus({ preventScroll: true });
   }
 
   drawArrows() {

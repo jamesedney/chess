@@ -723,12 +723,42 @@ p {
 .square.dark {
   background: var(--sq-dark);
 }
+/* Hover colours only where a pointer can hover, so they never stick after a tap. */
+@media (hover: hover) {
+  .square:hover {
+    background: var(--sq-light-hover);
+    border: 0;
+  }
+  .square.dark:hover {
+    background: var(--sq-dark-hover);
+  }
+  .square.dot:hover::after {
+    width: 34%;
+    height: 34%;
+  }
+}
 .square:hover {
-  background: var(--sq-light-hover);
   border: 0;
 }
-.square.dark:hover {
-  background: var(--sq-dark-hover);
+.square.movable {
+  cursor: grab;
+}
+.square.drag-origin img {
+  opacity: 0.3;
+}
+.square.drag-over {
+  box-shadow: inset 0 0 0 4px var(--focus);
+}
+.drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 60;
+  pointer-events: none;
+  object-fit: contain;
+  will-change: transform;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.35));
+  cursor: grabbing;
 }
 .square.selected,
 .square.selected:hover {
@@ -749,6 +779,9 @@ p {
   height: 86%;
   width: 86%;
   pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   z-index: 1;
   object-fit: contain;
 }
