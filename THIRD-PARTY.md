@@ -20,6 +20,10 @@ Copyright Jeff Hlywa and contributors. BSD-2-Clause.
 Source: https://github.com/jhlywa/chess.js/tree/v1.4.0
 Licence included: `vendor/chess.LICENSE`.
 
+## Maia networks
+
+`maia/maia-1100.bin`, `maia-1500.bin` and `maia-1900.bin` are converted from the Maia chess networks by the Computational Social Science Lab (McIlroy-Young, Sen, Kleinberg, Anderson), https://github.com/CSSLab/maia-chess, GNU GPL v3. The originals are in `tools/data/maia-*.pb.gz`; `tools/convert-maia.mjs` folds batch normalisation into the convolutions and stores the weights as half floats. `maia/tables.json` holds Leela Chess Zero's policy index and convolution policy map (https://github.com/LeelaChessZero/lc0, GNU GPL v3), from `tools/data/lc0-policy-index.py` and `tools/data/lc0-policy-map.h`. The inference code in `src/maia-core.js` is this project's own implementation of the Leela network format.
+
 ## Piece graphics
 
 The chess pieces in `pieces/` are the "cburnett" set by Colin M.L. Burnett, as distributed by Lichess (https://github.com/lichess-org/lila/tree/master/public/piece/cburnett). GNU GPL v2 or later; redistributed here under GPL v3 as part of Rankup. Files are unmodified apart from renaming.

@@ -26,6 +26,10 @@ const FILES = [
   './src/ui.js',
   './src/verify.js',
   './src/vision.js',
+  './src/maia.js',
+  './src/maia-core.js',
+  './src/maia-worker.js',
+  './maia/tables.json',
   './src/pages/train.js',
   './src/pages/path.js',
   './src/pages/play.js',
@@ -64,6 +68,22 @@ self.addEventListener('message', event => {
 self.addEventListener('fetch', event => {
   const { request } = event;
   if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
+  // Maia networks are large and optional: cache each one the first time it is used.
+  if (new URL(request.url).pathname.includes('/maia/') && request.url.endsWith('.bin')) {
+    event.respondWith(
+      caches.open(CACHE).then(cache =>
+        cache.match(request).then(
+          hit =>
+            hit ||
+            fetch(request).then(res => {
+              if (res.ok) cache.put(request, res.clone());
+              return res;
+            }),
+        ),
+      ),
+    );
+    return;
+  }
   event.respondWith(
     caches.match(request, { ignoreSearch: true }).then(cached => {
       if (cached) return cached;

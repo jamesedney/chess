@@ -3,6 +3,9 @@
 // engine's top moves with deliberate noise. All labels are approximate.
 
 export const LEVELS = [
+  { id: 'maia1100', label: 'Plays like a 1100 player (Maia)', elo: 1100, mode: 'maia', maia: 1100, group: 'human' },
+  { id: 'maia1500', label: 'Plays like a 1500 player (Maia)', elo: 1500, mode: 'maia', maia: 1500, group: 'human' },
+  { id: 'maia1900', label: 'Plays like a 1900 player (Maia)', elo: 1900, mode: 'maia', maia: 1900, group: 'human' },
   { id: 'beginner', label: 'Beginner · about 800', elo: 800, mode: 'noise', multipv: 5, temperature: 260, randomRate: 0.22 },
   { id: 'novice', label: 'Novice · about 1000', elo: 1000, mode: 'noise', multipv: 5, temperature: 170, randomRate: 0.1 },
   { id: 'improver', label: 'Improver · about 1200', elo: 1200, mode: 'noise', multipv: 4, temperature: 90, randomRate: 0.04 },
@@ -13,7 +16,7 @@ export const LEVELS = [
   { id: 'elo2400', label: 'Master · about 2400', elo: 2400, mode: 'elo' },
   { id: 'full', label: 'Full strength', elo: null, mode: 'full' },
 ];
-export const DEFAULT_LEVEL = 'novice';
+export const DEFAULT_LEVEL = 'maia1100';
 
 export function levelById(id) {
   return LEVELS.find(l => l.id === id) || LEVELS.find(l => l.id === DEFAULT_LEVEL);

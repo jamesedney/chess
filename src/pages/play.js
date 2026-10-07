@@ -6,6 +6,7 @@ import { BoardView, boardCard, turnLabel } from '../board.js';
 import { $, esc, pageHead, choosePromotion, confirmDialog, download, toast, settle } from '../ui.js';
 import { moveToUci, playUci, opposite } from '../chess-utils.js';
 import { LEVELS, levelById, pickNoisyMove } from '../strength.js';
+import { humanMove } from '../maia.js';
 import { isTrainableMistake, winPercentLoss } from '../evaluation.js';
 import { createMistake, deleteMistake } from '../mistakes.js';
 import { dateKey } from '../state.js';
@@ -77,10 +78,17 @@ function draw() {
         <section class="panel">
           <div class="eyebrow">YOUR OPPONENT</div>
           <h2>Stockfish sparring partner</h2>
-          <div class="field"><label for="difficulty">Strength</label><select id="difficulty">${LEVELS.map(l => `<option value="${l.id}" ${l.id === level ? 'selected' : ''}>${esc(l.label)}</option>`).join('')}</select></div>
+          <div class="field"><label for="difficulty">Opponent</label><select id="difficulty">
+            <optgroup label="Human-like (Maia)">${LEVELS.filter(l => l.mode === 'maia')
+              .map(l => `<option value="${l.id}" ${l.id === level ? 'selected' : ''}>${esc(l.label)}</option>`)
+              .join('')}</optgroup>
+            <optgroup label="Stockfish">${LEVELS.filter(l => l.mode !== 'maia')
+              .map(l => `<option value="${l.id}" ${l.id === level ? 'selected' : ''}>${esc(l.label)}</option>`)
+              .join('')}</optgroup>
+          </select></div>
           <div class="field"><label for="play-colour">Your colour (next game)</label><select id="play-colour"><option value="w">White</option><option value="b">Black</option><option value="r">Random</option></select></div>
           <div class="checks"><label><input type="checkbox" id="coach" ${app.state.coach ? 'checked' : ''}> Coach: save my missed opportunities</label></div>
-          <small>Levels up to 1200 play deliberately imperfect moves; higher levels use Stockfish’s own strength limit. All labels are approximate.</small>
+          <small>Maia opponents were trained on millions of human games and make the mistakes real players make. Stockfish levels play engine moves with a strength limit. All ratings are approximate.</small>
           <div id="play-status" class="status" role="status" aria-live="polite">${esc((play.note ? play.note + ' ' : '') + gameStatus())}</div>
           <div class="actions">
             <button type="button" id="new-game" class="primary">New game</button>
@@ -218,7 +226,7 @@ async function onMove(move) {
     if (g.isGameOver()) return;
     const level = levelById(app.state.strength);
     let after = null;
-    if (app.state.coach || level.mode !== 'elo') {
+    if (app.state.coach || level.mode === 'noise' || level.mode === 'full') {
       after = await engine.analyse(g.fen(), { nodes: BUDGET.coach, multipv: level.mode === 'noise' ? level.multipv : 1 });
     }
     if (token !== play.token) return;
@@ -263,6 +271,14 @@ async function engineMove(token, after, level) {
       ? after.lines
       : (await engine.analyse(fen, { nodes: BUDGET.opponent, multipv: level.multipv })).lines;
     uci = pickNoisyMove(lines, g.moves({ verbose: true }).map(moveToUci), level);
+  } else if (level.mode === 'maia') {
+    try {
+      uci = await humanMove({ level: level.maia, game: g });
+    } catch (e) {
+      // The network could not load (for example offline before first use): fall back to Stockfish.
+      toast(e.message + ' Using Stockfish for this move.');
+      uci = (await engine.analyse(fen, { elo: Math.max(1320, level.elo), movetime: 500 })).best;
+    }
   } else {
     uci = (await engine.analyse(fen, { elo: level.elo, movetime: 500 })).best;
   }
