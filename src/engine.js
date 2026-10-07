@@ -2,7 +2,7 @@
 import { parseInfo, parseBestMove } from './uci-parse.js';
 
 /** Search budgets in nodes. Nodes, unlike time, give the same result on any device. */
-export const BUDGET = { coach: 150000, review: 250000, verify: 120000, hint: 100000, opponent: 90000 };
+export const BUDGET = { coach: 150000, review: 250000, verify: 120000, hint: 100000, opponent: 90000, deep: 1500000 };
 
 export class Engine {
   constructor(url) {
@@ -14,6 +14,14 @@ export class Engine {
     this.status = 'idle';
     this.searching = false;
     this.abort = null; // rejects the search in flight if the worker dies
+    this.waiting = 0; // foreground searches queued or running
+    this.background = false; // the search in flight is a background one
+    this.preempted = false;
+  }
+
+  /** True when nothing the user is waiting for is queued or running. */
+  get idle() {
+    return this.waiting === 0 && !this.searching;
   }
 
   init() {
@@ -65,9 +73,19 @@ export class Engine {
    * Analyse a position. Options: nodes | movetime | depth, multipv, elo.
    * Scores are for the side to move. Resolves with the top line flattened
    * plus every MultiPV line in `lines`.
+   * Background searches give way: a foreground request stops them, and they
+   * resolve with `interrupted: true` so the caller can retry later.
    */
-  analyse(fen, { nodes = null, movetime = null, depth = null, multipv = 1, elo = null } = {}) {
+  analyse(fen, { nodes = null, movetime = null, depth = null, multipv = 1, elo = null, background = false } = {}) {
+    if (!background) {
+      this.waiting++;
+      if (this.searching && this.background) {
+        this.preempted = true;
+        this.worker?.postMessage('stop');
+      }
+    }
     const job = async () => {
+      if (background && this.waiting > 0) return { interrupted: true, best: null, score: 0, mate: null, pv: [], depth: 0, lines: [] };
       await this.init();
       return new Promise((resolve, reject) => {
         const lines = {};
@@ -79,10 +97,13 @@ export class Engine {
           else this.abort?.(new Error('Analysis timed out. Try again.'));
         }, 45000);
         this.searching = true;
+        this.background = background;
+        this.preempted = false;
         this.abort = error => {
           clearTimeout(timer);
           this.listener = null;
           this.searching = false;
+          this.background = false;
           this.abort = null;
           reject(error);
         };
@@ -101,7 +122,10 @@ export class Engine {
             .sort((a, b) => a - b)
             .map(k => lines[k]);
           const top = ordered[0] || { score: 0, mate: null, pv: [], depth: 0 };
+          const interrupted = background && this.preempted;
+          this.background = false;
           resolve({
+            interrupted,
             best: best === '(none)' ? null : best,
             score: top.score,
             mate: top.mate,
@@ -118,7 +142,13 @@ export class Engine {
         post('go ' + (depth ? `depth ${depth}` : nodes ? `nodes ${nodes}` : `movetime ${movetime || 300}`));
       });
     };
-    const promise = this.queue.then(job);
+    const run = background
+      ? job
+      : () =>
+          job().finally(() => {
+            this.waiting--;
+          });
+    const promise = this.queue.then(run);
     this.queue = promise.catch(() => {});
     return promise;
   }

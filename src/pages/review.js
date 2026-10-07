@@ -11,6 +11,9 @@ import { whitePov, winPercentLoss, classifyLoss, isTrainableMistake, formatScore
 import { createMistake, archiveMistake, deleteMistake } from '../mistakes.js';
 import { evalGraph, hydrateEvalGraph } from '../charts.js';
 import { MAX_REVIEWS } from '../state.js';
+import { readClocks, parseTimeControl, moveTime, timeSummary, formatClock } from '../clocks.js';
+import { identifyOpening, openingStats } from '../openings.js';
+import { scheduleDeepAnalysis } from '../deep.js';
 
 export const MAX_PLIES = 200;
 export const MATE_EVAL = 10000;
@@ -104,6 +107,7 @@ function drawImport() {
         ${reviewsHTML()}
       </section>
     </div>
+    ${openingsHTML()}
     <section class="panel">
       <div class="eyebrow">PERSONAL MISTAKE BANK</div>
       <div class="panel-head"><h2>Lessons you actually need</h2><label class="small toggle"><input type="checkbox" id="show-archived" ${showArchived ? 'checked' : ''}> Show removed</label></div>
@@ -214,7 +218,7 @@ async function fetchGames(source, username) {
 }
 
 export async function fetchLichess(username, fetchImpl = fetch) {
-  const url = `https://lichess.org/api/games/user/${encodeURIComponent(username)}?max=20&moves=true&tags=true&clocks=false&evals=false&opening=false`;
+  const url = `https://lichess.org/api/games/user/${encodeURIComponent(username)}?max=20&moves=true&tags=true&clocks=true&evals=false&opening=true`;
   let res;
   try {
     res = await fetchImpl(url, { headers: { Accept: 'application/x-chess-pgn' } });
@@ -293,6 +297,9 @@ async function analyseGame(pgn, colour) {
     return app.navigate('review', { review: existing.id, ply: 0 });
   }
   const d = describeGame(pgn);
+  const fens = [moves[0].before, ...moves.map(m => m.after)];
+  const tc = parseTimeControl(readHeaders(pgn).TimeControl);
+  const clocks = tc ? readClocks(pgn, moves.length) : null;
   const review = {
     id: 'r' + Date.now().toString(36),
     key,
@@ -308,6 +315,8 @@ async function analyseGame(pgn, colour) {
     evals: new Array(limit + 1).fill(null),
     marks: [],
     complete: false,
+    opening: identifyOpening(fens),
+    ...(clocks ? { clocks: clocks.slice(0, limit), tc } : {}),
   };
   const token = ++analysis.token;
   analysis.running = true;
@@ -372,6 +381,7 @@ async function analyseGame(pgn, colour) {
     picker = null;
     if (app.page === 'review') app.navigate('review', { review: review.id, ply: firstMarkPly(review) });
     else toast('Your game review is ready under Review a game.');
+    scheduleDeepAnalysis();
   } catch (e) {
     analysis.running = false;
     setStatus(e.message || 'Analysis failed. Try again.');
@@ -380,7 +390,8 @@ async function analyseGame(pgn, colour) {
 }
 
 function firstMarkPly(review) {
-  const m = review.marks.find(x => x.cls !== 'inaccuracy') || review.marks[0];
+  const live = review.marks.filter(x => !x.cleared);
+  const m = live.find(x => x.cls !== 'inaccuracy') || live[0];
   return m ? m.ply : 0;
 }
 
@@ -393,11 +404,32 @@ function reviewsHTML() {
       <div class="step"><span class="step-number">3</span><p>Solve the saved positions until the idea becomes familiar.</p></div>`;
   return list
     .map(r => {
-      const counts = ['blunder', 'mistake', 'inaccuracy'].map(c => r.marks.filter(m => m.cls === c).length);
-      return `<div class="review-item"><div><strong>${esc(r.white)} – ${esc(r.black)}</strong><p>${esc([r.result, formatDate(r.date), `you: ${r.colour === 'w' ? 'White' : 'Black'}`].filter(Boolean).join(' · '))}<br>${counts[0]} blunders · ${counts[1]} mistakes · ${counts[2]} inaccuracies${r.complete ? '' : ' · partial'}</p></div>
+      const counts = ['blunder', 'mistake', 'inaccuracy'].map(c => r.marks.filter(m => m.cls === c && !m.cleared).length);
+      const time = timeSummary(r);
+      return `<div class="review-item"><div><strong>${esc(r.white)} – ${esc(r.black)}</strong><p>${esc([r.result, formatDate(r.date), `you: ${r.colour === 'w' ? 'White' : 'Black'}`, r.opening?.name].filter(Boolean).join(' · '))}<br>${counts[0]} blunders · ${counts[1]} mistakes · ${counts[2]} inaccuracies${r.complete ? '' : ' · partial'}${time.rushed ? ` · ${time.rushed} rushed` : ''}</p></div>
         <div class="item-actions"><button type="button" data-open="${esc(r.id)}">Open</button><button type="button" class="icon-button" data-delete-review="${esc(r.id)}" aria-label="Delete review of ${esc(r.white)} – ${esc(r.black)}">✕</button></div></div>`;
     })
     .join('');
+}
+
+function openingsHTML() {
+  const stats = openingStats(app.state.reviews);
+  if (!stats.length) return '';
+  return `<section class="panel">
+    <div class="eyebrow">YOUR OPENINGS</div>
+    <h2>How your openings are going</h2>
+    <p class="small">From the games you have reviewed, grouped by opening. Score counts a win as 1 and a draw as ½. A handful of games is not a verdict.</p>
+    <div class="table-wrap"><table class="data-table">
+      <thead><tr><th scope="col">Opening</th><th scope="col">Games</th><th scope="col">W / D / L</th><th scope="col">Score</th><th scope="col">Mistakes per game</th></tr></thead>
+      <tbody>${stats
+        .slice(0, 12)
+        .map(
+          o =>
+            `<tr><th scope="row">${esc(o.family)}</th><td>${o.games}</td><td>${o.wins} / ${o.draws} / ${o.losses}</td><td>${o.score === null ? '–' : o.score + '%'}</td><td>${(o.errors / o.games).toFixed(1)}</td></tr>`,
+        )
+        .join('')}</tbody>
+    </table></div>
+  </section>`;
 }
 
 function wireReviews() {
@@ -514,8 +546,11 @@ function drawViewer(review) {
   const total = review.moves.length;
   const ply = Math.max(0, Math.min(total, viewer.ply));
   viewer.ply = ply;
-  const markAt = review.marks.find(m => m.ply === ply); // the reviewed side is about to move here
-  const markJust = review.marks.find(m => m.ply === ply - 1); // the move just played
+  const marks = review.marks.filter(m => !m.cleared);
+  const markAt = marks.find(m => m.ply === ply); // the reviewed side is about to move here
+  const markJust = marks.find(m => m.ply === ply - 1); // the move just played
+  const clearedJust = review.marks.find(m => m.cleared && m.ply === ply - 1);
+  const timeJust = ply > 0 ? moveTime(review, ply - 1) : null;
   const ev = review.evals[ply];
   const whiteShare =
     ev === null || ev === undefined ? 50 : 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * Math.max(-1000, Math.min(1000, ev)))) - 1);
@@ -551,7 +586,10 @@ function drawViewer(review) {
       </div>
       <div>
         <section class="panel">
-          ${evalGraph('eval-graph', review.evals, review.marks, { current: ply })}
+          ${evalGraph('eval-graph', review.evals, marks, { current: ply })}
+          ${review.opening ? `<p class="small opening-line"><strong>${esc(review.opening.eco)}</strong> ${esc(review.opening.name)}</p>` : ''}
+          ${timeJust ? `<p class="small clock-line">${esc(labels[ply - 1])}: ${formatSpent(timeJust.spent)} spent with ${formatClock(timeJust.left)} on the clock${timeJust.trouble ? ' · time trouble' : ''}</p>` : ''}
+          ${clearedJust ? `<p class="status">A deeper engine check found ${esc(labels[ply - 1])} was fine. It is no longer marked.</p>` : ''}
           ${focus ? momentHTML(review, focus, focus === markAt, mistake) : `<p class="muted small">Use the arrow keys or tap the graph to move through the game. Marked moves: ?! inaccuracy, ? mistake, ?? blunder.</p>`}
           <div class="actions">
             <button type="button" id="next-mark">Next marked move</button>
@@ -594,7 +632,7 @@ function drawViewer(review) {
   root.querySelectorAll('[data-ply]').forEach(b => (b.onclick = () => go(Number(b.dataset.ply))));
   $('#back-to-list', root).onclick = () => app.navigate('review', { list: true });
   $('#next-mark', root).onclick = () => {
-    const next = review.marks.find(m => m.ply > ply) || review.marks[0];
+    const next = marks.find(m => m.ply > ply) || marks[0];
     if (next) go(next.ply);
     else toast('No marked moves in this game.');
   };
@@ -622,8 +660,20 @@ function momentHTML(review, mark, before, mistake) {
   const lead = before
     ? `You are about to play ${move}. The green arrow shows ${esc(mark.bestSan)}.`
     : `${move} was ${mark.cls === 'inaccuracy' ? 'an inaccuracy' : 'a ' + mark.cls}. Better was ${esc(mark.bestSan)}.`;
-  return `<div class="moment ${mark.cls}"><div class="eyebrow"><span class="badge ${mark.cls}">${SYMBOL[mark.cls]}</span> ${mark.cls.toUpperCase()} · −${mark.loss}% WINNING CHANCES</div>
-    <p>${lead}</p>${mistake ? `<p class="muted">${esc(mistake.explanation)}</p><button type="button" id="mark-practise" class="primary">Practise this position</button>` : ''}</div>`;
+  const t = moveTime(review, mark.ply);
+  const timing = t
+    ? t.rushed
+      ? ` You spent ${formatSpent(t.spent)} on it: a critical moment played quickly.`
+      : t.trouble
+        ? ` You had ${formatClock(t.left)} left: time trouble.`
+        : ` You spent ${formatSpent(t.spent)} on it.`
+    : '';
+  return `<div class="moment ${mark.cls}"><div class="eyebrow"><span class="badge ${mark.cls}">${SYMBOL[mark.cls]}</span> ${mark.cls.toUpperCase()} · −${mark.loss}% WINNING CHANCES${mark.deep ? ' · DEEP CHECKED' : ''}</div>
+    <p>${lead}${esc(timing)}</p>${mistake ? `<p class="muted">${esc(mistake.explanation)}</p><button type="button" id="mark-practise" class="primary">Practise this position</button>` : ''}</div>`;
+}
+
+function formatSpent(s) {
+  return s < 60 ? `${s < 10 ? s.toFixed(1).replace(/\.0$/, '') : Math.round(s)}s` : formatClock(s);
 }
 
 /** "20… Nf6" for move index i, honouring games that start from a position. */
@@ -641,7 +691,7 @@ function moveListHTML(review, ply) {
   review.moves.forEach((san, i) => {
     const idx = i + (startBlack ? 1 : 0);
     const no = startNo + Math.floor(idx / 2);
-    const mark = review.marks.find(m => m.ply === i);
+    const mark = review.marks.find(m => m.ply === i && !m.cleared);
     const cls = ['move', mark ? mark.cls : '', ply === i + 1 ? 'current' : ''].join(' ');
     if (idx % 2 === 0 || i === 0) html += `<li><span class="move-no">${no}${idx % 2 ? '…' : '.'}</span>`;
     html += `<button type="button" class="${cls}" data-ply="${i + 1}" aria-current="${ply === i + 1}">${esc(san)}${mark ? SYMBOL[mark.cls] : ''}</button>`;

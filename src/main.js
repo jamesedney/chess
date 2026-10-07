@@ -10,6 +10,7 @@ import * as path from './pages/path.js';
 import * as play from './pages/play.js';
 import * as review from './pages/review.js';
 import * as progress from './pages/progress.js';
+import { scheduleDeepAnalysis } from './deep.js';
 
 export const VERSION = '1.4.0';
 const PAGES = { train, path, play, review, progress };
@@ -334,6 +335,8 @@ function boot() {
   window.addEventListener('online', () => setNetworkLabel('Online'));
   registerServiceWorker();
   show(currentPage(), hashParams());
+  // Re-check reviewed mistakes with a deeper search once the app has settled.
+  scheduleDeepAnalysis(15000);
   if (app.recovered) toast('Saved progress could not be read, so a copy was kept. See Settings to download it.', { duration: 9000 });
   else if (!app.storageOK) toast('This browser is not saving progress (private mode?). Export a backup in Settings.');
 }

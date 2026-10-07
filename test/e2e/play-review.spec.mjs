@@ -56,6 +56,27 @@ test('reviewing a game saves explained mistakes and opens the viewer', async ({ 
   await expect(page.locator('#mistake-list .review-item').first()).toContainText('Instead of');
 });
 
+const CLOCKED = `[Event "Rated blitz"]
+[White "me"]
+[Black "rival"]
+[Result "0-1"]
+[TimeControl "180+0"]
+
+1. e4 { [%clk 0:02:59] } 1... e5 { [%clk 0:02:59] } 2. Nf3 { [%clk 0:02:55] } 2... Nc6 { [%clk 0:02:57] } 3. Bc4 { [%clk 0:02:50] } 3... Nd4 { [%clk 0:02:54] } 4. Nxe5 { [%clk 0:02:48] } 4... Qg5 { [%clk 0:02:50] } 5. Nxf7 { [%clk 0:02:46] } 5... Qxg2 { [%clk 0:02:45] } 6. Rf1 { [%clk 0:02:44] } 6... Qxe4+ { [%clk 0:02:40] } 7. Be2 { [%clk 0:02:42] } 7... Nf3# { [%clk 0:02:38] } 0-1`;
+
+test('a review shows the opening, time per move and opening results', async ({ page }) => {
+  await open(page, 'review');
+  await page.fill('#pgn', CLOCKED);
+  await page.selectOption('#review-colour', 'w');
+  await page.click('#analyse');
+  await expect(page.locator('h1')).toContainText('me – rival', { timeout: 90000 });
+  await expect(page.locator('.opening-line')).toContainText('C');
+  await page.keyboard.press('End');
+  await expect(page.locator('.clock-line')).toContainText('spent with');
+  await page.click('#back-to-list');
+  await expect(page.locator('.data-table')).toContainText('0 / 0 / 1');
+});
+
 test('a multi-game PGN offers a game picker with your colour detected', async ({ page }) => {
   await open(page, 'review');
   await page.click('#settings');
