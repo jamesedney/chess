@@ -626,3 +626,5 @@
 {"fen":"8/P7/8/3K1pp1/1k5P/R7/8/8 b - - 0 61","setup":"g5g4","line":["a7a8q","g4g3","a8a4"],"ply":117,"score":99998,"mate":2,"discovery":3,"second":99996,"source":"generated"}
 {"fen":"r1k4r/ppp3p1/8/2N2pP1/5B2/1B2R1Pp/PPP2P2/RN4K1 b - - 1 24","setup":"h8d8","line":["b3e6","d8d7","e6d7","c8d8","e3e8"],"ply":42,"score":99997,"mate":3,"discovery":3,"second":1033,"source":"generated"}
 {"fen":"rnb1k2r/pp1p1ppp/8/2pp2q1/2P1n3/1Q6/PP2PPP1/R2K1B1R w kq - 0 12","setup":"g2g4","line":["g5d2"],"ply":20,"score":99999,"mate":1,"discovery":1,"second":772,"source":"generated"}
+{"fen":"8/7p/b4p2/Pk4pP/3q2K1/4R1P1/5P2/7r w - - 3 45","setup":"g4f3","line":["a6b7","e3e4","d4e4"],"ply":83,"score":99998,"mate":2,"discovery":1,"second":99996,"source":"generated"}
+{"fen":"6k1/8/3p3p/3r2pP/8/5q2/5PP1/1R4K1 w - - 0 55","setup":"b1b8","line":["f3f8","b8f8","g8f8"],"ply":105,"score":662,"mate":null,"discovery":1,"second":33,"source":"generated"}
