@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0
+
+- Training screen redesigned around the board: a thin progress line, the board, one feedback line and an action bar fixed to the bottom on phones. Stats and modes live behind a Mode menu. A Skip button moves on without recording an attempt.
+- New colour scheme, Walnut: a wooden board on warm paper with an amber accent, in light and dark.
+- Pieces replaced with the cburnett vector set (Lichess's default), with solid outlines that read on any square.
+- Pieces can be dragged, with the piece following the finger, or moved by tapping; a tap off target just clears the selection.
+- Filler panels removed from the training page.
+
 ## 1.1.0
 
 ### Training

@@ -2,8 +2,8 @@
 import { Chess } from '../../vendor/chess.js';
 import { app } from '../app-context.js';
 import { engine, BUDGET } from '../engine.js';
-import { BoardView, boardCard, turnLabel } from '../board.js';
-import { $, esc, pageHead, choosePromotion, plural } from '../ui.js';
+import { BoardView, turnLabel } from '../board.js';
+import { $, esc, choosePromotion, plural, showModal, closeModal } from '../ui.js';
 import { schedule, choosePuzzle, dueCount, isMistake } from '../srs.js';
 import { updateRating, pushHistory, weakestTheme } from '../rating.js';
 import { judgeAlternative, rejectionMessage } from '../verify.js';
@@ -103,36 +103,71 @@ function startSession(mode, theme, redraw = true) {
   if (redraw) draw();
 }
 
-function header() {
+/** The thin line above the board: where you are in the session, and the menu. */
+function topLine() {
+  const s = app.state;
+  const goal = s.goal;
+  let progress;
+  if (session.mode === 'vision') progress = `Vision sprint · best ${s.vision.best}`;
+  else {
+    const n = Math.min(session.done + (current && !current.complete ? 1 : 0), goal) || Math.min(session.done, goal);
+    progress = `${Math.max(1, n)} of ${goal} · rating ${s.puzzle.rating}`;
+  }
+  const chip = session.theme
+    ? `<span class="chip">${esc(session.theme)} <button type="button" class="chip-close" id="clear-theme" aria-label="Clear theme filter">×</button></span>`
+    : session.mode === 'mistakes'
+      ? '<span class="chip">My mistakes</span>'
+      : '';
+  return `<div class="focus-top">
+    <span id="focus-progress" class="focus-progress">${esc(progress)}</span>
+    ${chip}
+    <button type="button" id="train-menu" class="secondary focus-menu" aria-haspopup="dialog" aria-label="Training menu: modes and today’s numbers">☰ Mode</button>
+  </div>`;
+}
+
+/** Stats and modes, shown on request rather than above the board. */
+function openMenu() {
   const s = app.state;
   const today = s.days[dateKey()];
   const streak = streaks(s.days);
   const due = dueCount(app.allPuzzles(), s.records, Date.now());
   const active = app.activeMistakes().length;
-  const chip = session.theme
-    ? `<span class="chip">${esc(session.theme)} <button type="button" class="chip-close" id="clear-theme" aria-label="Clear theme filter">×</button></span>`
-    : '';
-  return (
-    pageHead('DAILY PRACTICE', 'Make your next move count.', 'A little focus today. A stronger player tomorrow.') +
-    `<div class="stat-row four">
+  showModal(`<h2>Training</h2>
+    <div class="stat-row four compact">
       <div class="stat"><small>Today’s reps</small><strong>${today?.attempts || 0}<span class="small"> / ${s.goal}</span></strong></div>
       <div class="stat"><small>Streak</small><strong>${plural(streak.current, 'day')}</strong></div>
       <div class="stat"><small>Ready to revisit</small><strong>${due}</strong></div>
       <div class="stat"><small>Puzzle rating</small><strong>${s.puzzle.rating}</strong></div>
     </div>
+    <h3>Mode</h3>
     <div class="pill-row" role="group" aria-label="Training mode">
       <button type="button" data-mode="daily" class="${session.mode === 'daily' && !session.theme ? 'active' : ''}">Adaptive session</button>
       <button type="button" data-mode="mistakes" class="${session.mode === 'mistakes' ? 'active' : ''}">My mistakes · ${active}</button>
       <button type="button" data-mode="vision" class="${session.mode === 'vision' ? 'active' : ''}">Vision sprint</button>
-      ${chip}
-    </div>`
+    </div>
+    ${session.theme ? `<p class="small">Theme filter: ${esc(session.theme)}. Choosing a mode clears it.</p>` : ''}
+    <div class="actions"><button type="button" id="menu-flip">⇅ Flip board</button><button type="button" id="menu-progress">See progress</button></div>`);
+  document.querySelectorAll('#modal [data-mode]').forEach(
+    b =>
+      (b.onclick = () => {
+        closeModal();
+        startSession(b.dataset.mode);
+      }),
   );
+  $('#menu-progress').onclick = () => {
+    closeModal();
+    app.navigate('progress');
+  };
+  $('#menu-flip').onclick = () => {
+    closeModal();
+    if (board) board.set({ orientation: opposite(board.orientation) });
+  };
 }
 
 function draw() {
   if (!root || app.page !== 'train') return;
-  root.innerHTML = header() + '<div id="train-body"></div>';
-  root.querySelectorAll('[data-mode]').forEach(b => (b.onclick = () => startSession(b.dataset.mode)));
+  root.innerHTML = '<div class="focus">' + topLine() + '<div id="train-body"></div></div>';
+  $('#train-menu', root).onclick = openMenu;
   $('#clear-theme', root)?.addEventListener('click', () => startSession('daily'));
   const body = $('#train-body', root);
   if (session.mode === 'vision') return drawVision(body);
@@ -165,31 +200,29 @@ function drawPuzzle(body) {
   const c = current;
   const p = c.puzzle;
   const tags = c.complete ? displayTags(p.tags || []) : [];
-  const ratingText = isMistake(p) ? 'YOUR GAME' : p.rating ? `RATED ${p.rating}` : '';
-  const position = `${Math.min(session.done + 1, app.state.goal)} OF ${app.state.goal}`;
-  body.innerHTML = `<div class="workspace">
-    ${boardCard({ title: esc(c.complete ? 'Position complete' : p.goal), chip: '' })}
-    <div>
-      <section class="panel">
-        <div class="eyebrow">${esc(p.theme.toUpperCase())}${ratingText ? ' · ' + ratingText : ''} · ${position}</div>
-        ${isMistake(p) ? `<p class="muted">From your own game: you played ${esc(p.played || 'a weaker move')}.</p>` : ''}
-        ${tags.length ? `<div class="tag-row">${tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
-        <div id="feedback" class="status ${c.tone}" role="status" aria-live="polite">${esc(c.message)}</div>
-        <div class="actions">
-          ${
-            c.complete
-              ? `<button type="button" class="primary" id="next">Next position</button>
-               ${c.game.isGameOver() ? '' : '<button type="button" id="play-out">Play it out</button>'}
-               ${isMistake(p) ? '<button type="button" id="archive">Remove from my mistakes</button>' : ''}`
-              : `<button type="button" id="hint">${c.hint ? 'More help' : 'Hint'}</button><button type="button" id="solution">Show solution</button>`
-          }
-        </div>
-      </section>
+  const ratingText = isMistake(p) ? 'your game' : p.rating ? `rated ${p.rating}` : '';
+  body.innerHTML = `
+    <div class="focus-prompt">
+      <strong id="board-title">${esc(c.complete ? 'Position complete' : p.goal)}</strong>
+      <span class="chip" id="board-chip"></span>
     </div>
-  </div>`;
+    <div class="focus-board"><div id="board"></div></div>
+    <div class="focus-meta small">${esc(p.theme)}${ratingText ? ' · ' + ratingText : ''}${isMistake(p) ? ` · you played ${esc(p.played || 'a weaker move')}` : ''}</div>
+    <div id="feedback" class="status ${c.tone}" role="status" aria-live="polite">${esc(c.message)}</div>
+    ${tags.length ? `<div class="tag-row">${tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
+    <div class="focus-actions">
+      ${
+        c.complete
+          ? `${c.game.isGameOver() ? '' : '<button type="button" id="play-out">Play it out</button>'}
+             ${isMistake(p) ? '<button type="button" id="archive" class="secondary" aria-label="Remove from my mistakes">Remove</button>' : ''}
+             <button type="button" class="primary" id="next">Next position</button>`
+          : `<button type="button" id="hint">${c.hint ? 'More help' : 'Hint'}</button>
+             <button type="button" id="solution">Solution</button>
+             <button type="button" class="secondary" id="skip" aria-label="Skip to the next position">Skip</button>`
+      }
+    </div>`;
   board = new BoardView($('#board', body), { onMove: handleMove, askPromotion: choosePromotion, label: 'Puzzle board' });
   refreshBoard();
-  $('#board-flip', body).onclick = () => board.set({ orientation: opposite(board.orientation) });
   if (c.complete) {
     $('#next', body).onclick = next;
     $('#play-out', body)?.addEventListener('click', () => app.navigate('play', { fen: c.game.fen(), from: p.title, colour: c.solver }));
@@ -201,8 +234,18 @@ function drawPuzzle(body) {
   } else {
     $('#hint', body).onclick = hint;
     $('#solution', body).onclick = showSolution;
+    $('#skip', body).onclick = skip;
   }
   if (c.setupPending) playSetup(c);
+}
+
+/** Give up on this position without recording an attempt; it stays in the pool. */
+function skip() {
+  const c = current;
+  if (!c || c.complete) return;
+  if (session.done >= app.state.goal) session.finished = true;
+  else loadNext();
+  draw();
 }
 
 function refreshBoard() {
@@ -219,6 +262,9 @@ function refreshBoard() {
   });
   const chip = $('#board-chip');
   if (chip) chip.textContent = turnLabel(c.game);
+  const prog = $('#focus-progress');
+  if (prog)
+    prog.textContent = `${Math.max(1, Math.min(session.done + (c.complete ? 0 : 1), app.state.goal))} of ${app.state.goal} · rating ${app.state.puzzle.rating}`;
 }
 
 function feedback(message, tone = '') {
@@ -448,24 +494,21 @@ function stopVisionTimer() {
 function drawVision(body) {
   const v = vision;
   const best = app.state.vision.best;
-  body.innerHTML = `<div class="workspace">
-    ${boardCard({ title: 'Find the free piece', chip: '' })}
-    <div>
-      <section class="panel">
-        <div class="eyebrow">BOARD VISION SPRINT</div>
-        ${
-          v.phase === 'running'
-            ? `<div class="sprint"><div><small>Time</small><strong id="sprint-time">60</strong></div><div><small>Found</small><strong id="sprint-score">${v.score}</strong></div></div>
-             <div id="feedback" class="status" role="status" aria-live="polite">Capture the one enemy piece that is free to take.</div>`
-            : `<h2>${v.phase === 'done' ? `${plural(v.score, 'piece')} found` : 'One minute. One free piece per position.'}</h2>
-             <p class="muted">${v.phase === 'done' ? (v.score >= best && v.score > 0 ? 'A new best score.' : `Your best is ${best}.`) : 'Each position has exactly one enemy piece you can capture without losing material. Find it and take it. A wrong move costs three seconds.'}</p>
-             <div class="actions"><button type="button" class="primary" id="sprint-start">${v.phase === 'done' ? 'Go again' : 'Start sprint'}</button></div>
-             <p class="small">Best score: ${best} · Sprints: ${app.state.vision.runs}</p>`
-        }
-      </section>
-    </div></div>`;
+  body.innerHTML = `
+    <div class="focus-prompt"><strong id="board-title">Find the free piece</strong><span class="chip" id="board-chip"></span></div>
+    <div class="focus-board"><div id="board"></div></div>
+    ${
+      v.phase === 'running'
+        ? `<div class="sprint"><div><small>Time</small><strong id="sprint-time">60</strong></div><div><small>Found</small><strong id="sprint-score">${v.score}</strong></div></div>
+           <div id="feedback" class="status" role="status" aria-live="polite">Capture the one enemy piece that is free to take.</div>`
+        : `<div class="status" role="status">${
+            v.phase === 'done'
+              ? `${plural(v.score, 'piece')} found. ${v.score >= best && v.score > 0 ? 'A new best score.' : `Your best is ${best}.`}`
+              : 'One minute. Each position has exactly one enemy piece you can take for free. Find it and capture it. A wrong move costs three seconds.'
+          }</div>
+           <div class="focus-actions"><span class="small">Best ${best} · ${plural(app.state.vision.runs, 'sprint')}</span><button type="button" class="primary" id="sprint-start">${v.phase === 'done' ? 'Go again' : 'Start sprint'}</button></div>`
+    }`;
   board = new BoardView($('#board', body), { onMove: visionMove, askPromotion: async () => 'q', label: 'Vision sprint board' });
-  $('#board-flip', body).onclick = () => board.set({ orientation: opposite(board.orientation) });
   $('#sprint-start', body)?.addEventListener('click', startSprint);
   if (v.phase === 'running' && v.drill) showDrill();
   else board.set({ game: new Chess(), interactive: false });

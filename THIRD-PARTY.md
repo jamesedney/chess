@@ -20,9 +20,13 @@ Copyright Jeff Hlywa and contributors. BSD-2-Clause.
 Source: https://github.com/jhlywa/chess.js/tree/v1.4.0
 Licence included: `vendor/chess.LICENSE`.
 
-## Piece graphics and icons
+## Piece graphics
 
-Rasterised chess glyphs from DejaVu Sans, based on Bitstream Vera. DejaVu fonts are distributed under the permissive Bitstream Vera and public-domain modification terms. Font notice included in `vendor/DEJAVU-LICENSE.txt`.
+The chess pieces in `pieces/` are the "cburnett" set by Colin M.L. Burnett, as distributed by Lichess (https://github.com/lichess-org/lila/tree/master/public/piece/cburnett). GNU GPL v2 or later; redistributed here under GPL v3 as part of Rankup. Files are unmodified apart from renaming.
+
+## App icons
+
+The knight in `icons/` and the header is rasterised from DejaVu Sans, based on Bitstream Vera. DejaVu fonts are distributed under the permissive Bitstream Vera and public-domain modification terms. Font notice included in `vendor/DEJAVU-LICENSE.txt`.
 
 ## Positions
 

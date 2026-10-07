@@ -35,8 +35,9 @@ test('progress from version 1.0 carries over', async ({ page }) => {
     }
   }, JSON.stringify(V1));
   await open(page);
-  await expect(page.locator('[data-mode="mistakes"]')).toContainText('My mistakes · 1');
-  await expect(page.locator('.stat-row')).toContainText('1100');
+  await page.click('#train-menu');
+  await expect(page.locator('#modal [data-mode="mistakes"]')).toContainText('My mistakes · 1');
+  await expect(page.locator('#modal .stat-row')).toContainText('1100');
 });
 
 test('unreadable saved data is kept for recovery', async ({ page }) => {
@@ -69,7 +70,7 @@ test('backup export and import round-trip, and dark mode applies', async ({ page
   // Reset, then restore.
   await page.click('#reset');
   await page.click('#confirm [data-answer="yes"]');
-  await expect(page.locator('.stat-row')).toContainText('0 / 8');
+  await expect(page.locator('#focus-progress')).toContainText('rating 800');
   await expect(page).toHaveURL(/#train$/);
   await page.click('#settings');
   await page.setInputFiles('#restore-file', file);

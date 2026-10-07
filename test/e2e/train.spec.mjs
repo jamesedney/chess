@@ -26,7 +26,8 @@ test('solving a puzzle cleanly updates the rating and reveals its tags', async (
   await expect(page.locator('#feedback')).toContainText('Solved without help');
   await expect(page.locator('#feedback')).toContainText('Puzzle rating');
   await expect(page.locator('.tag-row')).toContainText('Back-rank mate');
-  await expect(page.locator('.stat-row')).toContainText('1 / 8');
+  await expect(page.locator('#focus-progress')).toContainText('1 of 8');
+  await expect(page.locator('#focus-progress')).not.toContainText('rating 800');
   // A theme's first rating starts from the overall rating before this result.
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')));
   expect(saved.themes['King safety'].rating).toBe(saved.puzzle.rating);
@@ -77,7 +78,8 @@ test('generated puzzles start with the opponent’s move', async ({ page }) => {
 
 test('vision sprint scores a correct capture', async ({ page }) => {
   await open(page);
-  await page.click('[data-mode="vision"]');
+  await page.click('#train-menu');
+  await page.click('#modal [data-mode="vision"]');
   await page.click('#sprint-start');
   const fen = await page.locator('#board').getAttribute('data-fen');
   const [target] = hangingPieces(Chess, fen, { minValue: 3 }).filter(h => h.gain >= 3);

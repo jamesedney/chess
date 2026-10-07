@@ -66,7 +66,7 @@ export function choosePromotion(color = 'w') {
     dialog.innerHTML = `<h2>Promote your pawn</h2><p>Choose the piece your pawn becomes.</p><div class="promotion">${['q', 'r', 'n', 'b']
       .map(
         p =>
-          `<button type="button" data-promote="${p}" aria-label="${{ q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight' }[p]}"><img src="./pieces/${color}${p}.png" alt=""></button>`,
+          `<button type="button" data-promote="${p}" aria-label="${{ q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight' }[p]}"><img src="./pieces/${color}${p}.svg" alt=""></button>`,
       )
       .join('')}</div>`;
     let done = false;

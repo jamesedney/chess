@@ -9,7 +9,7 @@ import * as play from './pages/play.js';
 import * as review from './pages/review.js';
 import * as progress from './pages/progress.js';
 
-export const VERSION = '1.1.0';
+export const VERSION = '1.2.0';
 const PAGES = { train, path, play, review, progress };
 const THEME_KEY = 'rankup-theme';
 let pendingParams = null;
@@ -73,7 +73,7 @@ function applyTheme(choice) {
   if (choice === 'light' || choice === 'dark') document.documentElement.dataset.theme = choice;
   else delete document.documentElement.dataset.theme;
   const dark = choice === 'dark' || (choice !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
-  $('meta[name="theme-color"]')?.setAttribute('content', dark ? '#0d1a17' : '#122723');
+  $('meta[name="theme-color"]')?.setAttribute('content', dark ? '#1a1512' : '#a6521f');
 }
 
 function themeChoice() {

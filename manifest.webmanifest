@@ -6,8 +6,8 @@
   "start_url": "./#train",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f3f5f2",
-  "theme_color": "#122723",
+  "background_color": "#f6f1e8",
+  "theme_color": "#a6521f",
   "categories": ["education", "games"],
   "icons": [
     { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

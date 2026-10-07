@@ -299,7 +299,7 @@ export class BoardView {
       const piece = p ? p.color + p.type : '';
       if (b.dataset.piece !== piece) {
         b.querySelector('img')?.remove();
-        if (piece) b.insertAdjacentHTML('beforeend', `<img src="./pieces/${piece}.png" alt="" draggable="false">`);
+        if (piece) b.insertAdjacentHTML('beforeend', `<img src="./pieces/${piece}.svg" alt="" draggable="false">`);
         b.dataset.piece = piece;
       }
     }

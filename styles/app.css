@@ -2,160 +2,158 @@
 
 :root {
   color-scheme: light;
-  --ink: #152c27;
-  --muted: #5b6e67;
-  --paper: #f3f5f2;
-  --surface: #ffffff;
-  --surface-2: #f2f5f0;
-  --line: #dce4de;
-  --line-strong: #bdcbbf;
-  --accent: #152c27;
+  --ink: #2b2219;
+  --muted: #7a6a5a;
+  --paper: #f6f1e8;
+  --surface: #fffdf8;
+  --surface-2: #f3ebdf;
+  --line: #e5dbcb;
+  --line-strong: #cdbfa9;
+  --accent: #a6521f;
   --accent-ink: #ffffff;
-  --accent-hover: #285a48;
-  --green: #285a48;
-  --lime: #d8f29b;
-  --lime-ink: #152c27;
-  --hover: #edf3eb;
-  --chip: #e5ece5;
-  --chip-ink: #285a48;
-  --status: #eef4e7;
-  --status-line: #90aa7d;
-  --success: #e5f4e3;
-  --success-line: #387a49;
-  --error: #fff0ee;
+  --accent-hover: #8e4418;
+  --green: #a6521f;
+  --lime: #f3c98b;
+  --lime-ink: #2b2219;
+  --hover: #f3eadb;
+  --chip: #f0e4d2;
+  --chip-ink: #7a4a22;
+  --status: #f5ebdc;
+  --status-line: #c99a5b;
+  --success: #e9f1e2;
+  --success-line: #6b9a4a;
+  --error: #f9e7e1;
   --error-line: #b23a35;
-  --warning: #fff6e3;
+  --warning: #f7ebd4;
   --warning-line: #b07a12;
   --danger: #b23a35;
-  --focus: #c89129;
-  --sq-light: #e6ebd9;
-  --sq-dark: #73937f;
-  --sq-light-hover: #d3dfb7;
-  --sq-dark-hover: #87a58b;
-  --sq-selected: #e4c269;
-  --sq-last: rgba(232, 209, 99, 0.45);
-  --sq-check: radial-gradient(circle, rgba(214, 64, 52, 0.85) 0%, rgba(214, 64, 52, 0.35) 45%, transparent 72%);
-  --coord-light: #355541;
-  --coord-dark: #eff4e3;
-  --dot: rgba(24, 62, 72, 0.4);
-  --ring: #b2922f;
-  --arrow-best: rgba(40, 140, 80, 0.82);
+  --focus: #1f6fb3;
+  --sq-light: #f0d9b5;
+  --sq-dark: #b58863;
+  --sq-light-hover: #e9cfa4;
+  --sq-dark-hover: #ab7d57;
+  --sq-selected: rgba(20, 85, 30, 0.45);
+  --sq-last: rgba(155, 199, 0, 0.41);
+  --sq-check: radial-gradient(circle, rgba(255, 0, 0, 0.75) 0%, rgba(231, 0, 0, 0.3) 45%, transparent 72%);
+  --coord-light: #b58863;
+  --coord-dark: #f0d9b5;
+  --dot: rgba(20, 85, 30, 0.5);
+  --ring: rgba(20, 85, 30, 0.55);
+  --arrow-best: rgba(21, 120, 60, 0.85);
   --arrow-played: rgba(200, 60, 50, 0.7);
-  --arrow-hint: rgba(40, 110, 170, 0.8);
-  --series: #285a48;
-  --series-wash: rgba(40, 90, 72, 0.1);
-  --grid: #e6ebe7;
+  --arrow-hint: rgba(31, 111, 179, 0.85);
+  --series: #a6521f;
+  --series-wash: rgba(166, 82, 31, 0.1);
+  --grid: #ece3d6;
   --mistake: #d9822b;
   --blunder: #c2413b;
   --inaccuracy: #8a8f2a;
-  --eval-white: #f4f6f2;
-  --eval-black: #3b4a45;
-  --heat-0: #e8ede8;
-  --heat-1: #9fc0a7;
-  --heat-2: #285a48;
-  --backdrop: rgba(16, 41, 30, 0.82);
+  --eval-white: #f6efe3;
+  --eval-black: #4a3a2e;
+  --heat-0: #ece3d6;
+  --heat-1: #d7a979;
+  --heat-2: #a6521f;
+  --backdrop: rgba(43, 34, 25, 0.8);
   --shadow: 0 5px 25px rgba(0, 0, 0, 0.2);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --ink: #e3ebe6;
-    --muted: #9fb3aa;
-    --paper: #0d1a17;
-    --surface: #16241f;
-    --surface-2: #1c2e28;
-    --line: #2b3f38;
-    --line-strong: #3d554c;
-    --accent: #d8f29b;
-    --accent-ink: #11221d;
-    --accent-hover: #c5e584;
-    --green: #8fc7a8;
-    --lime: #d8f29b;
-    --lime-ink: #11221d;
-    --hover: #21352e;
-    --chip: #21352e;
-    --chip-ink: #b9dcc7;
-    --status: #1b2d26;
-    --status-line: #5f8a6e;
-    --success: #19321f;
-    --success-line: #6ab37e;
+    --ink: #efe6da;
+    --muted: #b3a08c;
+    --paper: #1a1512;
+    --surface: #231d18;
+    --surface-2: #2b241e;
+    --line: #3a2f27;
+    --line-strong: #52433a;
+    --accent: #e4a06a;
+    --accent-ink: #1a1512;
+    --accent-hover: #edb27f;
+    --green: #e4a06a;
+    --lime: #e4a06a;
+    --lime-ink: #1a1512;
+    --hover: #2d251f;
+    --chip: #33291f;
+    --chip-ink: #e9c9a8;
+    --status: #2a2119;
+    --status-line: #9a7345;
+    --success: #1f2a1a;
+    --success-line: #6b9a4a;
     --error: #3a1d1c;
     --error-line: #e5726b;
     --warning: #33290f;
     --warning-line: #d5a63a;
     --danger: #e5726b;
     --focus: #e3b552;
-    --sq-light: #c9d3bd;
-    --sq-dark: #5f7d6b;
-    --sq-light-hover: #b7c7a0;
-    --sq-dark-hover: #6f8f79;
-    --sq-selected: #d4b456;
-    --coord-light: #2e4a39;
-    --coord-dark: #e2ead7;
-    --series: #8fc7a8;
-    --series-wash: rgba(143, 199, 168, 0.12);
-    --grid: #263a33;
+    --sq-light: #d9c3a0;
+    --sq-dark: #8b6744;
+    --sq-light-hover: #cdb38c;
+    --sq-dark-hover: #7d5b3b;
+    --coord-light: #8b6744;
+    --coord-dark: #d9c3a0;
+    --series: #e4a06a;
+    --series-wash: rgba(228, 160, 106, 0.12);
+    --grid: #2f2720;
     --mistake: #b39012;
     --blunder: #e6566a;
     --inaccuracy: #a3a65a;
-    --eval-white: #d9e0da;
-    --eval-black: #0b1311;
-    --heat-0: #1f322b;
-    --heat-1: #4e7a60;
-    --heat-2: #a6d9b8;
-    --backdrop: rgba(3, 10, 8, 0.85);
+    --eval-white: #e6dccb;
+    --eval-black: #0f0c0a;
+    --heat-0: #2a211a;
+    --heat-1: #8b5e3c;
+    --heat-2: #e4a06a;
+    --backdrop: rgba(8, 5, 3, 0.85);
     --shadow: 0 5px 25px rgba(0, 0, 0, 0.6);
   }
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --ink: #e3ebe6;
-  --muted: #9fb3aa;
-  --paper: #0d1a17;
-  --surface: #16241f;
-  --surface-2: #1c2e28;
-  --line: #2b3f38;
-  --line-strong: #3d554c;
-  --accent: #d8f29b;
-  --accent-ink: #11221d;
-  --accent-hover: #c5e584;
-  --green: #8fc7a8;
-  --lime: #d8f29b;
-  --lime-ink: #11221d;
-  --hover: #21352e;
-  --chip: #21352e;
-  --chip-ink: #b9dcc7;
-  --status: #1b2d26;
-  --status-line: #5f8a6e;
-  --success: #19321f;
-  --success-line: #6ab37e;
+  --ink: #efe6da;
+  --muted: #b3a08c;
+  --paper: #1a1512;
+  --surface: #231d18;
+  --surface-2: #2b241e;
+  --line: #3a2f27;
+  --line-strong: #52433a;
+  --accent: #e4a06a;
+  --accent-ink: #1a1512;
+  --accent-hover: #edb27f;
+  --green: #e4a06a;
+  --lime: #e4a06a;
+  --lime-ink: #1a1512;
+  --hover: #2d251f;
+  --chip: #33291f;
+  --chip-ink: #e9c9a8;
+  --status: #2a2119;
+  --status-line: #9a7345;
+  --success: #1f2a1a;
+  --success-line: #6b9a4a;
   --error: #3a1d1c;
   --error-line: #e5726b;
   --warning: #33290f;
   --warning-line: #d5a63a;
   --danger: #e5726b;
   --focus: #e3b552;
-  --sq-light: #c9d3bd;
-  --sq-dark: #5f7d6b;
-  --sq-light-hover: #b7c7a0;
-  --sq-dark-hover: #6f8f79;
-  --sq-selected: #d4b456;
-  --coord-light: #2e4a39;
-  --coord-dark: #e2ead7;
-  --series: #8fc7a8;
-  --series-wash: rgba(143, 199, 168, 0.12);
-  --grid: #263a33;
+  --sq-light: #d9c3a0;
+  --sq-dark: #8b6744;
+  --sq-light-hover: #cdb38c;
+  --sq-dark-hover: #7d5b3b;
+  --coord-light: #8b6744;
+  --coord-dark: #d9c3a0;
+  --series: #e4a06a;
+  --series-wash: rgba(228, 160, 106, 0.12);
+  --grid: #2f2720;
   --mistake: #b39012;
   --blunder: #e6566a;
   --inaccuracy: #a3a65a;
-  --eval-white: #d9e0da;
-  --eval-black: #0b1311;
-  --heat-0: #1f322b;
-  --heat-1: #4e7a60;
-  --heat-2: #a6d9b8;
-  --backdrop: rgba(3, 10, 8, 0.85);
+  --eval-white: #e6dccb;
+  --eval-black: #0f0c0a;
+  --heat-0: #2a211a;
+  --heat-1: #8b5e3c;
+  --heat-2: #e4a06a;
+  --backdrop: rgba(8, 5, 3, 0.85);
   --shadow: 0 5px 25px rgba(0, 0, 0, 0.6);
 }
 
@@ -471,14 +469,15 @@ p {
   min-width: 0;
 }
 .panel.dark-panel {
-  background: #152c27;
-  color: #fff;
-  border-color: #152c27;
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
 }
 .dark-panel .muted,
 .dark-panel .eyebrow,
 .dark-panel small {
-  color: #b5c8be;
+  color: var(--paper);
+  opacity: 0.75;
 }
 .dark-panel p {
   font-size: 14px;
@@ -532,8 +531,8 @@ p {
   bottom: calc(24px + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
-  background: #152c27;
-  color: #fff;
+  background: var(--ink);
+  color: var(--paper);
   padding: 12px 18px;
   border-radius: 12px;
   box-shadow: var(--shadow);
@@ -665,7 +664,7 @@ p {
   position: relative;
   width: 100%;
   aspect-ratio: 1;
-  border: 1px solid #557562;
+  border: 1px solid var(--line-strong);
   border-radius: 4px;
   overflow: hidden;
   user-select: none;
@@ -762,7 +761,7 @@ p {
 }
 .square.selected,
 .square.selected:hover {
-  background: var(--sq-selected);
+  box-shadow: inset 0 0 0 100px var(--sq-selected);
 }
 .square.last {
   box-shadow: inset 0 0 0 100px var(--sq-last);
@@ -1122,7 +1121,7 @@ p {
   font:
     20px/1.5 Georgia,
     serif;
-  border-left: 3px solid #bdd994;
+  border-left: 3px solid var(--status-line);
   padding-left: 16px;
   margin: 24px 0;
 }
@@ -1682,5 +1681,113 @@ dialog p {
   .goal-line span,
   .session-line span {
     background: CanvasText;
+  }
+}
+
+/* ---------- Focus layout (training page) ---------- */
+.focus {
+  max-width: 600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.focus-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+}
+.focus-progress {
+  font-size: 14px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.focus-menu {
+  margin-left: auto;
+  padding: 7px 12px;
+  font-size: 14px;
+}
+.focus-prompt {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 17px;
+}
+.focus-prompt strong {
+  font-weight: 600;
+}
+.focus-board .board {
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+.focus-meta {
+  margin-top: -2px;
+}
+.focus .status {
+  margin: 0;
+}
+.focus .sprint {
+  margin: 0;
+}
+.focus-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.focus-actions .primary {
+  margin-left: auto;
+}
+.focus-actions .small {
+  margin-right: auto;
+}
+.focus .panel {
+  margin: 0;
+}
+.stat-row.compact {
+  margin-bottom: 6px;
+  grid-template-columns: repeat(2, 1fr);
+}
+.stat-row.compact .stat {
+  padding: 10px 12px;
+}
+.stat-row.compact .stat strong {
+  font-size: 20px;
+}
+@media (max-width: 850px) {
+  main:has(.focus) {
+    padding-top: 10px;
+    padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+  .focus-actions {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 15;
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    flex-wrap: nowrap;
+  }
+  .focus-actions button {
+    flex: 1;
+    padding: 12px 8px;
+    font-size: 15px;
+  }
+  .focus-actions .primary {
+    margin-left: 0;
+  }
+  .focus-actions .small {
+    flex: 1;
+    margin-right: 0;
+  }
+}
+@media (max-width: 640px) {
+  main:has(.focus) {
+    padding-left: 10px;
+    padding-right: 10px;
   }
 }

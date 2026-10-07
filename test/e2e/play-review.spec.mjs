@@ -43,7 +43,7 @@ test('reviewing a game saves explained mistakes and opens the viewer', async ({ 
   await page.keyboard.press('ArrowRight');
   await expect(counter).not.toHaveText(before);
   await page.click('#practise-game');
-  await expect(page.locator('.panel').first()).toContainText('From your own game');
+  await expect(page.locator('.focus-meta')).toContainText('you played');
   // The mistake bank lists it, and it can be removed and restored.
   await page.click('nav a[data-page="review"]');
   await page.click('#back-to-list').catch(() => {});
@@ -118,7 +118,8 @@ test('arrow keys in the viewer do not pile up or leak into other pages', async (
   await expect(page.locator('.viewer-controls .small')).toHaveText('14 / 14');
   await page.click('nav a[data-page="train"]');
   await page.keyboard.press('ArrowLeft');
-  await expect(page.locator('h1')).toContainText('Make your next move count');
+  await expect(page.locator('#focus-progress')).toBeVisible();
+  await expect(page.locator('.viewer-controls')).toHaveCount(0);
 });
 
 test.describe('board interaction', () => {
