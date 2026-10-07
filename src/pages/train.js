@@ -3,7 +3,7 @@ import { Chess } from '../../vendor/chess.js';
 import { app } from '../app-context.js';
 import { engine, BUDGET } from '../engine.js';
 import { BoardView, turnLabel } from '../board.js';
-import { $, esc, choosePromotion, plural, showModal, closeModal } from '../ui.js';
+import { $, esc, choosePromotion, plural, showModal, closeModal, settle } from '../ui.js';
 import { schedule, choosePuzzle, dueCount, isMistake } from '../srs.js';
 import { updateRating, pushHistory, weakestTheme } from '../rating.js';
 import { judgeAlternative, rejectionMessage } from '../verify.js';
@@ -275,6 +275,7 @@ function feedback(message, tone = '') {
   if (el) {
     el.textContent = message;
     el.className = 'status ' + tone;
+    settle(el);
   }
 }
 

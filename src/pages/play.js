@@ -3,7 +3,7 @@ import { Chess } from '../../vendor/chess.js';
 import { app } from '../app-context.js';
 import { engine, BUDGET } from '../engine.js';
 import { BoardView, boardCard, turnLabel } from '../board.js';
-import { $, esc, pageHead, choosePromotion, confirmDialog, download, toast } from '../ui.js';
+import { $, esc, pageHead, choosePromotion, confirmDialog, download, toast, settle } from '../ui.js';
 import { moveToUci, playUci, opposite } from '../chess-utils.js';
 import { LEVELS, levelById, pickNoisyMove } from '../strength.js';
 import { isTrainableMistake, winPercentLoss } from '../evaluation.js';
@@ -180,10 +180,11 @@ function refreshBoard() {
 function status(text, tone = '') {
   if (app.page !== 'play') return;
   const el = $('#play-status');
-  if (el) {
+  if (el && el.textContent !== text) {
     el.textContent = text;
     el.className = 'status ' + tone;
-  }
+    settle(el);
+  } else if (el) el.className = 'status ' + tone;
 }
 
 function prepareCoach() {

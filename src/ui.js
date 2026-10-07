@@ -97,6 +97,19 @@ export function download(name, data, type = 'application/json') {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
+/** Fade a status element in after its text changes, unless motion is reduced. */
+export function settle(el) {
+  if (!el || typeof el.animate !== 'function') return;
+  if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  el.animate(
+    [
+      { opacity: 0.35, transform: 'translateY(3px)' },
+      { opacity: 1, transform: 'none' },
+    ],
+    { duration: 180, easing: 'ease-out' },
+  );
+}
+
 export function formatDate(key) {
   if (!key) return '';
   const d = new Date(key.length === 10 ? key + 'T12:00:00' : key);

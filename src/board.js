@@ -3,6 +3,11 @@ import { NAMES } from './chess-utils.js';
 
 const FILES = 'abcdefgh';
 let uid = 0;
+const MOVE_MS = 190;
+const EASE = 'cubic-bezier(0.2, 0.7, 0.2, 1)';
+
+/** Honour the user's reduced-motion setting for every scripted animation. */
+export const motionOK = () => !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
 
 export class BoardView {
   /**
@@ -28,6 +33,7 @@ export class BoardView {
     this.drag = null;
     this.squares = null;
     this.builtFor = null;
+    this.skipAnimation = false; // set when the piece is already where the user put it (a drag)
 
     el.classList.add('board');
     el.setAttribute('role', 'group');
@@ -190,7 +196,8 @@ export class BoardView {
     if (!d || e.pointerId !== d.id) return;
     this.handled = { square: d.from, at: Date.now() };
     const target = d.moved ? this.squareAt(e.clientX, e.clientY) : null;
-    this.endDrag();
+    const legalDrop = !!target && target !== d.from && this.legalTargets(d.from).has(target);
+    this.endDrag(!legalDrop && d.moved ? d : null);
     if (!d.moved) {
       // A tap on your own piece: a second tap on the same piece deselects it.
       if (d.wasSelected) {
@@ -199,15 +206,32 @@ export class BoardView {
       }
       return;
     }
-    if (target && target !== d.from && this.legalTargets(d.from).has(target)) this.tap(target);
-    else this.render(); // dropped off target: snap back and stay selected
+    if (legalDrop) {
+      this.skipAnimation = true;
+      this.tap(target);
+    } else this.render(); // dropped off target: the ghost glides back and the piece stays selected
   }
 
-  endDrag() {
+  /** End a drag. With `snap`, the ghost glides back to its square before disappearing. */
+  endDrag(snap = null) {
     const d = this.drag;
     if (!d) return;
     this.drag = null;
-    d.ghost?.remove();
+    if (d.ghost && snap && motionOK()) {
+      const origin = this.squares.get(d.from)?.getBoundingClientRect();
+      const ghost = d.ghost;
+      if (origin) {
+        ghost
+          .animate([{ transform: ghost.style.transform }, { transform: `translate(${origin.left}px, ${origin.top}px) scale(1)` }], {
+            duration: 160,
+            easing: EASE,
+          })
+          .finished.then(
+            () => ghost.remove(),
+            () => ghost.remove(),
+          );
+      } else ghost.remove();
+    } else d.ghost?.remove();
     this.squares?.get(d.from)?.classList.remove('drag-origin');
     if (d.over) this.squares?.get(d.over)?.classList.remove('drag-over');
     try {
@@ -289,6 +313,8 @@ export class BoardView {
       for (const row of this.game.board()) for (const p of row) if (p && p.type === 'k' && p.color === this.game.turn()) checked = p.square;
     }
     const target = this.focusTarget();
+    const vanished = []; // [square, pieceCode, img]
+    const appeared = []; // [square, pieceCode, img]
     for (const [sq, b] of this.squares) {
       const p = this.game.get(sq);
       const cls = ['square', b.dataset.shade];
@@ -304,14 +330,83 @@ export class BoardView {
       b.setAttribute('aria-label', this.squareLabel(sq, p, legal.has(sq)));
       const piece = p ? p.color + p.type : '';
       if (b.dataset.piece !== piece) {
-        b.querySelector('img')?.remove();
-        if (piece) b.insertAdjacentHTML('beforeend', `<img src="./pieces/${piece}.svg" alt="" draggable="false">`);
+        const old = b.querySelector('img');
+        if (old) {
+          vanished.push([sq, b.dataset.piece, old]);
+          old.remove();
+        }
+        if (piece) {
+          b.insertAdjacentHTML('beforeend', `<img src="./pieces/${piece}.svg" alt="" draggable="false">`);
+          appeared.push([sq, piece, b.lastElementChild]);
+        }
         b.dataset.piece = piece;
       }
     }
+    if (!this.skipAnimation && this.builtFor === this.orientation) this.animateChanges(vanished, appeared);
+    this.skipAnimation = false;
     this.el.dataset.fen = this.game.fen();
     this.drawArrows();
     if (hadFocus && document.activeElement !== this.squares.get(target)) this.squares.get(target)?.focus({ preventScroll: true });
+  }
+
+  /**
+   * Slide pieces from where they were to where they are now, and fade out
+   * captured ones. Only a move's worth of changes is animated; a new
+   * position simply appears.
+   */
+  animateChanges(vanished, appeared) {
+    if (!motionOK() || !appeared.length || vanished.length + appeared.length > 6) return;
+    const rect = sq => this.squares.get(sq).getBoundingClientRect();
+    const unmatched = [...vanished];
+    for (const [to, piece, img] of appeared) {
+      // The same piece that left the nearest square is the one that moved here.
+      let best = -1;
+      let bestDist = Infinity;
+      unmatched.forEach(([from, code], i) => {
+        if (code !== piece) return;
+        const a = rect(from);
+        const b = rect(to);
+        const dist = Math.hypot(a.left - b.left, a.top - b.top);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = i;
+        }
+      });
+      if (best < 0) {
+        img.animate(
+          [
+            { opacity: 0, transform: 'scale(0.6)' },
+            { opacity: 1, transform: 'scale(1)' },
+          ],
+          { duration: 160, easing: EASE },
+        );
+        continue;
+      }
+      const [from] = unmatched.splice(best, 1)[0];
+      const a = rect(from);
+      const b = rect(to);
+      img.style.zIndex = 5;
+      img
+        .animate([{ transform: `translate(${a.left - b.left}px, ${a.top - b.top}px)` }, { transform: 'translate(0, 0)' }], {
+          duration: MOVE_MS,
+          easing: EASE,
+        })
+        .finished.then(
+          () => (img.style.zIndex = ''),
+          () => (img.style.zIndex = ''),
+        );
+    }
+    // Whatever was not matched to a mover was captured: let it fade where it stood.
+    for (const [from, , img] of unmatched) {
+      const square = this.squares.get(from);
+      const ghost = img.cloneNode();
+      ghost.className = 'fade-piece';
+      square.append(ghost);
+      ghost.animate([{ opacity: 0.9 }, { opacity: 0 }], { duration: MOVE_MS, easing: 'ease-out' }).finished.then(
+        () => ghost.remove(),
+        () => ghost.remove(),
+      );
+    }
   }
 
   drawArrows() {

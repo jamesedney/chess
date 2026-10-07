@@ -3,7 +3,7 @@ import { Chess } from '../../vendor/chess.js';
 import { lessons, SECTIONS } from '../../data/lessons.js';
 import { app } from '../app-context.js';
 import { BoardView, turnLabel } from '../board.js';
-import { $, esc, pageHead, choosePromotion, plural } from '../ui.js';
+import { $, esc, pageHead, choosePromotion, plural, settle } from '../ui.js';
 import { moveToUci, playUci } from '../chess-utils.js';
 import { PERSONAL } from '../themes.js';
 
@@ -179,6 +179,7 @@ function say(message, tone = '') {
   el.textContent = message;
   el.className = 'status ' + tone;
   el.hidden = !message;
+  settle(el);
 }
 
 function solved(explain) {

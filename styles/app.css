@@ -1937,3 +1937,99 @@ dialog p {
     gap: 12px;
   }
 }
+
+/* ---------- Motion ---------- */
+button:not(.square) {
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    transform 90ms ease,
+    opacity 140ms ease;
+}
+button:not(.square):active:not(:disabled) {
+  transform: scale(0.97);
+}
+.square {
+  transition:
+    box-shadow 140ms ease,
+    background-color 140ms ease;
+}
+.square.dot::after,
+.square.capture::after {
+  animation: pop-in 150ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+.square img {
+  will-change: transform;
+}
+.fade-piece {
+  position: absolute;
+  inset: 7%;
+  width: 86% !important;
+  height: 86% !important;
+  pointer-events: none;
+}
+.board-arrows .arrow {
+  animation: fade-in 180ms ease-out;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+dialog[open] {
+  animation: dialog-in 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+dialog[open]::backdrop {
+  animation: fade-in 180ms ease-out;
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+#toast.show {
+  animation: toast-in 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}
+.step-dots li,
+.goal-line span,
+.session-line span,
+.bar-fill {
+  transition:
+    background-color 220ms ease,
+    width 300ms ease;
+}
+.chip,
+.tag,
+.status {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+.choice,
+.lesson,
+.panel,
+.review-item {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+nav a {
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}

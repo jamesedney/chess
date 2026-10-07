@@ -9,7 +9,7 @@ import * as play from './pages/play.js';
 import * as review from './pages/review.js';
 import * as progress from './pages/progress.js';
 
-export const VERSION = '1.3.1';
+export const VERSION = '1.4.0';
 const PAGES = { train, path, play, review, progress };
 const THEME_KEY = 'rankup-theme';
 let pendingParams = null;
@@ -30,6 +30,15 @@ function show(name, params = {}) {
   });
   const main = $('#main');
   PAGES[name].render(main, params);
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    main.animate(
+      [
+        { opacity: 0, transform: 'translateY(6px)' },
+        { opacity: 1, transform: 'none' },
+      ],
+      { duration: 170, easing: 'ease-out' },
+    );
+  }
   updateSidebar();
   main.focus({ preventScroll: true });
   window.scrollTo({ top: 0, behavior: 'instant' });

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.0
+
+- Motion: pieces slide to their squares, captured pieces fade out, a piece dropped off target glides back, and highlights and legal-move dots ease in. Pages, dialogs, toasts and status messages fade rather than flash. Everything is disabled when the device asks for reduced motion.
+
+## 1.3.1
+
+- Fixed two lesson positions whose tap questions were wrong (a defended bishop called loose; a pin blocked by a pawn). Every tap step is now verified against the rules of chess in the tests.
+
 ## 1.3.0
 
 - Learning path rebuilt as interactive lessons: 15 lessons in five sections, each a sequence of steps on the board. Steps ask you to tap a square, find a move, play a line or decide between answers, with a Show answer fallback. Progress is saved per lesson and shown as a ring on the path.
