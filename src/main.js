@@ -10,10 +10,13 @@ import * as path from './pages/path.js';
 import * as play from './pages/play.js';
 import * as review from './pages/review.js';
 import * as progress from './pages/progress.js';
+import * as drills from './pages/drills.js';
 import { scheduleDeepAnalysis } from './deep.js';
 
 export const VERSION = '1.4.0';
-const PAGES = { train, path, play, review, progress };
+const PAGES = { train, path, play, review, progress, drills };
+// Parameters that are part of a page's address, so reloads and the back button return to them.
+const ADDRESS_KEYS = ['lesson', 'drill', 'id'];
 const THEME_KEY = 'rankup-theme';
 let pendingParams = null;
 
@@ -25,8 +28,9 @@ function currentPage() {
 function show(name, params = {}) {
   if (app.page && app.page !== name) PAGES[app.page].leave?.();
   app.page = name;
+  const nav = PAGES[name].navAs || name;
   $$('[data-page]').forEach(a => {
-    const active = a.dataset.page === name;
+    const active = a.dataset.page === nav;
     a.classList.toggle('active', active);
     if (active) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
@@ -49,8 +53,8 @@ function show(name, params = {}) {
 
 app.navigate = (name, params = {}) => {
   pendingParams = params;
-  // Lessons get their own address so the back button and reloads return to them.
-  const target = name + (params.lesson ? '?lesson=' + encodeURIComponent(params.lesson) : '');
+  const query = new URLSearchParams(ADDRESS_KEYS.filter(k => params[k]).map(k => [k, params[k]])).toString();
+  const target = name + (query ? '?' + query : '');
   if (location.hash === '#' + target) {
     pendingParams = null;
     show(name, params);
@@ -62,7 +66,7 @@ function hashParams() {
   const q = location.hash.split('?')[1];
   if (!q) return {};
   const out = {};
-  for (const [k, v] of new URLSearchParams(q)) if (['puzzle', 'theme', 'mode', 'lesson'].includes(k)) out[k] = v;
+  for (const [k, v] of new URLSearchParams(q)) if (['puzzle', 'theme', 'mode', ...ADDRESS_KEYS].includes(k)) out[k] = v;
   if (out.theme && !out.mode) out.mode = 'daily';
   return out;
 }

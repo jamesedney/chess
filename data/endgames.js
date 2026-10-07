@@ -1,0 +1,71 @@
+// Endgame drills, each played out against Stockfish. Every position was
+// checked with Stockfish 17.1 at depth 26 (tools/verify-endgames.mjs).
+// goal: mate | promote | draw. limit: the most moves you may use.
+export const ENDGAME_DRILLS = [
+  {
+    id: 'kq-k',
+    title: 'Queen and king mate',
+    goal: 'mate',
+    limit: 12,
+    fen: '8/8/8/4k3/8/8/8/3QK3 w - - 0 1',
+    intro: 'Mate with king and queen. Box the king in with the queen a knight’s move away, then bring your own king up.',
+    tip: 'Never leave the king with no moves unless it is checkmate: that is stalemate.',
+  },
+  {
+    id: 'krr-k',
+    title: 'Two-rook ladder',
+    goal: 'mate',
+    limit: 12,
+    fen: '8/8/3k4/8/8/8/8/R4RK1 w - - 0 1',
+    intro: 'Mate with two rooks. One rook cuts off a rank, the other checks on the next, and the king is walked to the edge.',
+    tip: 'If the king attacks a rook, move that rook to the far side of the board on the same rank.',
+  },
+  {
+    id: 'kr-k',
+    title: 'Rook and king mate',
+    goal: 'mate',
+    limit: 30,
+    fen: '8/8/8/4k3/8/8/8/R3K3 w - - 0 1',
+    intro: 'Mate with king and rook. Use the rook to shrink the box and your king to take the opposition.',
+    tip: 'Check only when the kings face each other with one square between them.',
+  },
+  {
+    id: 'kp-win',
+    title: 'King in front of the pawn',
+    goal: 'promote',
+    limit: 12,
+    fen: '4k3/8/4K3/4P3/8/8/8/8 w - - 0 1',
+    intro: 'Your king stands in front of its pawn on the sixth rank. That always wins. Promote and keep the new queen.',
+    tip: 'Step to the side to push the defending king away before you push the pawn.',
+  },
+  {
+    id: 'kp-draw',
+    title: 'Hold the pawn ending',
+    goal: 'draw',
+    side: 'b',
+    limit: 20,
+    fen: '8/4k3/8/4P3/4K3/8/8/8 b - - 0 1',
+    intro: 'You defend with Black. Keep your king in front of the pawn and take the opposition, and White cannot win.',
+    tip: 'When the pawn reaches the sixth rank, your king belongs on the back rank directly in front of it.',
+  },
+  {
+    id: 'lucena',
+    title: 'Lucena: build a bridge',
+    goal: 'promote',
+    limit: 20,
+    fen: '1K1k4/1P6/8/8/8/8/r7/2R5 w - - 0 1',
+    intro: 'The famous winning rook ending. Cut the black king off, bring your rook to the fourth rank, then use it to block the checks.',
+    tip: 'First Rd1+ to push the king further away. Then Rd4, and walk your king out.',
+  },
+  {
+    id: 'philidor',
+    title: 'Philidor: third-rank defence',
+    goal: 'draw',
+    side: 'b',
+    limit: 25,
+    fen: '4k3/8/r7/3KP3/8/8/8/7R b - - 0 1',
+    intro:
+      'You defend with Black. Keep your rook on the sixth rank so the white king cannot advance. When the pawn moves up, check from behind.',
+    tip: 'Once White plays e6, the white king has no shelter: send your rook to the first rank and check.',
+  },
+];

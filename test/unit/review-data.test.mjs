@@ -150,3 +150,67 @@ test('mistake kinds come from the engine lines', () => {
   assert.ok(KIND_IDS.includes(kindFromExplanation('You played a3. Nf3 kept a stronger position.')));
   assert.equal(kindFromExplanation('Nxe5 forks the king and rook.'), 'missed-tactic');
 });
+
+import { judge, baseline, recordResult, ENDGAME_DRILLS } from '../../src/endgames.js';
+import { makeVisualisation, nextPlies, makeCheckDrill, checkingMoves, scoreChecks, MAX_PLIES } from '../../src/calc.js';
+
+const drill = id => ENDGAME_DRILLS.find(d => d.id === id);
+
+test('endgame drills are judged by their goal', () => {
+  const kq = drill('kq-k');
+  const going = new Chess('7k/8/5QK1/8/8/8/8/8 b - - 0 1');
+  const mate = new Chess('6k1/5Q2/6K1/8/8/8/8/8 w - - 0 1');
+  mate.move('Qg7#');
+  assert.equal(judge(kq, mate, 'w', 5, baseline(new Chess(kq.fen))).state, 'won');
+  const stale = new Chess('7k/8/6K1/8/8/8/8/5Q2 w - - 0 1');
+  stale.move('Qf7');
+  assert.equal(judge(kq, stale, 'w', 5, baseline(new Chess(kq.fen))).state, 'lost', 'stalemate throws the win away');
+  assert.equal(judge(kq, going, 'w', kq.limit, baseline(new Chess(kq.fen))).state, 'playing', 'the limit only bites on your turn');
+  const slow = new Chess('8/8/8/4k3/8/8/8/3QK3 w - - 0 1');
+  assert.match(judge(kq, slow, 'w', kq.limit, baseline(slow)).reason, /Out of moves/);
+});
+
+test('promotion and defence drills', () => {
+  const kp = drill('kp-win');
+  const base = baseline(new Chess(kp.fen));
+  assert.equal(judge(kp, new Chess('3Qk3/8/8/8/8/8/8/4K3 b - - 0 1'), 'w', 4, base).state, 'playing', 'wait for the reply');
+  assert.equal(judge(kp, new Chess('3Q4/4k3/8/8/8/8/8/4K3 w - - 0 1'), 'w', 5, base).state, 'won');
+  const hold = drill('kp-draw');
+  const hb = baseline(new Chess(hold.fen));
+  assert.equal(judge(hold, new Chess('4Q3/8/8/2k5/8/8/8/4K3 b - - 0 1'), 'b', 6, hb).state, 'lost');
+  assert.equal(judge(hold, new Chess('8/4k3/8/8/8/4K3/8/8 w - - 0 1'), 'b', 6, hb).state, 'won', 'bare kings are a draw');
+  assert.equal(judge(hold, new Chess(hold.fen), 'b', hold.limit, hb).state, 'won', 'surviving the limit holds');
+  assert.deepEqual(recordResult(undefined, { won: true, moves: 9, assisted: false }), { tries: 1, wins: 1, best: 9 });
+  assert.deepEqual(recordResult({ tries: 1, wins: 1, best: 9 }, { won: true, moves: 7, assisted: true }), { tries: 2, wins: 1, best: 9 });
+});
+
+let seed = 7;
+const rng = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const SEEDS = [
+  'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3',
+  'r2q1rk1/ppp2ppp/2np1n2/2b1p1B1/2B1P1b1/2NP1N2/PPP2PPP/R2Q1RK1 w - - 0 8',
+];
+
+test('visualisation questions track a piece through the line', () => {
+  for (let i = 0; i < 20; i++) {
+    const v = makeVisualisation(SEEDS, 4, rng);
+    assert.ok(v);
+    assert.equal(v.sans.length, 4);
+    const g = new Chess(v.fen);
+    for (const s of v.sans) g.move(s);
+    assert.equal(g.fen(), v.finalFen);
+    const p = g.get(v.answer);
+    assert.equal(p.color, v.piece.color);
+    assert.equal(p.type, v.piece.type);
+  }
+  assert.equal(nextPlies(MAX_PLIES, true), MAX_PLIES);
+  assert.equal(nextPlies(2, false), 2);
+  assert.equal(nextPlies(4, true), 5);
+});
+
+test('check drills list every checking move', () => {
+  assert.deepEqual(checkingMoves('4k3/8/8/8/8/8/8/R3K3 w - - 0 1'), ['a1a8']);
+  const d = makeCheckDrill(SEEDS, rng, { min: 1, max: 10 });
+  assert.ok(d === null || d.checks.length >= 1);
+  assert.equal(scoreChecks(3, 5), 0);
+});

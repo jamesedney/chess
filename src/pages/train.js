@@ -146,6 +146,12 @@ function openMenu() {
       <button type="button" data-mode="mistakes" class="${session.mode === 'mistakes' ? 'active' : ''}">My mistakes · ${active}</button>
       <button type="button" data-mode="vision" class="${session.mode === 'vision' ? 'active' : ''}">Vision sprint</button>
     </div>
+    <h3>Drills</h3>
+    <div class="pill-row" role="group" aria-label="Drills">
+      <button type="button" data-drill="endgames">Endgames vs Stockfish</button>
+      <button type="button" data-drill="visualise">Visualisation</button>
+      <button type="button" data-drill="checks">Find every check</button>
+    </div>
     ${session.theme ? `<p class="small">Theme filter: ${esc(session.theme)}. Choosing a mode clears it.</p>` : ''}
     <div class="actions"><button type="button" id="menu-flip">⇅ Flip board</button><button type="button" id="menu-progress">See progress</button></div>`);
   document.querySelectorAll('#modal [data-mode]').forEach(
@@ -153,6 +159,13 @@ function openMenu() {
       (b.onclick = () => {
         closeModal();
         startSession(b.dataset.mode);
+      }),
+  );
+  document.querySelectorAll('#modal [data-drill]').forEach(
+    b =>
+      (b.onclick = () => {
+        closeModal();
+        app.navigate('drills', { drill: b.dataset.drill });
       }),
   );
   $('#menu-progress').onclick = () => {

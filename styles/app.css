@@ -2131,3 +2131,48 @@ nav a {
 .clock-line {
   margin: 8px 0 0;
 }
+
+/* ---------- Drills ---------- */
+
+.drill-list {
+  display: grid;
+  gap: 10px;
+}
+
+.drill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.drill h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.drill p {
+  margin: 0;
+}
+
+.drill.done {
+  border-color: var(--success-line);
+}
+
+.calc-line {
+  margin: 10px 0 4px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font:
+    600 16px/1.6 ui-monospace,
+    'SF Mono',
+    Menlo,
+    monospace;
+  word-spacing: 2px;
+}
