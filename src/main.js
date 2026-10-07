@@ -1,0 +1,269 @@
+// Entry point: routing, settings, theme, offline support and install prompt.
+import { app } from './app-context.js';
+import { $, $$, esc, toast, showModal, closeModal, confirmDialog, download } from './ui.js';
+import { parseState, defaults, dateKey, RECOVERY_PREFIX } from './state.js';
+import { STAGES } from './themes.js';
+import * as train from './pages/train.js';
+import * as path from './pages/path.js';
+import * as play from './pages/play.js';
+import * as review from './pages/review.js';
+import * as progress from './pages/progress.js';
+
+export const VERSION = '1.1.0';
+const PAGES = { train, path, play, review, progress };
+const THEME_KEY = 'rankup-theme';
+let pendingParams = null;
+
+function currentPage() {
+  const name = location.hash.replace(/^#/, '').split('?')[0];
+  return PAGES[name] ? name : 'train';
+}
+
+function show(name, params = {}) {
+  if (app.page && app.page !== name) PAGES[app.page].leave?.();
+  app.page = name;
+  $$('[data-page]').forEach(a => {
+    const active = a.dataset.page === name;
+    a.classList.toggle('active', active);
+    if (active) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
+  });
+  const main = $('#main');
+  PAGES[name].render(main, params);
+  updateSidebar();
+  main.focus({ preventScroll: true });
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+
+app.navigate = (name, params = {}) => {
+  pendingParams = params;
+  if (currentPage() === name && location.hash === '#' + name) {
+    pendingParams = null;
+    show(name, params);
+  } else location.hash = name;
+};
+
+/** Parameters written into the address, e.g. #train?puzzle=p001 or #train?theme=Tactics. */
+function hashParams() {
+  const q = location.hash.split('?')[1];
+  if (!q) return {};
+  const out = {};
+  for (const [k, v] of new URLSearchParams(q)) if (['puzzle', 'theme', 'mode'].includes(k)) out[k] = v;
+  if (out.theme && !out.mode) out.mode = 'daily';
+  return out;
+}
+
+window.addEventListener('hashchange', () => {
+  const params = pendingParams || hashParams();
+  pendingParams = null;
+  show(currentPage(), params);
+});
+
+function updateSidebar() {
+  const r = app.state.puzzle.rating;
+  const bar = $('#goal-bar');
+  if (bar) bar.style.width = Math.min(100, (r / 1500) * 100) + '%';
+  const text = $('#goal-text');
+  if (text) text.textContent = `Puzzle rating ${r} of 1500`;
+}
+
+// ---------- Theme ----------
+
+function applyTheme(choice) {
+  if (choice === 'light' || choice === 'dark') document.documentElement.dataset.theme = choice;
+  else delete document.documentElement.dataset.theme;
+  const dark = choice === 'dark' || (choice !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  $('meta[name="theme-color"]')?.setAttribute('content', dark ? '#0d1a17' : '#122723');
+}
+
+function themeChoice() {
+  try {
+    return localStorage.getItem(THEME_KEY) || 'system';
+  } catch {
+    return 'system';
+  }
+}
+
+// ---------- Settings ----------
+
+function openSettings() {
+  const s = app.state;
+  const recovery = app.recoveryKeys();
+  showModal(`<h2>Your training setup</h2>
+    <div class="field"><label for="session-goal">Positions per session</label><select id="session-goal"><option value="4">4 · quick focus</option><option value="8">8 · daily session</option><option value="12">12 · deep practice</option></select></div>
+    <div class="field"><label for="difficulty-offset">Puzzle difficulty</label><select id="difficulty-offset"><option value="-200">Easier than my rating</option><option value="0">Matched to my rating</option><option value="200">Harder than my rating</option></select></div>
+    ${
+      s.puzzle.count < 10
+        ? `<div class="field"><label for="start-level">Starting level</label><select id="start-level">${STAGES.map(st => `<option value="${st.rating}">${st.label} · ${st.rating}</option>`).join('')}</select><small>Sets your starting puzzle rating. After ten rated puzzles your results take over.</small></div>`
+        : ''
+    }
+    <div class="field"><label for="appearance">Appearance</label><select id="appearance"><option value="system">Match my device</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
+    <fieldset class="field"><legend>Your accounts (for fetching games)</legend>
+      <label for="lichess-name">Lichess username</label><input id="lichess-name" maxlength="40" spellcheck="false" value="${esc(s.profiles.lichess)}">
+      <label for="chesscom-name">Chess.com username</label><input id="chesscom-name" maxlength="40" spellcheck="false" value="${esc(s.profiles.chesscom)}">
+    </fieldset>
+    <h3>Backup</h3>
+    <p class="small">Progress is saved in this browser only. Export a backup before changing device or clearing browser data.</p>
+    <div class="actions"><button type="button" id="backup">Export progress</button><button type="button" id="restore">Import backup</button><input type="file" id="restore-file" accept=".json,application/json" hidden></div>
+    ${recovery.length ? `<div class="status error"><p>Saved data from an earlier session could not be read. A copy was kept so nothing is lost.</p><div class="actions"><button type="button" id="recovery-download">Download unreadable data</button><button type="button" id="recovery-discard">Discard it</button></div></div>` : ''}
+    <p id="storage-state" class="small">${app.storageOK ? 'Local storage available.' : 'Local storage unavailable. Progress will not survive a reload; keep a backup.'}</p>
+    <div class="actions"><button type="button" id="reset" class="danger">Reset all progress</button></div>
+    <hr>
+    <p class="small">Rankup ${VERSION} · chess.js (BSD-2-Clause) · Stockfish.js 17.1 lite (GPLv3). <a href="./THIRD-PARTY.md" target="_blank" rel="noopener">Licences and source</a></p>
+    <p class="small">Install: on Android, use the browser’s “Install app” or “Add to Home screen”. On iPhone, open in Safari and use Share → Add to Home Screen. The first online visit downloads about 9 MB for offline training.</p>`);
+  $('#session-goal').value = s.goal;
+  $('#difficulty-offset').value = s.difficulty;
+  $('#appearance').value = themeChoice();
+  if ($('#start-level')) {
+    const closest = STAGES.reduce((a, b) => (Math.abs(b.rating - s.puzzle.rating) < Math.abs(a.rating - s.puzzle.rating) ? b : a));
+    $('#start-level').value = closest.rating;
+    $('#start-level').onchange = e => {
+      s.puzzle.rating = Number(e.target.value);
+      app.save();
+      updateSidebar();
+    };
+  }
+  $('#session-goal').onchange = e => {
+    s.goal = Number(e.target.value);
+    app.save();
+  };
+  $('#difficulty-offset').onchange = e => {
+    s.difficulty = Number(e.target.value);
+    app.save();
+  };
+  $('#appearance').onchange = e => {
+    try {
+      if (e.target.value === 'system') localStorage.removeItem(THEME_KEY);
+      else localStorage.setItem(THEME_KEY, e.target.value);
+    } catch {}
+    applyTheme(e.target.value);
+  };
+  const saveName = (key, el) =>
+    (el.onchange = () => {
+      s.profiles[key] = el.value.trim();
+      app.save();
+    });
+  saveName('lichess', $('#lichess-name'));
+  saveName('chesscom', $('#chesscom-name'));
+  $('#backup').onclick = () => download(`rankup-progress-${dateKey()}.json`, JSON.stringify(s, null, 1));
+  $('#restore').onclick = () => $('#restore-file').click();
+  $('#restore-file').onchange = async e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    let restored;
+    try {
+      if (f.size > 8e6) throw new Error('too big');
+      restored = parseState(await f.text());
+    } catch {
+      return toast('That file is not a valid Rankup backup.');
+    }
+    if (
+      !(await confirmDialog({
+        title: 'Replace this device’s progress?',
+        body: 'Your current progress here will be overwritten by the backup.',
+        confirm: 'Restore backup',
+      }))
+    )
+      return;
+    app.state = restored;
+    app.save();
+    closeModal();
+    show(currentPage());
+    toast('Progress restored.');
+  };
+  $('#recovery-download')?.addEventListener('click', () => {
+    for (const k of recovery) download(`${k}.json`, app.storage.getItem(k));
+  });
+  $('#recovery-discard')?.addEventListener('click', async () => {
+    if (
+      !(await confirmDialog({
+        title: 'Discard the unreadable data?',
+        body: 'Download it first if you might want to recover it.',
+        confirm: 'Discard',
+        danger: true,
+      }))
+    )
+      return;
+    for (const k of recovery) app.storage.removeItem(k);
+    closeModal();
+  });
+  $('#reset').onclick = async () => {
+    if (
+      !(await confirmDialog({
+        title: 'Reset all progress?',
+        body: 'Ratings, history, mistakes and reviews on this device are deleted. Export a backup first if you might want them.',
+        confirm: 'Reset everything',
+        danger: true,
+      }))
+    )
+      return;
+    app.state = defaults();
+    app.save();
+    closeModal();
+    show('train');
+    toast('Progress reset.');
+  };
+}
+
+// ---------- Offline support and install ----------
+
+function setNetworkLabel(text) {
+  const el = $('#offline');
+  if (el) el.textContent = text;
+}
+
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return setNetworkLabel('Offline mode unavailable in this browser');
+  const hadController = !!navigator.serviceWorker.controller;
+  const offer = worker =>
+    toast('A new version of Rankup is ready.', {
+      action: { label: 'Update now', onClick: () => worker.postMessage({ type: 'SKIP_WAITING' }) },
+    });
+  navigator.serviceWorker
+    .register('./sw.js')
+    .then(reg => {
+      if (reg.waiting && hadController) offer(reg.waiting);
+      reg.addEventListener('updatefound', () => {
+        const w = reg.installing;
+        w?.addEventListener('statechange', () => {
+          if (w.state === 'installed' && navigator.serviceWorker.controller) offer(w);
+        });
+      });
+      return navigator.serviceWorker.ready;
+    })
+    .then(() => setNetworkLabel(navigator.onLine ? 'Offline training ready' : 'Offline mode'))
+    .catch(() => setNetworkLabel('Offline setup unavailable'));
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return;
+    reloading = true;
+    location.reload();
+  });
+}
+
+function boot() {
+  applyTheme(themeChoice());
+  matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => applyTheme(themeChoice()));
+  $('#settings').onclick = openSettings;
+  $('#close-modal').onclick = closeModal;
+  let installPrompt = null;
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    installPrompt = e;
+    $('#install').hidden = false;
+  });
+  $('#install').onclick = async () => {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    installPrompt = null;
+    $('#install').hidden = true;
+  };
+  window.addEventListener('offline', () => setNetworkLabel('Offline mode'));
+  window.addEventListener('online', () => setNetworkLabel('Online'));
+  registerServiceWorker();
+  show(currentPage(), hashParams());
+  if (app.recovered) toast('Saved progress could not be read, so a copy was kept. See Settings to download it.', { duration: 9000 });
+  else if (!app.storageOK) toast('This browser is not saving progress (private mode?). Export a backup in Settings.');
+}
+
+boot();

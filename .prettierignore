@@ -1,0 +1,9 @@
+vendor/
+node_modules/
+data/puzzles.js
+tools/data/
+_site/
+test-results/
+playwright-report/
+package-lock.json
+*.md

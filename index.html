@@ -1,1 +1,68 @@
-<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#122723"><meta name="description" content="Your personal chess training loop. Learn, practise and turn mistakes into lasting skills."><link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./icons/icon-192.png"><link rel="apple-touch-icon" href="./icons/icon-192.png"><link rel="stylesheet" href="./style.css"><title>Rankup — Chess training</title></head><body><header><a class="brand" href="#train"><span class="brand-icon">♞</span> rankup<span class="brand-tag">CHESS LAB</span></a><div class="header-right"><span id="offline" class="small">Local-first training</span><button id="install" hidden>Install app</button><button id="settings" aria-label="Settings and backup">Settings</button></div></header><div class="shell"><aside class="sidebar"><div class="eyebrow">YOUR TRAINING SPACE</div><nav aria-label="Main navigation"><button data-page="train" class="active">◈ <span>Today’s training</span></button><button data-page="path">▤ <span>Learning path</span></button><button data-page="play">♞ <span>Practice game</span></button><button data-page="review">⌕ <span>Review a game</span></button><button data-page="progress">◷ <span>Your progress</span></button></nav><div class="sidebar-bottom"><div class="eyebrow">THE LONG GAME</div><strong>Think better.<br>Then play better.</strong><p>Build the habits behind 1500.</p><div class="goal-line"><span></span></div><small>Training mastery ≠ Elo</small></div></aside><main id="main"></main></div><dialog id="modal"><div id="modal-content"></div><button id="close-modal" class="secondary">Close</button></dialog><div id="toast" role="status"></div><script type="module" src="./app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#122723" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Your personal chess training loop. Learn, practise and turn mistakes into lasting skills." />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Rankup" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <link rel="modulepreload" href="./src/main.js" />
+    <link rel="stylesheet" href="./styles/app.css" />
+    <title>Rankup — Chess training</title>
+    <script>
+      // Apply the saved appearance before first paint to avoid a flash.
+      try {
+        var t = localStorage.getItem('rankup-theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header>
+      <a class="brand" href="#train" aria-label="Rankup home"
+        ><span class="brand-icon" aria-hidden="true">♞</span> rankup<span class="brand-tag">CHESS LAB</span></a
+      >
+      <div class="header-right">
+        <span id="offline" class="small">Local-first training</span>
+        <button type="button" id="install" hidden>Install app</button>
+        <button type="button" id="settings" aria-haspopup="dialog">Settings</button>
+      </div>
+    </header>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="eyebrow">YOUR TRAINING SPACE</div>
+        <nav aria-label="Main navigation">
+          <a href="#train" data-page="train"><span aria-hidden="true">◈</span> <span>Today’s training</span></a>
+          <a href="#path" data-page="path"><span aria-hidden="true">▤</span> <span>Learning path</span></a>
+          <a href="#play" data-page="play"><span aria-hidden="true">♞</span> <span>Practice game</span></a>
+          <a href="#review" data-page="review"><span aria-hidden="true">⌕</span> <span>Review a game</span></a>
+          <a href="#progress" data-page="progress"><span aria-hidden="true">◷</span> <span>Your progress</span></a>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="eyebrow">THE LONG GAME</div>
+          <strong>Think better.<br />Then play better.</strong>
+          <p>Build the habits behind 1500.</p>
+          <div class="goal-line" aria-hidden="true"><span id="goal-bar"></span></div>
+          <small id="goal-text">Training rating ≠ Elo</small>
+        </div>
+      </aside>
+      <main id="main" tabindex="-1"></main>
+    </div>
+    <dialog id="modal" aria-labelledby="modal-content">
+      <div id="modal-content"></div>
+      <button type="button" id="close-modal" class="secondary">Close</button>
+    </dialog>
+    <dialog id="confirm"></dialog>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <noscript><p style="padding: 20px">Rankup needs JavaScript to run.</p></noscript>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

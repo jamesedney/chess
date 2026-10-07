@@ -1,16 +1,33 @@
-# Validation — 7 October 2026
+# Testing
 
-Verified locally in headless Chromium, served from a repository-style subdirectory:
+## Automated
 
-- All 52 puzzle solution lines are legal; all mate-in-one exercises finish in checkmate.
-- Every practical lesson has matching exercise content.
-- Chess rules: promotion, castling and en passant.
-- Solve an exercise and persist the result.
-- Play e4 and receive a legal Stockfish reply.
-- Import Fool's Mate as White; detect and save a missed opportunity.
-- Open a lesson and log an actual rating.
-- Responsive layout at 1440 px and 390 px; no horizontal page overflow on mobile.
-- Reload offline after service-worker activation and run Stockfish analysis offline.
-- No uncaught browser errors in the tested flow.
+`npm test` runs the unit tests with Node's built-in runner. They cover:
 
-Desktop and mobile screenshots were visually inspected. Physical Android/iOS installation and a live GitHub Pages deployment have not been tested in this environment. The package is ready for the user's repository; no repository or public deployment was created.
+- **Puzzle content.** Every puzzle and lesson example is legal and ends correctly. Mates end in mate, themes are covered, ratings are in range, the original starter ids survive, and the data file stays under its size budget.
+- **Training logic.** Spaced-repetition scheduling, puzzle selection order, puzzle rating updates, streaks, and the alternative-solution judge.
+- **Analysis.** UCI parsing, win-percentage maths, mistake thresholds, the tactic tagger (fork, pin, skewer, discovered attack, double check, smothered and back-rank mate, free pieces) and mistake explanations.
+- **Saved data.** Migration from 1.0 backups, validation, and recovery of unreadable data.
+- **Imports.** Multi-game PGN splitting, colour detection, Lichess and Chess.com fetching with fake responses, and the Lichess CSV importer with plain and zstd files.
+- **Offline shell.** Versions agree, every precached file exists, and every module the app imports is in the offline cache.
+
+`npm run test:e2e` runs Playwright in Chromium against the app served from a sub-path, as on GitHub Pages. It covers:
+
+- Every page loads with no browser errors, and back-button navigation works.
+- Solving a puzzle, a wrong move being rejected, and an alternative move being accepted by Stockfish.
+- Hints, the animated solution, "play it out", and generated puzzles' opening move.
+- Vision sprint scoring and interactive lessons, including the stalemate warning.
+- A practice game with engine replies, takebacks and keyboard-only moves.
+- Reviewing a PGN: marked mistakes, the viewer, practising saved positions, and removing and restoring them.
+- Multi-game picking, and fetching from Lichess and Chess.com with mocked responses.
+- Backup export, reset and restore, migration from 1.0 data, corrupted-data recovery, dark mode and the rating log.
+- No horizontal overflow at phone width on every page.
+- Offline reload after the service worker installs, including Stockfish.
+
+CI runs both suites on every pull request and before every Pages deployment.
+
+## Not covered automatically
+
+- Installation on physical Android and iOS devices.
+- The live Lichess and Chess.com APIs. The tests use recorded response shapes because the build environment cannot reach those sites.
+- Engine speed on low-end phones.

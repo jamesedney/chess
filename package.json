@@ -1,1 +1,29 @@
-{"name":"rankup-chess","version":"1.0.0","private":true,"type":"module","scripts":{"start":"python3 -m http.server 8080","test":"node tests.mjs"},"dependencies":{"chess.js":"1.4.0","stockfish":"17.1.0"},"license":"GPL-3.0-or-later"}
+{
+  "name": "rankup-chess",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Adaptive chess training: puzzles, spaced recall, game review and a Stockfish coach. Runs entirely in the browser.",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "test": "node --test \"test/unit/*.test.mjs\"",
+    "test:e2e": "playwright test",
+    "test:all": "npm test && npm run test:e2e",
+    "puzzles:generate": "node tools/generate-puzzles.mjs --minutes 30",
+    "puzzles:lichess": "node tools/import-lichess.mjs --download",
+    "puzzles:build": "node tools/build-puzzles.mjs",
+    "site": "node tools/stage-site.mjs",
+    "format": "prettier --write .",
+    "lint": "prettier --check ."
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "chess.js": "1.4.0",
+    "prettier": "3.9.9",
+    "stockfish": "17.1.0"
+  },
+  "engines": {
+    "node": ">=22.15"
+  }
+}

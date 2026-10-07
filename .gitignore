@@ -1,2 +1,7 @@
 node_modules/
 *.log
+_site/
+test-results/
+playwright-report/
+.smoke.mjs
+.shots.mjs
