@@ -18,6 +18,7 @@ export function defaults() {
     mistakes: [],
     days: {},
     read: [],
+    lessons: {},
     ratings: [],
     goal: 8,
     coach: true,
@@ -86,6 +87,9 @@ export function validate(s) {
   if (!s.days || typeof s.days !== 'object') return 'days';
   for (const [d, v] of Object.entries(s.days)) if (!isDate(d) || !finite(v?.attempts, 0) || !finite(v?.clean, 0)) return 'day';
   if (!Array.isArray(s.read) || !s.read.every(i => Number.isInteger(i))) return 'read';
+  if (!s.lessons || typeof s.lessons !== 'object') return 'lessons';
+  for (const [id, l] of Object.entries(s.lessons))
+    if (!/^[a-z0-9-]+$/.test(id) || !l || !Number.isInteger(l.step) || l.step < 0 || typeof l.done !== 'boolean') return 'lesson progress';
   if (!Array.isArray(s.ratings)) return 'ratings';
   for (const r of s.ratings) if (!finite(r?.rating, 100, 3500) || typeof r.platform !== 'string' || !isDate(r.date)) return 'rating';
   if (![4, 8, 12].includes(s.goal)) return 'goal';

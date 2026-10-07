@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0
+
+- Learning path rebuilt as interactive lessons: 15 lessons in five sections, each a sequence of steps on the board. Steps ask you to tap a square, find a move, play a line or decide between answers, with a Show answer fallback. Progress is saved per lesson and shown as a ring on the path.
+- New lessons on getting out of check, discovered attacks, opening traps, counting attackers and defenders, and mating with king and rook.
+- Every lesson position is checked by tests and by Stockfish (`tools/verify-lessons.mjs`).
+
 ## 1.2.0
 
 - Training screen redesigned around the board: a thin progress line, the board, one feedback line and an action bar fixed to the bottom on phones. Stats and modes live behind a Mode menu. A Skip button moves on without recording an attempt.

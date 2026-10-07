@@ -14,7 +14,7 @@ It is built for improving players, roughly 600 to 1600, who want a daily routine
 - **Game viewer.** Step through a reviewed game with an evaluation bar and graph. Marked moves show the better move as an arrow.
 - **Practice games.** Opponents from about 800 to full strength. Levels from 1400 up use Stockfish's own strength limit; lower levels pick among the engine's candidates with deliberate noise. An optional coach saves your missed opportunities. You can also play any solved puzzle out against the engine.
 - **Vision sprint.** One-minute drills: each position has exactly one free piece to win.
-- **Interactive lessons.** Eight short lessons, each with positions to solve on the board.
+- **Interactive lessons.** Fifteen lessons played step by step on the board: tap the loose piece, find the fork, play the line, decide between answers. Progress is saved per lesson.
 - **Honest progress.** A puzzle rating with trend chart, per-theme strength, a practice calendar and streak, and a separate log of your real online rating.
 - **Works offline and installs as an app.** After the first visit, about 9 MB, everything including Stockfish works offline. Light and dark themes follow your device or a setting.
 
@@ -75,6 +75,7 @@ npm run test:e2e       # end-to-end tests in Chromium, desktop and phone sizes
 node tools/generate-puzzles.mjs --minutes 60   # mine more puzzles from self-play (appends)
 node tools/build-puzzles.mjs                   # tag, rate, balance and write data/puzzles.js
 node tools/verify-puzzles.mjs --sample 50      # re-check a sample with a deeper search
+node tools/verify-lessons.mjs                  # check every lesson position with Stockfish
 ```
 
 To use real, crowd-rated Lichess puzzles (CC0) instead of the generated ones:

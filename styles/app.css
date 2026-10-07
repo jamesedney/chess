@@ -1791,3 +1791,149 @@ dialog p {
     padding-right: 10px;
   }
 }
+
+/* ---------- Learning path ---------- */
+.path-section {
+  margin-bottom: 26px;
+}
+.path-heading {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 10px;
+  font-family: var(--body, inherit);
+}
+.lesson {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 18px;
+}
+.lesson.next-up {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.lesson.done {
+  opacity: 0.85;
+}
+.lesson-body {
+  flex: 1;
+  min-width: 0;
+}
+.lesson h3 {
+  font:
+    600 19px/1.2 Georgia,
+    serif;
+  margin: 2px 0 6px;
+}
+.lesson-body p {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+.lesson .lesson-footer {
+  margin-top: 0;
+}
+.lesson-ring {
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) calc(var(--pct) * 1%), var(--line) 0);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.lesson-ring span {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+}
+.lesson.done .lesson-ring span {
+  color: var(--accent);
+  font-size: 16px;
+}
+.step-dots {
+  list-style: none;
+  display: flex;
+  gap: 5px;
+  padding: 0;
+  margin: -4px 0 0;
+}
+.step-dots li {
+  flex: 1;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--line);
+}
+.step-dots li.read {
+  opacity: 0.6;
+}
+.step-dots li.past {
+  background: var(--accent);
+  opacity: 1;
+}
+.step-dots li.now {
+  background: var(--accent-hover);
+  opacity: 1;
+}
+.lesson-text p {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+.lesson-text-only {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px;
+}
+.lesson-text-only .eyebrow {
+  margin-bottom: 8px;
+}
+.lesson-text-only p {
+  font-size: 17px;
+  line-height: 1.55;
+}
+.choices {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+.choice {
+  text-align: left;
+  padding: 12px 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: normal;
+}
+.choice.picked {
+  border-color: var(--accent);
+}
+.choice.right,
+.choice.right:disabled {
+  border-color: var(--success-line);
+  background: var(--success);
+  opacity: 1;
+}
+.choice.wrong,
+.choice.wrong:disabled {
+  border-color: var(--error-line);
+  background: var(--error);
+  opacity: 1;
+}
+.choice:disabled {
+  opacity: 0.6;
+}
+@media (max-width: 640px) {
+  .lesson {
+    padding: 14px;
+    gap: 12px;
+  }
+}

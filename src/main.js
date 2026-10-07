@@ -9,7 +9,7 @@ import * as play from './pages/play.js';
 import * as review from './pages/review.js';
 import * as progress from './pages/progress.js';
 
-export const VERSION = '1.2.0';
+export const VERSION = '1.3.0';
 const PAGES = { train, path, play, review, progress };
 const THEME_KEY = 'rankup-theme';
 let pendingParams = null;
@@ -37,10 +37,12 @@ function show(name, params = {}) {
 
 app.navigate = (name, params = {}) => {
   pendingParams = params;
-  if (currentPage() === name && location.hash === '#' + name) {
+  // Lessons get their own address so the back button and reloads return to them.
+  const target = name + (params.lesson ? '?lesson=' + encodeURIComponent(params.lesson) : '');
+  if (location.hash === '#' + target) {
     pendingParams = null;
     show(name, params);
-  } else location.hash = name;
+  } else location.hash = target;
 };
 
 /** Parameters written into the address, e.g. #train?puzzle=p001 or #train?theme=Tactics. */
@@ -48,7 +50,7 @@ function hashParams() {
   const q = location.hash.split('?')[1];
   if (!q) return {};
   const out = {};
-  for (const [k, v] of new URLSearchParams(q)) if (['puzzle', 'theme', 'mode'].includes(k)) out[k] = v;
+  for (const [k, v] of new URLSearchParams(q)) if (['puzzle', 'theme', 'mode', 'lesson'].includes(k)) out[k] = v;
   if (out.theme && !out.mode) out.mode = 'daily';
   return out;
 }

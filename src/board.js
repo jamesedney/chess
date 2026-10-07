@@ -9,9 +9,10 @@ export class BoardView {
    * el: container element. options.onMove({from, to, promotion}) is called for
    * legal moves; options.askPromotion(color) resolves to a piece letter.
    */
-  constructor(el, { onMove = null, askPromotion = async () => 'q', label = 'Chess board' } = {}) {
+  constructor(el, { onMove = null, onSquare = null, askPromotion = async () => 'q', label = 'Chess board' } = {}) {
     this.el = el;
     this.onMove = onMove;
+    this.onSquare = onSquare; // when set, any tapped square is reported instead of selecting pieces
     this.askPromotion = askPromotion;
     this.game = null;
     this.orientation = 'w';
@@ -110,6 +111,11 @@ export class BoardView {
     // pointerUp already handled the gesture on this square; skip the click the browser adds.
     if (sq === this.handled?.square && Date.now() - this.handled.at < 400) {
       this.handled = null;
+      return;
+    }
+    if (this.onSquare && !this.interactive) {
+      this.focusSquare = sq;
+      this.onSquare(sq);
       return;
     }
     this.tap(sq);
