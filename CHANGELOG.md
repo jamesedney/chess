@@ -3,7 +3,7 @@
 ## 1.1.0
 
 ### Training
-- Several hundred new rated, tagged puzzles mined from Stockfish self-play, with a one-command importer for the Lichess puzzle database.
+- 555 new rated, tagged puzzles (607 in total) mined from Stockfish self-play, with a one-command importer for the Lichess puzzle database.
 - A puzzle rating, updated on first attempts, that selects puzzles near your level. A difficulty setting can aim easier or harder.
 - Moves that differ from the stored solution are checked by Stockfish and accepted when equally strong.
 - Hints escalate from an idea, to the piece, to an arrow. The solution animates.

@@ -7,7 +7,7 @@ It is built for improving players, roughly 600 to 1600, who want a daily routine
 ## What it does
 
 - **Adaptive puzzle sessions.** Each session mixes due reviews, your own mistakes, your weakest theme and new puzzles chosen near your puzzle rating.
-- **Several hundred rated puzzles.** They are mined from Stockfish self-play, keeping only positions where the winning move is clearly the only good one, the same idea Lichess uses. Each one is tagged (fork, pin, skewer, back-rank mate…) and explained after you solve it. You can swap in a slice of the real Lichess puzzle database with one command (see below).
+- **About 600 rated puzzles.** They are mined from Stockfish self-play, keeping only positions where the winning move is clearly the only good one, the same idea Lichess uses. Each one is tagged (fork, pin, skewer, back-rank mate…) and explained after you solve it. You can swap in a slice of the real Lichess puzzle database with one command (see below).
 - **Fair answer checking.** If you play a different move from the stored solution, Stockfish checks it. An equally strong move is accepted, and the puzzle continues from your move.
 - **Spaced recall.** Clean solves return after 1, 3, 7, 14 and 30 days. Hints and errors bring a position back in ten minutes.
 - **Your games become the curriculum.** Fetch your recent games from Lichess or Chess.com by username, or paste a PGN (multi-game files are fine). The reviewer marks inaccuracies, mistakes and blunders using win-percentage loss. It explains what went wrong, such as a piece left hanging, a missed fork or an allowed mate, and saves the important moments as exercises.
