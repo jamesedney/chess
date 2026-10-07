@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import zlib from 'node:zlib';
 import readline from 'node:readline';
-import { Readable } from 'node:stream';
+import { Readable, PassThrough, pipeline } from 'node:stream';
 
 const URL_DB = 'https://database.lichess.org/lichess_db_puzzle.csv.zst';
 
@@ -61,14 +61,22 @@ export class BandSampler {
   }
 }
 
+function zstd() {
+  // Lichess compresses with a long window; allow up to 2 GB.
+  return zlib.createZstdDecompress({ params: { [zlib.constants.ZSTD_d_windowLogMax]: 31 } });
+}
+
+/** A text stream of the CSV. Errors anywhere in the chain surface on the returned stream. */
 async function openInput(args) {
+  const out = new PassThrough();
+  const fail = err => err && out.destroy(err);
   if (args.download) {
     const res = await fetch(URL_DB);
-    if (!res.ok) throw new Error('Download failed: ' + res.status);
-    return Readable.fromWeb(res.body).pipe(zlib.createZstdDecompress());
-  }
-  const stream = fs.createReadStream(args.input);
-  return args.input.endsWith('.zst') ? stream.pipe(zlib.createZstdDecompress()) : stream;
+    if (!res.ok) throw new Error('Download failed: HTTP ' + res.status);
+    pipeline(Readable.fromWeb(res.body), zstd(), out, fail);
+  } else if (args.input.endsWith('.zst')) pipeline(fs.createReadStream(args.input), zstd(), out, fail);
+  else pipeline(fs.createReadStream(args.input), out, fail);
+  return out;
 }
 
 export async function importLichess(args) {
@@ -104,6 +112,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   const out = args.out || new URL('./data/lichess.json', import.meta.url);
   const { rows, read } = await importLichess(args);
+  if (!rows.length) {
+    console.error(`No puzzles were imported (${read} lines read). Check the download or input file.`);
+    process.exit(1);
+  }
   fs.writeFileSync(out, JSON.stringify(rows));
   console.log(`Read ${read} rows; kept ${rows.length} puzzles. Now run: node tools/build-puzzles.mjs`);
 }

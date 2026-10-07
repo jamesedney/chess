@@ -24,8 +24,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Download and sample the puzzle database
-        run: node tools/import-lichess.mjs --download --count "${{ github.event.inputs.count || '3500' }}" --min 400 --max 2400 --max-lines 1500000
+      - name: Download the first part of the puzzle database
+        run: |
+          curl -sSL https://database.lichess.org/lichess_db_puzzle.csv.zst | zstd -dc --long=31 | head -n 1500000 > lichess-puzzles.csv || true
+          wc -l lichess-puzzles.csv
+          head -n 2 lichess-puzzles.csv
+      - name: Sample the puzzles
+        run: node tools/import-lichess.mjs --input lichess-puzzles.csv --count "${{ github.event.inputs.count || '3500' }}" --min 400 --max 2400 --max-lines 1500000
       - name: Build the puzzle set
         run: node tools/build-puzzles.mjs --source lichess
       - name: Check the content
