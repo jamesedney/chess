@@ -11,10 +11,11 @@ import * as play from './pages/play.js';
 import * as review from './pages/review.js';
 import * as progress from './pages/progress.js';
 import * as drills from './pages/drills.js';
+import * as coach from './pages/coach.js';
 import { scheduleDeepAnalysis } from './deep.js';
 
 export const VERSION = '1.4.0';
-const PAGES = { train, path, play, review, progress, drills };
+const PAGES = { train, coach, path, play, review, progress, drills };
 // Parameters that are part of a page's address, so reloads and the back button return to them.
 const ADDRESS_KEYS = ['lesson', 'drill', 'id'];
 const THEME_KEY = 'rankup-theme';

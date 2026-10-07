@@ -6,8 +6,10 @@ import { winPercent, winPercentLoss } from './evaluation.js';
  * after:  engine result for the opponent after the solver's alternative move.
  * mateExpected: the puzzle is a forced mate, so the alternative must keep a
  * mate within the solver's remaining moves (including the mating move).
+ * minWin: puzzles need a clearly winning alternative; positions from real
+ * games, which are often level, pass 0 to accept any move about as good.
  */
-export function judgeAlternative({ before, after, mateExpected = false, remainingMoves = 1, tolerance = 10 }) {
+export function judgeAlternative({ before, after, mateExpected = false, remainingMoves = 1, tolerance = 10, minWin = 60 }) {
   if (!before || !after) return { accepted: false, reason: 'unknown' };
   if (mateExpected) {
     const mating = after.mate !== null && after.mate !== undefined && after.mate < 0;
@@ -15,7 +17,7 @@ export function judgeAlternative({ before, after, mateExpected = false, remainin
     return { accepted: false, reason: mating ? 'slower-mate' : 'no-mate' };
   }
   const loss = winPercentLoss(before.score, after.score);
-  if (loss <= tolerance && winPercent(-after.score) >= 60) return { accepted: true, loss };
+  if (loss <= tolerance && winPercent(-after.score) >= minWin) return { accepted: true, loss };
   return { accepted: false, loss, reason: loss <= 25 ? 'weaker' : 'mistake' };
 }
 

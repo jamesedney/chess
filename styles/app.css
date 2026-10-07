@@ -2176,3 +2176,120 @@ nav a {
     monospace;
   word-spacing: 2px;
 }
+
+/* ---------- Coach ---------- */
+
+.plan-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.plan-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.plan-item.complete {
+  border-color: var(--success-line);
+}
+
+.plan-text {
+  flex: 1;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.plan-bar {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.plan-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+}
+
+.plan-item.complete .plan-bar span {
+  background: var(--success-line);
+}
+
+.plan-check {
+  color: var(--success-line);
+  font-size: 22px;
+  font-weight: 700;
+  padding: 0 8px;
+}
+
+.verdict {
+  font-weight: 700;
+}
+
+.verdict.better {
+  color: var(--success-line);
+}
+
+.verdict.worse {
+  color: var(--danger);
+}
+
+.verdict.flat,
+.verdict.unknown {
+  color: var(--muted);
+}
+
+.trend-table td:last-child {
+  white-space: normal;
+  min-width: 200px;
+}
+
+.findings {
+  margin: 12px 0;
+  padding-left: 20px;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .trend-table thead {
+    display: none;
+  }
+  .trend-table tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .trend-table th,
+  .trend-table td {
+    border: 0;
+    padding: 2px 0;
+    white-space: normal;
+  }
+  .trend-table th[scope='row'],
+  .trend-table td:last-child {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+  .trend-table td::before {
+    content: attr(data-label) ': ';
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .trend-table td:last-child::before {
+    content: '';
+  }
+}

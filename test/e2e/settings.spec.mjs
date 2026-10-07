@@ -94,7 +94,7 @@ test('a logged rating appears in the trend and can be deleted', async ({ page })
   await expect(page.locator('.rating-list')).not.toContainText('1234');
 });
 
-for (const name of ['train', 'path', 'play', 'review', 'progress']) {
+for (const name of ['train', 'coach', 'path', 'play', 'review', 'progress', 'drills?drill=endgames', 'drills?drill=visualise']) {
   test(`no horizontal overflow on a phone: ${name} @mobile`, async ({ page }) => {
     await open(page, name);
     await page.waitForTimeout(300);

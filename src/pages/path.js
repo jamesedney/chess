@@ -7,6 +7,14 @@ import { $, esc, pageHead, choosePromotion, plural, settle } from '../ui.js';
 import { moveToUci, playUci } from '../chess-utils.js';
 import { PERSONAL } from '../themes.js';
 import { cue } from '../sound.js';
+import { personalLessons, PERSONAL_SECTION } from '../personal-lessons.js';
+import { engine, BUDGET } from '../engine.js';
+import { judgeAlternative } from '../verify.js';
+
+/** Built-in lessons plus the ones made from the user's own mistakes. */
+function allLessons() {
+  return [...personalLessons(app.state), ...lessons];
+}
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
@@ -22,7 +30,7 @@ function progressOf(lesson) {
 function saveProgress(lesson, step, done = false) {
   const prev = app.state.lessons[lesson.id] || { step: 0, done: false };
   app.state.lessons[lesson.id] = { step: Math.max(prev.step, step), done: prev.done || done };
-  if (done) {
+  if (done && !lesson.personal) {
     const index = lessons.indexOf(lesson);
     if (!app.state.read.includes(index)) app.state.read.push(index);
   }
@@ -32,7 +40,7 @@ function saveProgress(lesson, step, done = false) {
 export function render(main, params = {}) {
   root = main;
   if (params.lesson) {
-    const lesson = lessons.find(l => l.id === params.lesson);
+    const lesson = allLessons().find(l => l.id === params.lesson);
     if (lesson) return openLesson(lesson);
   }
   active = null;
@@ -53,14 +61,16 @@ function drawList() {
       'Build the habits behind 1500.',
       'Short lessons you play on the board. Every step asks you to find, tap or decide something.',
     ) +
-    SECTIONS.map(section => {
-      const items = lessons.filter(l => l.section === section);
-      if (!items.length) return '';
-      return `<section class="path-section">
+    [PERSONAL_SECTION, ...SECTIONS]
+      .map(section => {
+        const items = allLessons().filter(l => l.section === section);
+        if (!items.length) return '';
+        return `<section class="path-section">
         <h2 class="path-heading">${esc(section)}</h2>
         <div class="lesson-grid">${items.map(l => lessonCard(l, l === nextUp)).join('')}</div>
       </section>`;
-    }).join('');
+      })
+      .join('');
   root.querySelectorAll('[data-lesson]').forEach(b => (b.onclick = () => app.navigate('path', { lesson: b.dataset.lesson })));
 }
 
@@ -138,7 +148,7 @@ function drawStep() {
   $('#lesson-exit').onclick = () => app.navigate('path', { list: true });
   $('#lesson-back').onclick = () => goTo(index - 1);
   $('#lesson-next').onclick = () => goTo(index + 1);
-  $('#lesson-cta')?.addEventListener('click', () => app.navigate(step.page));
+  $('#lesson-cta')?.addEventListener('click', () => app.navigate(step.page, step.params || {}));
   $('#lesson-answer')?.addEventListener('click', showAnswer);
   root.querySelectorAll('[data-choice]').forEach(b => (b.onclick = () => choose(Number(b.dataset.choice))));
   if (active.picked !== null) markChoices();
@@ -228,6 +238,21 @@ async function handleMove(move) {
   let correct;
   if (step.kind === 'move') correct = step.mate ? game.isCheckmate() : step.answers.includes(uci);
   else correct = uci === step.line[active.ply];
+  // Positions from your own games accept any move Stockfish rates as just as good.
+  if (!correct && step.engine && engine.available) {
+    active.busy = true;
+    board.set({ game, lastMove: [m.from, m.to], interactive: false });
+    say('Checking your move with Stockfish…');
+    try {
+      const before = await engine.analyse(m.before, { nodes: BUDGET.verify });
+      const after = game.isGameOver() ? null : await engine.analyse(m.after, { nodes: BUDGET.verify });
+      correct = game.isCheckmate() || judgeAlternative({ before, after, minWin: 0 }).accepted;
+    } catch {}
+    if (!active || stepOf() !== step || board.game !== game) return;
+    active.busy = false;
+    board.set({ interactive: !correct });
+    if (correct) return solved(`${m.san} works too. ${step.explain}`);
+  }
   if (!correct) {
     const stalemate = game.isStalemate();
     game.undo();
@@ -335,13 +360,17 @@ function drawComplete() {
       <div class="callout">${esc(lesson.rule)}</div>
       <p>Carry the rule into the next thing you play.</p>
       <div class="actions">
-        ${lesson.theme === PERSONAL ? '<button type="button" id="lesson-practise" class="lime">Review a game</button>' : `<button type="button" id="lesson-practise" class="lime">Practise ${esc(lesson.theme.toLowerCase())} puzzles</button>`}
+        ${lesson.personal ? '<button type="button" id="lesson-practise" class="lime">Practise my mistakes</button>' : lesson.theme === PERSONAL ? '<button type="button" id="lesson-practise" class="lime">Review a game</button>' : `<button type="button" id="lesson-practise" class="lime">Practise ${esc(lesson.theme.toLowerCase())} puzzles</button>`}
         ${next ? `<button type="button" id="lesson-following">Next lesson: ${esc(next.title)}</button>` : ''}
       </div>
     </div>
   </div>`;
   $('#lesson-exit').onclick = () => app.navigate('path', { list: true });
   $('#lesson-practise').onclick = () =>
-    lesson.theme === PERSONAL ? app.navigate('review') : app.navigate('train', { mode: 'daily', theme: lesson.theme });
+    lesson.personal
+      ? app.navigate('train', { mode: 'mistakes' })
+      : lesson.theme === PERSONAL
+        ? app.navigate('review')
+        : app.navigate('train', { mode: 'daily', theme: lesson.theme });
   $('#lesson-following')?.addEventListener('click', () => app.navigate('path', { lesson: next.id }));
 }
