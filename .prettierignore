@@ -1,6 +1,7 @@
 vendor/
 node_modules/
 data/puzzles.js
+data/openings.js
 tools/data/
 _site/
 test-results/
