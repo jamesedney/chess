@@ -70,6 +70,7 @@ test('backup export and import round-trip, and dark mode applies', async ({ page
   await page.click('#reset');
   await page.click('#confirm [data-answer="yes"]');
   await expect(page.locator('.stat-row')).toContainText('0 / 8');
+  await expect(page).toHaveURL(/#train$/);
   await page.click('#settings');
   await page.setInputFiles('#restore-file', file);
   await page.click('#confirm [data-answer="yes"]');

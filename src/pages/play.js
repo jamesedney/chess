@@ -36,7 +36,8 @@ function persist() {
 
 export function render(main, params = {}) {
   root = main;
-  if (params.fen) newGame({ fen: params.fen, from: params.from || 'a puzzle', color: new Chess(params.fen).turn() });
+  // The user keeps the side they solved the puzzle with; Stockfish replies first.
+  if (params.fen) newGame({ fen: params.fen, from: params.from || 'a puzzle', color: params.colour || new Chess(params.fen).turn() });
   draw();
   if (play.game.turn() !== play.color && !play.game.isGameOver() && !play.thinking) engineTurn();
 }
@@ -221,7 +222,7 @@ async function onMove(move) {
     }
     if (token !== play.token) return;
     if (app.state.coach && before && after && moveToUci(m) !== before.best && isTrainableMistake(before.score, after.score)) {
-      const mistake = createMistake({
+      const saved = createMistake({
         fen,
         played: m.san,
         before,
@@ -229,8 +230,9 @@ async function onMove(move) {
         loss: winPercentLoss(before.score, after.score),
         source: { practice: true },
       });
-      if (mistake) {
-        play.mistakes[g.history().length - 1] = mistake.id;
+      if (saved) {
+        // Only positions created by this game are undone by a takeback.
+        if (saved.created) play.mistakes[g.history().length - 1] = saved.mistake.id;
         persist();
         play.note = 'Coach: a stronger move was available. Saved to My mistakes for later.';
       }

@@ -200,7 +200,7 @@ function openSettings() {
     app.state = defaults();
     app.save();
     closeModal();
-    show('train');
+    app.navigate('train');
     toast('Progress reset.');
   };
 }

@@ -347,7 +347,14 @@ async function analyseGame(pgn, colour) {
       const bestSan = playUci(new Chess(m.before), before.best).san;
       const mark = { ply: i, cls, loss: Math.round(loss), best: before.best, bestSan };
       if (isTrainableMistake(before.score, after.score)) {
-        const mistake = createMistake({ fen: m.before, played: m.san, before, after, loss, source: { reviewId: review.id, ply: i } });
+        const mistake = createMistake({
+          fen: m.before,
+          played: m.san,
+          before,
+          after,
+          loss,
+          source: { reviewId: review.id, ply: i },
+        })?.mistake;
         if (mistake) {
           mark.mistakeId = mistake.id;
           mark.explanation = mistake.explanation;
@@ -388,7 +395,7 @@ function reviewsHTML() {
     .map(r => {
       const counts = ['blunder', 'mistake', 'inaccuracy'].map(c => r.marks.filter(m => m.cls === c).length);
       return `<div class="review-item"><div><strong>${esc(r.white)} – ${esc(r.black)}</strong><p>${esc([r.result, formatDate(r.date), `you: ${r.colour === 'w' ? 'White' : 'Black'}`].filter(Boolean).join(' · '))}<br>${counts[0]} blunders · ${counts[1]} mistakes · ${counts[2]} inaccuracies${r.complete ? '' : ' · partial'}</p></div>
-        <div class="item-actions"><button type="button" data-open="${r.id}">Open</button><button type="button" class="icon-button" data-delete-review="${r.id}" aria-label="Delete review of ${esc(r.white)} – ${esc(r.black)}">✕</button></div></div>`;
+        <div class="item-actions"><button type="button" data-open="${esc(r.id)}">Open</button><button type="button" class="icon-button" data-delete-review="${esc(r.id)}" aria-label="Delete review of ${esc(r.white)} – ${esc(r.black)}">✕</button></div></div>`;
     })
     .join('');
 }
@@ -435,8 +442,8 @@ function mistakesHTML() {
       return `<div class="review-item"><div><strong>${esc(p.title)}</strong><p>${new Chess(p.fen).turn() === 'w' ? 'White' : 'Black'} to move · ${where} · ${r?.clean ? `solved ${r.clean}×` : r?.tries ? 'not yet solved cleanly' : 'ready to practise'}</p></div>
         <div class="item-actions">${
           showArchived
-            ? `<button type="button" data-restore="${p.id}">Restore</button><button type="button" class="danger" data-forget="${p.id}">Delete</button>`
-            : `<button type="button" data-practise="${p.id}">Practise</button>${origin ? `<button type="button" data-view="${origin.id}" data-ply="${p.source.ply}">View in game</button>` : ''}<button type="button" class="icon-button" data-archive="${p.id}" aria-label="Remove ${esc(p.title)} from my mistakes">✕</button>`
+            ? `<button type="button" data-restore="${esc(p.id)}">Restore</button><button type="button" class="danger" data-forget="${esc(p.id)}">Delete</button>`
+            : `<button type="button" data-practise="${esc(p.id)}">Practise</button>${origin ? `<button type="button" data-view="${esc(origin.id)}" data-ply="${Number(p.source.ply) || 0}">View in game</button>` : ''}<button type="button" class="icon-button" data-archive="${esc(p.id)}" aria-label="Remove ${esc(p.title)} from my mistakes">✕</button>`
         }</div></div>`;
     })
     .join('');
@@ -501,6 +508,8 @@ function positions(review) {
 }
 
 function drawViewer(review) {
+  // Every redraw replaces the keyboard handler; never stack them.
+  leave();
   const { fens, verbose } = positions(review);
   const total = review.moves.length;
   const ply = Math.max(0, Math.min(total, viewer.ply));
@@ -510,7 +519,8 @@ function drawViewer(review) {
   const ev = review.evals[ply];
   const whiteShare =
     ev === null || ev === undefined ? 50 : 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * Math.max(-1000, Math.min(1000, ev)))) - 1);
-  const moveLabel = ply === 0 ? 'Start position' : `${Math.ceil(ply / 2)}${ply % 2 ? '.' : '…'} ${review.moves[ply - 1]}`;
+  const labels = review.moves.map((_, i) => plyLabel(review, i));
+  const moveLabel = ply === 0 ? 'Start position' : labels[ply - 1];
   const evText =
     ev === null || ev === undefined ? '' : Math.abs(ev) >= MATE_EVAL ? (ev > 0 ? 'White mating' : 'Black mating') : formatScore(ev);
   const focus = markJust || markAt;
@@ -594,8 +604,9 @@ function drawViewer(review) {
     else toast('These positions were removed from your mistakes.');
   });
   $('#mark-practise', root)?.addEventListener('click', () => app.navigate('train', { puzzle: focus.mistakeId }));
-  hydrateEvalGraph(root, 'eval-graph', review.evals, review.moves, i => go(i));
+  hydrateEvalGraph(root, 'eval-graph', review.evals, labels, i => go(i));
   keyHandler = e => {
+    if (app.page !== 'review') return;
     if (e.target.closest('input, textarea, select, [role="slider"]') || e.altKey || e.metaKey || e.ctrlKey) return;
     const map = { ArrowLeft: ply - 1, ArrowRight: ply + 1, Home: 0, End: total };
     if (e.key in map) {
@@ -607,12 +618,20 @@ function drawViewer(review) {
 }
 
 function momentHTML(review, mark, before, mistake) {
-  const move = `${Math.floor(mark.ply / 2) + 1}${mark.ply % 2 ? '…' : '.'} ${review.moves[mark.ply]}${SYMBOL[mark.cls]}`;
+  const move = `${plyLabel(review, mark.ply)}${SYMBOL[mark.cls]}`;
   const lead = before
     ? `You are about to play ${move}. The green arrow shows ${esc(mark.bestSan)}.`
     : `${move} was ${mark.cls === 'inaccuracy' ? 'an inaccuracy' : 'a ' + mark.cls}. Better was ${esc(mark.bestSan)}.`;
   return `<div class="moment ${mark.cls}"><div class="eyebrow"><span class="badge ${mark.cls}">${SYMBOL[mark.cls]}</span> ${mark.cls.toUpperCase()} · −${mark.loss}% WINNING CHANCES</div>
     <p>${lead}</p>${mistake ? `<p class="muted">${esc(mistake.explanation)}</p><button type="button" id="mark-practise" class="primary">Practise this position</button>` : ''}</div>`;
+}
+
+/** "20… Nf6" for move index i, honouring games that start from a position. */
+export function plyLabel(review, i) {
+  const [, turn, , , , full] = review.startFen.split(' ');
+  const idx = i + (turn === 'b' ? 1 : 0);
+  const no = Number(full || 1) + Math.floor(idx / 2);
+  return `${no}${idx % 2 ? '…' : '.'} ${review.moves[i]}`;
 }
 
 function moveListHTML(review, ply) {

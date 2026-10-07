@@ -9,13 +9,15 @@ import { app } from './app-context.js';
  * Save a missed opportunity as a personal exercise.
  * The exercise asks only for the best first move (deeper engine lines from a
  * short search are unreliable), except for forced mates, which run to mate.
+ * Returns { mistake, created } or null; created is false when the position
+ * was already saved.
  */
 export function createMistake({ fen, played, before, after, loss, source = null }) {
   if (!before?.pv?.length || !before.best) return null;
   const existing = app.state.mistakes.find(p => p.fen === fen);
   if (existing) {
     existing.archived = false;
-    return existing;
+    return { mistake: existing, created: false };
   }
   let line = [before.pv[0]];
   if (before.mate > 0 && before.mate <= 4) {
@@ -50,7 +52,7 @@ export function createMistake({ fen, played, before, after, loss, source = null 
   };
   app.state.mistakes.unshift(mistake);
   app.save();
-  return mistake;
+  return { mistake, created: true };
 }
 
 export function archiveMistake(id, archived = true) {

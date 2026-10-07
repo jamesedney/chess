@@ -172,7 +172,7 @@ export function evalGraph(id, evals, marks, { current = 0, height = 150 } = {}) 
   </figure>`;
 }
 
-export function hydrateEvalGraph(root, id, evals, sans, onPick) {
+export function hydrateEvalGraph(root, id, evals, labels, onPick) {
   const wrap = root.querySelector(`#${id} .chart-wrap`);
   if (!wrap) return;
   const n = evals.length;
@@ -189,7 +189,7 @@ export function hydrateEvalGraph(root, id, evals, sans, onPick) {
               ? 'White is mating'
               : 'Black is mating'
             : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v / 100).toFixed(1);
-      const label = i === 0 ? 'Start' : `${Math.ceil(i / 2)}${i % 2 ? '.' : '…'} ${sans[i - 1]}`;
+      const label = i === 0 ? 'Start' : labels[i - 1];
       return { value, label };
     },
     onPick,

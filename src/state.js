@@ -71,7 +71,9 @@ export function validate(s) {
   }
   if (!Array.isArray(s.mistakes)) return 'mistakes';
   for (const p of s.mistakes) {
-    if (!p || typeof p.id !== 'string' || !p.id.startsWith('m') || typeof p.fen !== 'string') return 'mistake';
+    if (!p || typeof p.id !== 'string' || !/^m[a-z0-9]+$/i.test(p.id) || typeof p.fen !== 'string') return 'mistake';
+    if (p.source && p.source.reviewId !== undefined && (typeof p.source.reviewId !== 'string' || !Number.isInteger(p.source.ply)))
+      return 'mistake source';
     if (!Array.isArray(p.line) || !p.line.length || p.line.length > 7) return 'mistake line';
     let g;
     try {
@@ -95,7 +97,11 @@ export function validate(s) {
   if (!s.themes || typeof s.themes !== 'object') return 'themes';
   for (const t of Object.values(s.themes)) if (!finite(t?.rating, 100, 3500) || !finite(t?.count, 0)) return 'theme rating';
   if (!Array.isArray(s.reviews)) return 'reviews';
-  for (const r of s.reviews) if (!r || typeof r.id !== 'string' || !Array.isArray(r.moves) || !Array.isArray(r.evals)) return 'review';
+  for (const r of s.reviews) {
+    if (!r || typeof r.id !== 'string' || !/^r[a-z0-9]+$/i.test(r.id) || !Array.isArray(r.moves) || !Array.isArray(r.evals))
+      return 'review';
+    if (typeof r.startFen !== 'string' || !Array.isArray(r.marks) || !r.marks.every(m => Number.isInteger(m?.ply))) return 'review marks';
+  }
   if (!s.vision || !finite(s.vision.best, 0)) return 'vision';
   if (!s.profiles || typeof s.profiles !== 'object') return 'profiles';
   return null;

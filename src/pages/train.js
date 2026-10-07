@@ -209,7 +209,7 @@ function drawPuzzle(body) {
   $('#board-flip', body).onclick = () => board.set({ orientation: opposite(board.orientation) });
   if (c.complete) {
     $('#next', body).onclick = next;
-    $('#play-out', body)?.addEventListener('click', () => app.navigate('play', { fen: c.game.fen(), from: p.title }));
+    $('#play-out', body)?.addEventListener('click', () => app.navigate('play', { fen: c.game.fen(), from: p.title, colour: c.solver }));
     $('#archive', body)?.addEventListener('click', () => {
       archiveMistake(p.id);
       next();
@@ -352,9 +352,9 @@ function finish(c, revealed) {
   s.records[p.id] = schedule(prev, clean, Date.now());
   let ratingNote = '';
   if (!prev?.tries && !isMistake(p) && p.rating) {
+    const t = s.themes[p.theme] || { rating: s.puzzle.rating, count: 0 };
     const u = updateRating(s.puzzle.rating, s.puzzle.count, p.rating, clean ? 1 : 0);
     s.puzzle = { rating: u.rating, count: s.puzzle.count + 1, history: pushHistory(s.puzzle.history, dateKey(), u.rating) };
-    const t = s.themes[p.theme] || { rating: s.puzzle.rating, count: 0 };
     const tu = updateRating(t.rating, t.count, p.rating, clean ? 1 : 0);
     s.themes[p.theme] = { rating: tu.rating, count: t.count + 1 };
     ratingNote = ` Puzzle rating ${u.rating} (${u.delta >= 0 ? '+' : '−'}${Math.abs(u.delta)}).`;

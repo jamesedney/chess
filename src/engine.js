@@ -13,6 +13,7 @@ export class Engine {
     this.listener = null;
     this.status = 'idle';
     this.searching = false;
+    this.abort = null; // rejects the search in flight if the worker dies
   }
 
   init() {
@@ -27,6 +28,8 @@ export class Engine {
           this.worker?.terminate();
         } catch {}
         this.worker = null;
+        this.queue = Promise.resolve();
+        this.abort?.(new Error('The chess engine stopped. Refresh to restart it.'));
         reject(new Error(message));
       };
       const timer = setTimeout(() => fail('The chess engine did not load. Refresh while online.'), 30000);
@@ -72,9 +75,17 @@ export class Engine {
         const timer = setTimeout(() => {
           // Stop and wait for bestmove so the next search starts clean.
           timedOut = true;
-          this.worker.postMessage('stop');
+          if (this.worker) this.worker.postMessage('stop');
+          else this.abort?.(new Error('Analysis timed out. Try again.'));
         }, 45000);
         this.searching = true;
+        this.abort = error => {
+          clearTimeout(timer);
+          this.listener = null;
+          this.searching = false;
+          this.abort = null;
+          reject(error);
+        };
         this.listener = line => {
           const info = parseInfo(line);
           if (info) lines[info.multipv] = info;
@@ -83,6 +94,7 @@ export class Engine {
           clearTimeout(timer);
           this.listener = null;
           this.searching = false;
+          this.abort = null;
           if (timedOut && !lines[1]) return reject(new Error('Analysis timed out. Try again.'));
           const ordered = Object.keys(lines)
             .map(Number)

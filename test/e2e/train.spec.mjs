@@ -27,6 +27,9 @@ test('solving a puzzle cleanly updates the rating and reveals its tags', async (
   await expect(page.locator('#feedback')).toContainText('Puzzle rating');
   await expect(page.locator('.tag-row')).toContainText('Back-rank mate');
   await expect(page.locator('.stat-row')).toContainText('1 / 8');
+  // A theme's first rating starts from the overall rating before this result.
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')));
+  expect(saved.themes['King safety'].rating).toBe(saved.puzzle.rating);
   await page.click('#next');
   await expect(page.locator('#hint')).toBeVisible();
 });

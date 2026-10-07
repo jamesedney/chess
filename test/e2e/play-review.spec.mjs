@@ -97,3 +97,26 @@ test('pieces can be dragged, and a drag does not also count as a tap', async ({ 
   await sq(page, 'e1').dragTo(sq(page, 'e8'));
   await expect(page.locator('#feedback')).toContainText('Solved without help');
 });
+
+test('play it out keeps the side you solved with', async ({ page }) => {
+  await open(page, 'train?puzzle=p004b'); // reversed colours: Black solves
+  await page.click('#solution');
+  await expect(page.locator('#play-out')).toBeVisible();
+  await page.click('#play-out');
+  // Stockfish (White) replies first, then it is the user's move as Black.
+  await expect(page.locator('#play-status')).toContainText('Your move', { timeout: 60000 });
+  await expect(page.locator('#board-chip')).toHaveText('Black to move');
+});
+
+test('arrow keys in the viewer do not pile up or leak into other pages', async ({ page }) => {
+  await open(page, 'review');
+  await page.fill('#pgn', TRAP);
+  await page.click('#analyse');
+  await expect(page.locator('.viewer-controls')).toBeVisible({ timeout: 90000 });
+  await page.keyboard.press('Home');
+  for (let i = 0; i < 25; i++) await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.viewer-controls .small')).toHaveText('14 / 14');
+  await page.click('nav a[data-page="train"]');
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('h1')).toContainText('Make your next move count');
+});
