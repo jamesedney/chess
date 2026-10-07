@@ -26,6 +26,9 @@ const FILES = [
   './src/ui.js',
   './src/verify.js',
   './src/vision.js',
+  './src/mistake-kinds.js',
+  './src/appearance.js',
+  './src/sound.js',
   './src/maia.js',
   './src/maia-core.js',
   './src/maia-worker.js',
@@ -45,7 +48,9 @@ const FILES = [
   './icons/icon-maskable-512.png',
   './icons/apple-touch-icon.png',
   './THIRD-PARTY.md',
-  ...['w', 'b'].flatMap(c => [...'kqrbnp'].map(p => `./pieces/${c}${p}.svg`)),
+  ...['cburnett', 'merida', 'chessnut', 'kiwen-suwi', 'mpchess'].flatMap(set =>
+    ['w', 'b'].flatMap(c => [...'KQRBNP'].map(p => `./pieces/${set}/${c}${p}.svg`)),
+  ),
 ];
 
 self.addEventListener('install', event => {

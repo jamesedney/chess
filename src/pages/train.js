@@ -9,9 +9,10 @@ import { updateRating, pushHistory, weakestTheme } from '../rating.js';
 import { judgeAlternative, rejectionMessage } from '../verify.js';
 import { moveToUci, playUci, uciLineToSan, opposite, NAMES } from '../chess-utils.js';
 import { hintForTags, displayTags } from '../themes.js';
-import { dateKey, streaks } from '../state.js';
+import { dateKey, streaks, logAttempt } from '../state.js';
 import { makeVisionDrill, isVisionAnswer } from '../vision.js';
 import { archiveMistake } from '../mistakes.js';
+import { cue } from '../sound.js';
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const SPRINT_MS = 60000;
@@ -338,6 +339,7 @@ function rejectMove(c, m, reason) {
   c.lastMove = [];
   refreshBoard();
   board.flash(m.to);
+  cue('error');
   feedback(rejectionMessage(reason), 'error');
   board.announce('Not the solution. Try again.');
 }
@@ -392,6 +394,7 @@ function finish(c, revealed) {
   const today = app.today();
   today.attempts++;
   if (clean) today.clean++;
+  logAttempt(s, { kind: isMistake(p) ? 'm' : 'p', theme: isMistake(p) ? p.kind || 'positional' : p.theme, clean });
   session.done++;
   if (clean) session.clean++;
   app.save();
@@ -408,6 +411,7 @@ function finish(c, revealed) {
   }
   c.message = `${lead}${ratingNote} ${p.explanation || ''}${mainLine}`.replace(/\s+/g, ' ').trim();
   c.tone = 'success';
+  if (clean) cue('success');
   draw();
 }
 
@@ -588,6 +592,7 @@ function endSprint() {
   };
   const today = app.today();
   today.vision = (today.vision || 0) + 1;
+  logAttempt(s, { kind: 'v', theme: 'sprint', clean: v.score > 0 });
   app.save();
   if (app.page === 'train') draw();
 }

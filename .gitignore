@@ -5,3 +5,4 @@ test-results/
 playwright-report/
 .smoke.mjs
 .shots.mjs
+tmp/

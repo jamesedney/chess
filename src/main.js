@@ -3,6 +3,8 @@ import { app } from './app-context.js';
 import { $, $$, esc, toast, showModal, closeModal, confirmDialog, download } from './ui.js';
 import { parseState, defaults, dateKey, RECOVERY_PREFIX } from './state.js';
 import { STAGES } from './themes.js';
+import { BOARD_THEMES, PIECE_SETS, applyBoardTheme, setPieceSet, pieceUrl } from './appearance.js';
+import { configure as configureFeedback, cue } from './sound.js';
 import * as train from './pages/train.js';
 import * as path from './pages/path.js';
 import * as play from './pages/play.js';
@@ -85,6 +87,15 @@ function applyTheme(choice) {
   else delete document.documentElement.dataset.theme;
   const dark = choice === 'dark' || (choice !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
   $('meta[name="theme-color"]')?.setAttribute('content', dark ? '#1a1512' : '#a6521f');
+  applyBoardTheme(app.state.settings.board, dark);
+}
+
+/** Board colours, pieces, sound and haptics from the saved settings. */
+function applySettings() {
+  const st = app.state.settings;
+  setPieceSet(st.pieces);
+  configureFeedback(st);
+  applyTheme(themeChoice());
 }
 
 function themeChoice() {
@@ -109,6 +120,21 @@ function openSettings() {
         : ''
     }
     <div class="field"><label for="appearance">Appearance</label><select id="appearance"><option value="system">Match my device</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
+    <fieldset class="field"><legend>Board</legend>
+      <div class="swatches" role="radiogroup" aria-label="Board colours">${Object.entries(BOARD_THEMES)
+        .map(
+          ([id, t]) =>
+            `<button type="button" role="radio" class="swatch" data-board-theme="${id}" aria-checked="${s.settings.board === id}" aria-label="${esc(t.label)}" title="${esc(t.label)}"><span style="background:${t.light}"></span><span style="background:${t.dark}"></span><span style="background:${t.dark}"></span><span style="background:${t.light}"></span></button>`,
+        )
+        .join('')}</div>
+      <div class="piece-sets" role="radiogroup" aria-label="Pieces">${Object.entries(PIECE_SETS)
+        .map(
+          ([id, p]) =>
+            `<button type="button" role="radio" class="piece-set" data-piece-set="${id}" aria-checked="${s.settings.pieces === id}"><img src="./pieces/${id}/wN.svg" alt=""><img src="./pieces/${id}/bQ.svg" alt=""><span>${esc(p.label)}</span></button>`,
+        )
+        .join('')}</div>
+    </fieldset>
+    <div class="checks"><label><input type="checkbox" id="sound-on" ${s.settings.sound ? 'checked' : ''}> Move sounds</label><label><input type="checkbox" id="haptics-on" ${s.settings.haptics ? 'checked' : ''}> Vibration on supported phones</label></div>
     <fieldset class="field"><legend>Your accounts (for fetching games)</legend>
       <label for="lichess-name">Lichess username</label><input id="lichess-name" maxlength="40" spellcheck="false" value="${esc(s.profiles.lichess)}">
       <label for="chesscom-name">Chess.com username</label><input id="chesscom-name" maxlength="40" spellcheck="false" value="${esc(s.profiles.chesscom)}">
@@ -149,6 +175,31 @@ function openSettings() {
     } catch {}
     applyTheme(e.target.value);
   };
+  const pick = (attr, key) =>
+    document.querySelectorAll(`#modal [data-${attr}]`).forEach(
+      b =>
+        (b.onclick = () => {
+          s.settings[key] = b.dataset[attr.replace(/-(.)/g, (_, c) => c.toUpperCase())];
+          app.save();
+          applySettings();
+          document.querySelectorAll(`#modal [data-${attr}]`).forEach(x => x.setAttribute('aria-checked', String(x === b)));
+          redrawBehindModal();
+        }),
+    );
+  pick('board-theme', 'board');
+  pick('piece-set', 'pieces');
+  $('#sound-on').onchange = e => {
+    s.settings.sound = e.target.checked;
+    app.save();
+    applySettings();
+    cue('move');
+  };
+  $('#haptics-on').onchange = e => {
+    s.settings.haptics = e.target.checked;
+    app.save();
+    applySettings();
+    cue('move');
+  };
   const saveName = (key, el) =>
     (el.onchange = () => {
       s.profiles[key] = el.value.trim();
@@ -178,6 +229,7 @@ function openSettings() {
       return;
     app.state = restored;
     app.save();
+    applySettings();
     closeModal();
     show(currentPage());
     toast('Progress restored.');
@@ -210,10 +262,19 @@ function openSettings() {
       return;
     app.state = defaults();
     app.save();
+    applySettings();
     closeModal();
     app.navigate('train');
     toast('Progress reset.');
   };
+}
+
+/** Swap the pieces on any board behind the settings dialog to the chosen set. */
+function redrawBehindModal() {
+  document.querySelectorAll('#main img[src*="pieces/"]').forEach(img => {
+    const m = img.getAttribute('src').match(/([wb])([KQRBNP])\.svg$/);
+    if (m) img.src = pieceUrl(m[1], m[2].toLowerCase());
+  });
 }
 
 // ---------- Offline support and install ----------
@@ -253,7 +314,7 @@ function registerServiceWorker() {
 }
 
 function boot() {
-  applyTheme(themeChoice());
+  applySettings();
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => applyTheme(themeChoice()));
   $('#settings').onclick = openSettings;
   $('#close-modal').onclick = closeModal;

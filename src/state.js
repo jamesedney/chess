@@ -5,11 +5,14 @@ import { Chess } from '../vendor/chess.js';
 import { tryUci } from './chess-utils.js';
 import { STAGES } from './themes.js';
 import { LEVELS, DEFAULT_LEVEL } from './strength.js';
+import { KIND_IDS, kindFromExplanation } from './mistake-kinds.js';
+import { BOARD_THEMES, PIECE_SETS, DEFAULT_APPEARANCE } from './appearance.js';
 
 export const STORAGE_KEY = 'rankup-v1'; // Kept for continuity; the version lives inside.
 export const RECOVERY_PREFIX = 'rankup-recovery-';
-export const CURRENT_VERSION = 2;
+export const CURRENT_VERSION = 3;
 export const MAX_REVIEWS = 20;
+export const MAX_LOG = 4000;
 
 export function defaults() {
   return {
@@ -29,35 +32,82 @@ export function defaults() {
     reviews: [],
     vision: { best: 0, runs: 0, last: [] },
     profiles: { lichess: '', chesscom: '' },
+    // Added in version 3.
+    log: [], // one row per finished exercise: { d: date, k: kind, t: theme or drill, c: 1 clean | 0 }
+    plan: null, // this week's plan; see plan.js
+    endgames: {}, // drill id -> { tries, wins, best }
+    calc: { visual: emptyDrillStats(), checks: emptyDrillStats() },
+    settings: { ...DEFAULT_APPEARANCE, sound: true, haptics: true },
   };
 }
 
+export const emptyDrillStats = () => ({ best: 0, runs: 0, last: [] });
+
+/** Exercise kinds in the log. */
+export const LOG_KINDS = ['p', 'm', 'e', 'c', 'v']; // puzzle, my mistake, endgame, calculation, vision
+
 const V1_SKILL_TO_LEVEL = { 0: 'beginner', 3: 'novice', 8: 'elo1600', 20: 'full' };
+
+/**
+ * Each migration upgrades a state from version `from` to `from + 1`. Every
+ * saved state and backup goes through the chain, so old data always has one
+ * tested path to the current shape. Never edit a migration once released;
+ * add a new one.
+ */
+export const MIGRATIONS = [
+  {
+    from: 1,
+    run(s) {
+      const level = [0, 1, 2, 3].includes(s.level) ? s.level : 0;
+      return {
+        records: s.records || {},
+        mistakes: (s.mistakes || []).map(m => ({ ...m, tags: m.tags || [] })),
+        days: s.days || {},
+        read: s.read || [],
+        lessons: {},
+        ratings: s.ratings || [],
+        goal: [4, 8, 12].includes(s.goal) ? s.goal : 8,
+        coach: typeof s.coach === 'boolean' ? s.coach : true,
+        strength: V1_SKILL_TO_LEVEL[s.skill] || DEFAULT_LEVEL,
+        difficulty: 0,
+        puzzle: { rating: STAGES[level].rating, count: 0, history: [] },
+        themes: {},
+        reviews: [],
+        vision: { best: 0, runs: 0, last: [] },
+        profiles: { lichess: '', chesscom: '' },
+      };
+    },
+  },
+  {
+    from: 2,
+    run(s) {
+      return {
+        ...s,
+        mistakes: (s.mistakes || []).map(m => (m.kind ? m : { ...m, kind: kindFromExplanation(m.explanation) })),
+        log: [],
+        plan: null,
+        endgames: {},
+        calc: { visual: emptyDrillStats(), checks: emptyDrillStats() },
+        settings: { ...DEFAULT_APPEARANCE, sound: true, haptics: true },
+      };
+    },
+  },
+];
 
 /** Upgrade any supported saved state to the current version. Throws on unknown input. */
 export function migrate(input) {
   if (!input || typeof input !== 'object') throw new Error('Not a Rankup state');
   let s = structuredClone(input);
-  if (s.version === 1) {
-    const base = defaults();
-    const level = [0, 1, 2, 3].includes(s.level) ? s.level : 0;
-    s = {
-      ...base,
-      records: s.records || {},
-      mistakes: (s.mistakes || []).map(m => ({ ...m, tags: m.tags || [] })),
-      days: s.days || {},
-      read: s.read || [],
-      ratings: s.ratings || [],
-      goal: [4, 8, 12].includes(s.goal) ? s.goal : 8,
-      coach: typeof s.coach === 'boolean' ? s.coach : true,
-      strength: V1_SKILL_TO_LEVEL[s.skill] || DEFAULT_LEVEL,
-      puzzle: { rating: STAGES[level].rating, count: 0, history: [] },
-      version: 2,
-    };
+  if (!Number.isInteger(s.version) || s.version < 1 || s.version > CURRENT_VERSION)
+    throw new Error('Unsupported backup version ' + s.version);
+  while (s.version < CURRENT_VERSION) {
+    const step = MIGRATIONS.find(m => m.from === s.version);
+    if (!step) throw new Error('No migration from version ' + s.version);
+    s = { ...step.run(s), version: s.version + 1 };
   }
-  if (s.version !== CURRENT_VERSION) throw new Error('Unsupported backup version ' + s.version);
   // Fill fields added after a backup was made within the same version.
-  return { ...defaults(), ...s };
+  const base = defaults();
+  return { ...base, ...s, settings: { ...base.settings, ...s.settings }, calc: { ...base.calc, ...s.calc } };
 }
 
 const isDate = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
@@ -108,6 +158,17 @@ export function validate(s) {
   }
   if (!s.vision || !finite(s.vision.best, 0)) return 'vision';
   if (!s.profiles || typeof s.profiles !== 'object') return 'profiles';
+  for (const m of s.mistakes) if (m.kind !== undefined && !KIND_IDS.includes(m.kind)) return 'mistake kind';
+  if (!Array.isArray(s.log) || s.log.length > MAX_LOG * 2) return 'log';
+  for (const e of s.log)
+    if (!e || !isDate(e.d) || !LOG_KINDS.includes(e.k) || typeof e.t !== 'string' || ![0, 1].includes(e.c)) return 'log entry';
+  if (s.plan !== null && (typeof s.plan !== 'object' || !isDate(s.plan.week) || !Array.isArray(s.plan.items))) return 'plan';
+  if (!s.endgames || typeof s.endgames !== 'object') return 'endgames';
+  for (const e of Object.values(s.endgames)) if (!finite(e?.tries, 0) || !finite(e?.wins, 0)) return 'endgame progress';
+  for (const k of ['visual', 'checks']) if (!s.calc?.[k] || !finite(s.calc[k].best, 0) || !finite(s.calc[k].runs, 0)) return 'calc';
+  const st = s.settings;
+  if (!st || !BOARD_THEMES[st.board] || !PIECE_SETS[st.pieces] || typeof st.sound !== 'boolean' || typeof st.haptics !== 'boolean')
+    return 'settings';
   return null;
 }
 
@@ -139,6 +200,12 @@ export function loadState(storage, now = Date.now()) {
     } catch {}
     return { state: defaults(), storageOK: true, recovered: true };
   }
+}
+
+/** Append a finished exercise to the log, keeping it bounded. */
+export function logAttempt(state, { kind, theme, clean, date = dateKey() }) {
+  state.log.push({ d: date, k: kind, t: String(theme || ''), c: clean ? 1 : 0 });
+  if (state.log.length > MAX_LOG) state.log.splice(0, state.log.length - MAX_LOG);
 }
 
 export function saveState(storage, state) {

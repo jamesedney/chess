@@ -1,7 +1,7 @@
 // Turning engine findings into personal exercises.
 import { Chess } from '../vendor/chess.js';
 import { playUci, tryUci } from './chess-utils.js';
-import { explainMistake, analyseLine } from './tagger.js';
+import { diagnoseMistake, analyseLine } from './tagger.js';
 import { PERSONAL } from './themes.js';
 import { app } from './app-context.js';
 
@@ -36,6 +36,7 @@ export function createMistake({ fen, played, before, after, loss, source = null 
   }
   const { tags } = analyseLine(fen, line);
   const mateIn = tags.includes('mate') ? Math.ceil(line.length / 2) : 0;
+  const { kind, text } = diagnoseMistake({ fen, played, before, after });
   const mistake = {
     id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     title: 'Instead of ' + played,
@@ -44,7 +45,8 @@ export function createMistake({ fen, played, before, after, loss, source = null 
     theme: PERSONAL,
     tags,
     goal: mateIn ? (mateIn === 1 ? 'Deliver checkmate in one.' : `Deliver checkmate in ${mateIn}.`) : 'Find the improvement.',
-    explanation: explainMistake({ fen, played, before, after }),
+    explanation: text,
+    kind,
     played,
     loss: Math.round(loss),
     created: Date.now(),

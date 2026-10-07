@@ -6,6 +6,7 @@ import { BoardView, turnLabel } from '../board.js';
 import { $, esc, pageHead, choosePromotion, plural, settle } from '../ui.js';
 import { moveToUci, playUci } from '../chess-utils.js';
 import { PERSONAL } from '../themes.js';
+import { cue } from '../sound.js';
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
@@ -184,6 +185,7 @@ function say(message, tone = '') {
 
 function solved(explain) {
   active.solved = true;
+  if (!active.tries) cue('success');
   say(explain, 'success');
   board?.set({ interactive: false });
   if (board) board.onSquare = null;
@@ -232,6 +234,7 @@ async function handleMove(move) {
     active.tries++;
     board.set({ game, lastMove: [] });
     board.flash(m.to);
+    cue('error');
     say(
       stalemate
         ? `${m.san} is stalemate: the other side has no legal move and is not in check. That throws away the win.`

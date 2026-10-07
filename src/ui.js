@@ -1,4 +1,5 @@
 // DOM helpers: escaping, toasts, dialogs and downloads.
+import { pieceUrl } from './appearance.js';
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
@@ -66,7 +67,7 @@ export function choosePromotion(color = 'w') {
     dialog.innerHTML = `<h2>Promote your pawn</h2><p>Choose the piece your pawn becomes.</p><div class="promotion">${['q', 'r', 'n', 'b']
       .map(
         p =>
-          `<button type="button" data-promote="${p}" aria-label="${{ q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight' }[p]}"><img src="./pieces/${color}${p}.svg" alt=""></button>`,
+          `<button type="button" data-promote="${p}" aria-label="${{ q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight' }[p]}"><img src="${pieceUrl(color, p)}" alt=""></button>`,
       )
       .join('')}</div>`;
     let done = false;

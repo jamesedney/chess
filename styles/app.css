@@ -2033,3 +2033,64 @@ nav a {
     background-color 140ms ease,
     color 140ms ease;
 }
+
+/* ---------- Settings: board colours and piece sets ---------- */
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0 12px;
+}
+
+.swatch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.swatch span {
+  display: block;
+}
+
+.swatch[aria-checked='true'],
+.piece-set[aria-checked='true'] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.piece-sets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.piece-set {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: var(--sq-light);
+  color: #2b2118;
+}
+
+.piece-set img {
+  width: 34px;
+  height: 34px;
+}
+
+.piece-set span {
+  flex-basis: 100%;
+  text-align: center;
+  font-size: 0.78rem;
+}

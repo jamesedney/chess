@@ -1,6 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { defaults, migrate, validate, parseState, loadState, RECOVERY_PREFIX, STORAGE_KEY, streaks, dateKey } from '../../src/state.js';
+import {
+  defaults,
+  migrate,
+  validate,
+  parseState,
+  loadState,
+  logAttempt,
+  RECOVERY_PREFIX,
+  STORAGE_KEY,
+  CURRENT_VERSION,
+  MIGRATIONS,
+  MAX_LOG,
+  streaks,
+  dateKey,
+} from '../../src/state.js';
 
 // A backup in the format written by Rankup 1.0.
 const V1 = {
@@ -37,7 +51,7 @@ test('defaults are valid', () => {
 test('a version 1 backup migrates without losing progress', () => {
   const s = migrate(V1);
   assert.equal(validate(s), null);
-  assert.equal(s.version, 2);
+  assert.equal(s.version, CURRENT_VERSION);
   assert.deepEqual(s.records, V1.records);
   assert.equal(s.mistakes[0].id, 'mabc');
   assert.deepEqual(s.mistakes[0].tags, []);
@@ -81,10 +95,63 @@ test('unreadable saved data is kept under a recovery key', () => {
   assert.equal(validate(out.state), null);
 });
 
-test('saved v1 data loads as v2', () => {
+test('saved v1 data loads at the current version', () => {
   const out = loadState(fakeStorage({ [STORAGE_KEY]: JSON.stringify(V1) }));
   assert.equal(out.recovered, false);
-  assert.equal(out.state.version, 2);
+  assert.equal(out.state.version, CURRENT_VERSION);
+});
+
+test('every version has exactly one migration to the next', () => {
+  for (let v = 1; v < CURRENT_VERSION; v++) assert.equal(MIGRATIONS.filter(m => m.from === v).length, 1, `from ${v}`);
+  assert.equal(MIGRATIONS.length, CURRENT_VERSION - 1);
+});
+
+test('a version 2 state gains kinds, a log, drills and settings', () => {
+  const v2 = migrate(V1);
+  const asV2 = { ...v2, version: 2 };
+  for (const k of ['log', 'plan', 'endgames', 'calc', 'settings']) delete asV2[k];
+  asV2.mistakes = [
+    { ...V1.mistakes[0], tags: [], kind: undefined, explanation: 'Qh5 allowed a forced mate in 2, starting with Qxf2+.' },
+    { ...V1.mistakes[0], id: 'mdef', tags: [], explanation: 'Qh5 left your knight on c3 exposed: Bxc3 wins material.' },
+  ];
+  delete asV2.mistakes[0].kind;
+  const s = migrate(asV2);
+  assert.equal(validate(s), null);
+  assert.deepEqual(
+    s.mistakes.map(m => m.kind),
+    ['allowed-mate', 'hung-piece'],
+  );
+  assert.deepEqual(s.log, []);
+  assert.equal(s.settings.board, 'walnut');
+  assert.equal(s.settings.sound, true);
+  assert.deepEqual(s.calc.visual, { best: 0, runs: 0, last: [] });
+});
+
+test('newer or malformed versions are refused', () => {
+  assert.throws(() => migrate({ version: CURRENT_VERSION + 1 }), /Unsupported/);
+  assert.throws(() => migrate({ version: '2' }), /Unsupported/);
+});
+
+test('a backup missing a later-added setting gets the default', () => {
+  const s = defaults();
+  delete s.settings.haptics;
+  const out = migrate(s);
+  assert.equal(out.settings.haptics, true);
+  assert.equal(validate(out), null);
+});
+
+test('the attempt log is validated and bounded', () => {
+  const s = defaults();
+  logAttempt(s, { kind: 'p', theme: 'Tactics', clean: true, date: '2026-10-01' });
+  assert.deepEqual(s.log, [{ d: '2026-10-01', k: 'p', t: 'Tactics', c: 1 }]);
+  assert.equal(validate(s), null);
+  for (let i = 0; i < MAX_LOG + 10; i++) logAttempt(s, { kind: 'p', theme: 'Tactics', clean: false, date: '2026-10-02' });
+  assert.equal(s.log.length, MAX_LOG);
+  s.log.push({ d: 'bad', k: 'p', t: '', c: 1 });
+  assert.equal(validate(s), 'log entry');
+  const t = defaults();
+  t.settings.board = 'neon';
+  assert.equal(validate(t), 'settings');
 });
 
 test('blocked storage is reported', () => {

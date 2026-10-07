@@ -1,5 +1,7 @@
 // An accessible chess board: tap, drag or keyboard (arrow keys + Enter).
 import { NAMES } from './chess-utils.js';
+import { pieceUrl } from './appearance.js';
+import { cue } from './sound.js';
 
 const FILES = 'abcdefgh';
 let uid = 0;
@@ -336,13 +338,16 @@ export class BoardView {
           old.remove();
         }
         if (piece) {
-          b.insertAdjacentHTML('beforeend', `<img src="./pieces/${piece}.svg" alt="" draggable="false">`);
+          b.insertAdjacentHTML('beforeend', `<img src="${pieceUrl(p.color, p.type)}" alt="" draggable="false">`);
           appeared.push([sq, piece, b.lastElementChild]);
         }
         b.dataset.piece = piece;
       }
     }
     if (!this.skipAnimation && this.builtFor === this.orientation) this.animateChanges(vanished, appeared);
+    // One move's worth of change on a board that already had pieces: a move was played.
+    if (vanished.length && appeared.length && vanished.length + appeared.length <= 6)
+      cue(this.game.isCheck() ? 'check' : vanished.length > appeared.length ? 'capture' : 'move');
     this.skipAnimation = false;
     this.el.dataset.fen = this.game.fen();
     this.drawArrows();

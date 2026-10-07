@@ -317,19 +317,27 @@ export function explainLine(fen, line, opts = {}) {
   return parts.join(' ');
 }
 
+const TACTIC_TAGS = ['fork', 'pin', 'skewer', 'discoveredAttack', 'doubleCheck', 'hangingPiece', 'sacrifice', 'promotion', 'trappedPiece'];
+
 /**
- * Explain a personal mistake.
+ * Explain and classify a personal mistake.
  * before/after are engine results: before = best line for the player before
  * moving; after = best line for the opponent after the played move.
+ * Returns { kind, text }. Kinds: allowed-mate, missed-mate, hung-piece,
+ * missed-tactic, positional (see mistake-kinds.js).
  */
-export function explainMistake({ fen, played, before, after }) {
+export function diagnoseMistake({ fen, played, before, after }) {
   const game = new Chess(fen);
   const bestSan = before?.pv?.length ? safeSan(fen, before.pv[0]) : null;
   if (after?.mate > 0) {
     const reply = safeSan(afterFen(fen, played), after.pv[0]);
-    return `${played} allowed a forced mate in ${after.mate}${reply ? `, starting with ${reply}` : ''}. ${bestSan ? `${bestSan} was safer.` : ''}`.trim();
+    return {
+      kind: 'allowed-mate',
+      text: `${played} allowed a forced mate in ${after.mate}${reply ? `, starting with ${reply}` : ''}. ${bestSan ? `${bestSan} was safer.` : ''}`.trim(),
+    };
   }
-  if (before?.mate > 0) return `You had a forced mate in ${before.mate}${bestSan ? ` starting with ${bestSan}` : ''}.`;
+  if (before?.mate > 0)
+    return { kind: 'missed-mate', text: `You had a forced mate in ${before.mate}${bestSan ? ` starting with ${bestSan}` : ''}.` };
 
   // Did the move hand over material?
   if (after?.pv?.length) {
@@ -351,7 +359,10 @@ export function explainMistake({ fen, played, before, after }) {
       worst = Math.min(worst, materialBalance(pos) * sign);
     }
     if (captured && start - worst >= 2) {
-      return `${played} left your ${NAMES[captured.piece]} on ${captured.square} exposed: ${captured.san} wins material.${bestSan ? ` ${bestSan} was stronger.` : ''}`;
+      return {
+        kind: 'hung-piece',
+        text: `${played} left your ${NAMES[captured.piece]} on ${captured.square} exposed: ${captured.san} wins material.${bestSan ? ` ${bestSan} was stronger.` : ''}`,
+      };
     }
   }
 
@@ -359,9 +370,38 @@ export function explainMistake({ fen, played, before, after }) {
     const line = before.pv.slice(0, 5);
     if (line.length % 2 === 0) line.pop();
     const idea = explainLine(fen, line);
-    if (idea && bestSan) return `You played ${played}. Better was ${bestSan}. ${idea}`;
+    const kind = tacticalLine(fen, line) ? 'missed-tactic' : 'positional';
+    if (idea && bestSan) return { kind, text: `You played ${played}. Better was ${bestSan}. ${idea}` };
+    if (bestSan) return { kind, text: `You played ${played}. ${bestSan} kept a stronger position.` };
   }
-  return bestSan ? `You played ${played}. ${bestSan} kept a stronger position.` : `You played ${played}. A stronger move was available.`;
+  return { kind: 'positional', text: `You played ${played}. A stronger move was available.` };
+}
+
+/** True when the best line contains a recognised tactic or wins at least two points of material. */
+function tacticalLine(fen, line) {
+  let tags = [];
+  try {
+    tags = analyseLine(fen, line).tags;
+  } catch {}
+  if (tags.some(t => TACTIC_TAGS.includes(t))) return true;
+  const g = new Chess(fen);
+  const sign = g.turn() === 'w' ? 1 : -1;
+  const start = materialBalance(g) * sign;
+  for (const u of line) if (!tryPlay(g, u)) break;
+  return materialBalance(g) * sign - start >= 2;
+}
+
+function tryPlay(g, uci) {
+  try {
+    return playUci(g, uci);
+  } catch {
+    return null;
+  }
+}
+
+/** The explanation text alone. */
+export function explainMistake(args) {
+  return diagnoseMistake(args).text;
 }
 
 function afterFen(fen, san) {
