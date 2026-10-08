@@ -6,6 +6,11 @@ It is built for improving players, roughly 600 to 1600, who want a daily routine
 
 ## What it does
 
+### The loop
+- **One next step.** The training page tells you what to do now: drill the mistakes from your latest game, revisit what is due, solve puzzles on the tactics you missed, take a lesson for a recurring pattern, or play a game. Finish a step and the next one is waiting.
+- **Your games import themselves.** Link a Lichess or Chess.com username and new games are fetched whenever the app is open, then reviewed in the background. Games with Lichess analysis review almost instantly. Filters: rated only, time controls, a daily cap.
+- **The opponent adapts.** Score well over five practice games and the next one is a rung higher on a ladder that interleaves Maia and Stockfish levels; struggle and it steps down.
+
 ### Coaching
 - **A coach that reads your games.** Every saved mistake is classified: allowed a mating attack, left material en prise, missed a mate, missed a tactic, or a quieter slip. The Coach page shows which one you make most, in which phase of the game, how many blunders you make per game, and whether you rush critical moves or run short of time.
 - **A weekly plan.** Each Monday brings a plan aimed at your main weakness: training days, focused puzzles, re-solving your own mistakes, reviewing games and one drill. Targets rise after a completed week and ease off after a missed one.
@@ -51,7 +56,7 @@ If saved data is ever unreadable, Rankup keeps a copy instead of overwriting it.
 
 ## Privacy
 
-Games you paste are analysed locally. The only network requests after the first load are the ones you ask for: fetching your recent games from `lichess.org` or `api.chess.com`.
+Games you paste are analysed locally. The only network requests after the first load go to `lichess.org` and `api.chess.com`, and only for the public games of a username you entered: on request, or automatically when a username is linked and automatic import is on. Turn it off in Settings at any time.
 
 ## Development
 
@@ -74,6 +79,8 @@ npm run test:browsers  # the same in Firefox, Safari, iPhone and iPad (needs tho
 | `index.html`, `styles/app.css` | Page shell and styles, including dark mode |
 | `src/main.js` | Routing, settings, theme, service-worker updates |
 | `src/pages/` | One module per screen: train, coach, path, play, review, progress, drills |
+| `src/guide.js` | The guided loop: the next step, focus tags and lesson recommendations |
+| `src/sync.js`, `src/queue.js`, `src/analyse.js` | Automatic import, the background analysis queue and shared game analysis |
 | `src/coach.js` | Diagnosis, weekly plan and trends, as pure functions of the saved state |
 | `src/personal-lessons.js` | Lessons built from your own mistakes |
 | `src/maia.js`, `src/maia-core.js` | Human-like opponents: Maia networks run in a worker |
@@ -117,7 +124,7 @@ Without `--source lichess`, the build uses the self-play puzzles in `tools/data/
 1. Bump the version in `package.json`, `sw.js` and `src/main.js`. A unit test fails if they differ.
 2. Commit and push. Open copies of the app show an "Update now" button once the new version has downloaded.
 
-Saved progress uses the `rankup-v1` storage key with a version field inside (currently 3). To change its shape, add a migration to the `MIGRATIONS` list in `src/state.js`, never edit a released one, and bump `CURRENT_VERSION`. Every older backup then upgrades step by step, and a test checks the chain has no gaps.
+Saved progress uses the `rankup-v1` storage key with a version field inside (currently 4). To change its shape, add a migration to the `MIGRATIONS` list in `src/state.js`, never edit a released one, and bump `CURRENT_VERSION`. Every older backup then upgrades step by step, and a test checks the chain has no gaps.
 
 ## Limitations
 

@@ -31,6 +31,8 @@ export const app = {
   page: null,
   /** @type {(name: string, params?: Record<string, any>) => void} */
   navigate: () => {},
+  /** Opens the settings dialog; set by main.js. */
+  openSettings: () => {},
 
   save() {
     try {

@@ -50,7 +50,7 @@ export function dueCount(puzzles, records, now) {
 /**
  * Choose the next position.
  * Order: due reviews (personal mistakes first) → untried personal mistakes →
- * new puzzles near the target rating (sometimes from the weakest theme) →
+ * new puzzles near the target rating (preferring focus tags, else sometimes the weakest theme) →
  * the least recently seen position as extra practice.
  */
 export function choosePuzzle({
@@ -61,6 +61,7 @@ export function choosePuzzle({
   seen = [],
   target = 1000,
   weakTheme = null,
+  focusTags = [],
   now = Date.now(),
   rng = Math.random,
 }) {
@@ -80,7 +81,11 @@ export function choosePuzzle({
 
   let fresh = pool.filter(p => !isMistake(p) && !rec(p)?.tries);
   if (fresh.length) {
-    if (!theme && weakTheme && rng() < 0.35) {
+    // Tactics you missed in your own games come first; otherwise your weakest theme sometimes.
+    if (focusTags.length && rng() < 0.6) {
+      const focused = fresh.filter(p => (p.tags || []).some(t => focusTags.includes(t)));
+      if (focused.length) fresh = focused;
+    } else if (!theme && weakTheme && rng() < 0.35) {
       const weak = fresh.filter(p => p.theme === weakTheme);
       if (weak.length) fresh = weak;
     }

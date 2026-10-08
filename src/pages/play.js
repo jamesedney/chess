@@ -5,16 +5,28 @@ import { engine, BUDGET } from '../engine.js';
 import { BoardView, boardCard, turnLabel } from '../board.js';
 import { $, esc, pageHead, choosePromotion, confirmDialog, download, toast, settle } from '../ui.js';
 import { moveToUci, playUci, opposite } from '../chess-utils.js';
-import { LEVELS, levelById, pickNoisyMove } from '../strength.js';
+import { LEVELS, levelById, pickNoisyMove, adaptLevel } from '../strength.js';
 import { humanMove } from '../maia.js';
 import { isTrainableMistake, winPercentLoss } from '../evaluation.js';
 import { createMistake, deleteMistake } from '../mistakes.js';
-import { dateKey } from '../state.js';
+import { dateKey, logGame } from '../state.js';
 
 const SAVE_KEY = 'rankup-practice';
 let root = null;
 let board = null;
-const play = { game: new Chess(), color: 'w', token: 0, mistakes: {}, from: null, thinking: false, prepared: null, note: '', lastMove: [] };
+const play = {
+  game: new Chess(),
+  color: 'w',
+  token: 0,
+  mistakes: {},
+  from: null,
+  thinking: false,
+  prepared: null,
+  note: '',
+  lastMove: [],
+  recorded: false,
+  level: null,
+};
 
 (function restore() {
   try {
@@ -26,12 +38,24 @@ const play = { game: new Chess(), color: 'w', token: 0, mistakes: {}, from: null
     play.color = saved.color === 'b' ? 'b' : 'w';
     play.from = saved.from || null;
     play.mistakes = saved.mistakes || {};
+    play.recorded = !!saved.recorded;
+    play.level = saved.level || null;
   } catch {}
 })();
 
 function persist() {
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify({ pgn: play.game.pgn(), color: play.color, from: play.from, mistakes: play.mistakes }));
+    localStorage.setItem(
+      SAVE_KEY,
+      JSON.stringify({
+        pgn: play.game.pgn(),
+        color: play.color,
+        from: play.from,
+        mistakes: play.mistakes,
+        recorded: play.recorded,
+        level: play.level,
+      }),
+    );
   } catch {}
 }
 
@@ -158,7 +182,37 @@ function newGame({ fen = null, color = 'w', from = null }) {
   play.thinking = false;
   play.note = '';
   play.lastMove = [];
+  play.recorded = false;
+  play.level = fen ? null : app.state.strength; // games from a puzzle position do not count towards the ladder
   engine.newGame();
+  persist();
+}
+
+/**
+ * Once a full game ends, record the result and, when the setting is on, move
+ * the opponent up or down the ladder for the next game.
+ */
+function recordResult() {
+  const g = play.game;
+  if (play.recorded || !play.level || !g.isGameOver() || g.history().length < 6) return;
+  play.recorded = true;
+  const result = g.isCheckmate() ? (g.turn() === play.color ? 0 : 1) : 0.5;
+  logGame(app.state, { level: play.level, result });
+  if (app.state.settings.autoLevel) {
+    const next = adaptLevel(app.state.games, play.level);
+    if (next.change) {
+      app.state.strength = next.level;
+      const label = levelById(next.level).label;
+      play.note =
+        next.change === 'up'
+          ? `You are scoring well here. Next game: ${label}.`
+          : `A step down for the next game: ${label}. Win a few and it climbs again.`;
+      toast(play.note);
+      const sel = $('#difficulty');
+      if (sel) sel.value = next.level;
+    }
+  }
+  app.save();
   persist();
 }
 
@@ -223,7 +277,7 @@ async function onMove(move) {
     persist();
     refreshBoard();
     board.announce(`You played ${m.san}.`);
-    if (g.isGameOver()) return;
+    if (g.isGameOver()) return recordResult();
     const level = levelById(app.state.strength);
     let after = null;
     if (app.state.coach || level.mode === 'noise' || level.mode === 'full') {
@@ -287,6 +341,7 @@ async function engineMove(token, after, level) {
   play.lastMove = [m.from, m.to];
   persist();
   if (board) board.announce(`Stockfish played ${m.san}.`);
+  if (g.isGameOver()) recordResult();
 }
 
 async function engineTurn() {

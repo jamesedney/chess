@@ -13,8 +13,10 @@ import * as progress from './pages/progress.js';
 import * as drills from './pages/drills.js';
 import * as coach from './pages/coach.js';
 import { scheduleDeepAnalysis } from './deep.js';
+import { startAutoSync, syncNow } from './queue.js';
+import { CONTROLS } from './sync.js';
 
-export const VERSION = '2.0.0';
+export const VERSION = '2.1.0';
 const PAGES = { train, coach, path, play, review, progress, drills };
 // Parameters that are part of a page's address, so reloads and the back button return to them.
 const ADDRESS_KEYS = ['lesson', 'drill', 'id'];
@@ -141,10 +143,19 @@ function openSettings() {
         .join('')}</div>
     </fieldset>
     <div class="checks"><label><input type="checkbox" id="sound-on" ${s.settings.sound ? 'checked' : ''}> Move sounds</label><label><input type="checkbox" id="haptics-on" ${s.settings.haptics ? 'checked' : ''}> Vibration on supported phones</label></div>
-    <fieldset class="field"><legend>Your accounts (for fetching games)</legend>
-      <label for="lichess-name">Lichess username</label><input id="lichess-name" maxlength="40" spellcheck="false" value="${esc(s.profiles.lichess)}">
-      <label for="chesscom-name">Chess.com username</label><input id="chesscom-name" maxlength="40" spellcheck="false" value="${esc(s.profiles.chesscom)}">
+    <fieldset class="field"><legend>Your online games</legend>
+      <label for="lichess-name">Lichess username</label><input id="lichess-name" maxlength="40" spellcheck="false" autocomplete="off" value="${esc(s.profiles.lichess)}">
+      <label for="chesscom-name">Chess.com username</label><input id="chesscom-name" maxlength="40" spellcheck="false" autocomplete="off" value="${esc(s.profiles.chesscom)}">
+      <div class="checks">
+        <label><input type="checkbox" id="sync-auto" ${s.sync.auto ? 'checked' : ''}> Import and review my new games automatically</label>
+        <label><input type="checkbox" id="sync-rated" ${s.sync.ratedOnly ? 'checked' : ''}> Rated games only</label>
+      </div>
+      <div class="pill-row small" role="group" aria-label="Time controls to import">${CONTROLS.map(c => `<button type="button" data-control="${c}" class="${s.sync.controls.includes(c) ? 'active' : ''}" aria-pressed="${s.sync.controls.includes(c)}">${c[0].toUpperCase() + c.slice(1)}</button>`).join('')}</div>
+      <label for="sync-cap">Games per day, at most</label><select id="sync-cap">${[2, 5, 10, 20].map(n => `<option value="${n}" ${s.sync.dailyCap === n ? 'selected' : ''}>${n}</option>`).join('')}</select>
+      <small>Public games only, fetched when the app is open. Games with Lichess analysis review almost instantly; others take Stockfish a minute or two each, in the background.</small>
+      <div class="actions"><button type="button" id="sync-now">Check for new games now</button></div>
     </fieldset>
+    <div class="checks"><label><input type="checkbox" id="auto-level" ${s.settings.autoLevel ? 'checked' : ''}> Adjust the practice opponent to my results</label></div>
     <h3>Backup</h3>
     <p class="small">Progress is saved in this browser only. Export a backup before changing device or clearing browser data.</p>
     <div class="actions"><button type="button" id="backup">Export progress</button><button type="button" id="restore">Import backup</button><input type="file" id="restore-file" accept=".json,application/json" hidden></div>
@@ -213,6 +224,50 @@ function openSettings() {
     });
   saveName('lichess', $('#lichess-name'));
   saveName('chesscom', $('#chesscom-name'));
+  $('#sync-auto').onchange = e => {
+    s.sync.auto = e.target.checked;
+    app.save();
+  };
+  $('#sync-rated').onchange = e => {
+    s.sync.ratedOnly = e.target.checked;
+    app.save();
+  };
+  $('#sync-cap').onchange = e => {
+    s.sync.dailyCap = Number(e.target.value);
+    app.save();
+  };
+  $('#auto-level').onchange = e => {
+    s.settings.autoLevel = e.target.checked;
+    app.save();
+  };
+  $$('#modal [data-control]').forEach(
+    b =>
+      (b.onclick = () => {
+        const c = b.dataset.control;
+        const on = !s.sync.controls.includes(c);
+        s.sync.controls = on ? [...s.sync.controls, c] : s.sync.controls.filter(x => x !== c);
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-pressed', String(on));
+        app.save();
+      }),
+  );
+  $('#sync-now').onclick = async e => {
+    e.target.disabled = true;
+    const names = [s.profiles.lichess, s.profiles.chesscom].filter(Boolean);
+    if (!names.length) {
+      e.target.disabled = false;
+      return toast('Enter a Lichess or Chess.com username first.');
+    }
+    const { added, errors } = await syncNow({ force: true });
+    e.target.disabled = false;
+    toast(
+      errors.length
+        ? errors.join(' ')
+        : added
+          ? `${added} new ${added === 1 ? 'game' : 'games'} queued for review.`
+          : 'No new games since the last check.',
+    );
+  };
   $('#backup').onclick = () => download(`rankup-progress-${dateKey()}.json`, JSON.stringify(s, null, 1));
   $('#restore').onclick = () => $('#restore-file').click();
   $('#restore-file').onchange = async e => {
@@ -323,6 +378,7 @@ function boot() {
   applySettings();
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => applyTheme(themeChoice()));
   $('#settings').onclick = openSettings;
+  app.openSettings = openSettings;
   $('#close-modal').onclick = closeModal;
   let installPrompt = null;
   window.addEventListener('beforeinstallprompt', e => {
@@ -342,6 +398,7 @@ function boot() {
   show(currentPage(), hashParams());
   // Re-check reviewed mistakes with a deeper search once the app has settled.
   scheduleDeepAnalysis(15000);
+  startAutoSync();
   if (app.recovered) toast('Saved progress could not be read, so a copy was kept. See Settings to download it.', { duration: 9000 });
   else if (!app.storageOK) toast('This browser is not saving progress (private mode?). Export a backup in Settings.');
 }

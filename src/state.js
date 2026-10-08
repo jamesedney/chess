@@ -7,10 +7,12 @@ import { STAGES } from './themes.js';
 import { LEVELS, DEFAULT_LEVEL } from './strength.js';
 import { KIND_IDS, kindFromExplanation } from './mistake-kinds.js';
 import { BOARD_THEMES, PIECE_SETS, DEFAULT_APPEARANCE } from './appearance.js';
+import { DEFAULT_SYNC, CONTROLS } from './sync.js';
 
 export const STORAGE_KEY = 'rankup-v1'; // Kept for continuity; the version lives inside.
 export const RECOVERY_PREFIX = 'rankup-recovery-';
-export const CURRENT_VERSION = 3;
+export const CURRENT_VERSION = 4;
+export const MAX_GAMES = 50;
 export const MAX_REVIEWS = 20;
 export const MAX_LOG = 4000;
 
@@ -37,7 +39,10 @@ export function defaults() {
     plan: null, // this week's plan; see plan.js
     endgames: {}, // drill id -> { tries, wins, best }
     calc: { visual: emptyDrillStats(), checks: emptyDrillStats() },
-    settings: { ...DEFAULT_APPEARANCE, sound: true, haptics: true },
+    settings: { ...DEFAULT_APPEARANCE, sound: true, haptics: true, autoLevel: true },
+    // Added in version 4.
+    sync: DEFAULT_SYNC(), // automatic import of your online games
+    games: [], // finished practice games: { d: date, level, r: 1 win | 0.5 draw | 0 loss }
   };
 }
 
@@ -92,6 +97,12 @@ export const MIGRATIONS = [
       };
     },
   },
+  {
+    from: 3,
+    run(s) {
+      return { ...s, settings: { ...s.settings, autoLevel: true }, sync: DEFAULT_SYNC(), games: [] };
+    },
+  },
 ];
 
 /** Upgrade any supported saved state to the current version. Throws on unknown input. */
@@ -107,7 +118,13 @@ export function migrate(input) {
   }
   // Fill fields added after a backup was made within the same version.
   const base = defaults();
-  return { ...base, ...s, settings: { ...base.settings, ...s.settings }, calc: { ...base.calc, ...s.calc } };
+  return {
+    ...base,
+    ...s,
+    settings: { ...base.settings, ...s.settings },
+    calc: { ...base.calc, ...s.calc },
+    sync: { ...base.sync, ...s.sync },
+  };
 }
 
 const isDate = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
@@ -169,6 +186,13 @@ export function validate(s) {
   const st = s.settings;
   if (!st || !BOARD_THEMES[st.board] || !PIECE_SETS[st.pieces] || typeof st.sound !== 'boolean' || typeof st.haptics !== 'boolean')
     return 'settings';
+  if (typeof st.autoLevel !== 'boolean') return 'settings';
+  const sy = s.sync;
+  if (!sy || typeof sy.auto !== 'boolean' || typeof sy.ratedOnly !== 'boolean' || !Array.isArray(sy.controls)) return 'sync';
+  if (!sy.controls.every(c => CONTROLS.includes(c)) || !finite(sy.minMoves, 0, 60) || !finite(sy.dailyCap, 1, 50)) return 'sync';
+  if (!sy.last || !finite(sy.last.lichess, 0) || !finite(sy.last.chesscom, 0) || !Array.isArray(sy.seen)) return 'sync';
+  if (!Array.isArray(s.games) || s.games.length > MAX_GAMES * 2) return 'games';
+  for (const g of s.games) if (!g || !isDate(g.d) || !LEVELS.some(l => l.id === g.level) || ![0, 0.5, 1].includes(g.r)) return 'game';
   return null;
 }
 
@@ -206,6 +230,12 @@ export function loadState(storage, now = Date.now()) {
 export function logAttempt(state, { kind, theme, clean, date = dateKey() }) {
   state.log.push({ d: date, k: kind, t: String(theme || ''), c: clean ? 1 : 0 });
   if (state.log.length > MAX_LOG) state.log.splice(0, state.log.length - MAX_LOG);
+}
+
+/** Record a finished practice game. */
+export function logGame(state, { level, result, date = dateKey() }) {
+  state.games.push({ d: date, level, r: result });
+  if (state.games.length > MAX_GAMES) state.games.splice(0, state.games.length - MAX_GAMES);
 }
 
 export function saveState(storage, state) {

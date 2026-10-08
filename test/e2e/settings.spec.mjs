@@ -65,7 +65,7 @@ test('backup export and import round-trip, and dark mode applies', async ({ page
   const file = info.outputPath('backup.json');
   await download.saveAs(file);
   const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
-  expect(saved.version).toBe(3);
+  expect(saved.version).toBe(4);
   expect(saved.records.p001.clean).toBe(1);
   // Reset, then restore.
   await page.click('#reset');

@@ -13,6 +13,8 @@ import { dateKey, streaks, logAttempt } from '../state.js';
 import { makeVisionDrill, isVisionAnswer } from '../vision.js';
 import { archiveMistake } from '../mistakes.js';
 import { cue } from '../sound.js';
+import { nextStep } from '../guide.js';
+import { snapshot as queueSnapshot, subscribe as watchQueue } from '../queue.js';
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const SPRINT_MS = 60000;
@@ -24,22 +26,40 @@ let current = null;
 let board = null;
 let vision = null;
 let seeds = null;
+let unwatch = null;
 
-function newSession(mode = 'daily', theme = null) {
-  session = { mode, theme, done: 0, clean: 0, seen: [], finished: false, ratingStart: app.state.puzzle.rating };
+function newSession(mode = 'daily', theme = null, { tags = [], review = null, step = null } = {}) {
+  session = { mode, theme, tags, review, step, done: 0, clean: 0, seen: [], finished: false, ratingStart: app.state.puzzle.rating };
   current = null;
+}
+
+/** The guided next step, computed from the saved state and the import queue. */
+function guideStep() {
+  return nextStep(app.state, { queue: queueSnapshot(), puzzles: app.allPuzzles() });
+}
+
+/** Start the session a guide step asks for. */
+function followStep(step) {
+  const p = step.action.params || {};
+  if (step.action.page === 'settings') return app.openSettings();
+  if (step.action.page !== 'train') return app.navigate(step.action.page, p);
+  startSession(p.mode || 'daily', p.theme || null, { tags: p.tags || [], review: p.review || null, step: step.id });
 }
 
 function loadNext() {
   const target = app.state.puzzle.rating + app.state.difficulty;
+  let pool = app.allPuzzles();
+  // Drilling one game: only the positions saved from that review.
+  if (session.review) pool = pool.filter(x => x.source?.reviewId === session.review);
   const p = choosePuzzle({
-    puzzles: app.allPuzzles(),
+    puzzles: pool,
     records: app.state.records,
     mode: session.mode,
     theme: session.theme,
     seen: session.seen,
     target,
     weakTheme: weakestTheme(app.state.themes),
+    focusTags: session.tags,
     now: Date.now(),
   });
   loadPuzzle(p);
@@ -81,9 +101,15 @@ export function render(main, params = {}) {
     newSession(p && isMistake(p) ? 'mistakes' : 'daily');
     if (p) loadPuzzle(p);
   } else if (params.mode) {
-    startSession(params.mode, params.theme || null, false);
+    startSession(params.mode, params.theme || null, {
+      tags: params.tags || [],
+      review: params.review || null,
+      step: params.step || null,
+      redraw: false,
+    });
   }
-  if (!session) startSession('daily', null, false);
+  if (!session) startSession('daily', null, { redraw: false });
+  if (!unwatch) unwatch = watchQueue(() => app.page === 'train' && refreshGuide());
   draw();
 }
 
@@ -93,9 +119,9 @@ export function leave() {
   stopVisionTimer();
 }
 
-function startSession(mode, theme, redraw = true) {
+function startSession(mode, theme, { tags = [], review = null, step = null, redraw = true } = {}) {
   stopVisionTimer();
-  newSession(mode, theme);
+  newSession(mode, theme, { tags, review, step });
   if (mode === 'vision') vision = { phase: 'ready', score: 0, misses: 0 };
   else {
     vision = null;
@@ -117,8 +143,10 @@ function topLine() {
   const chip = session.theme
     ? `<span class="chip">${esc(session.theme)} <button type="button" class="chip-close" id="clear-theme" aria-label="Clear theme filter">×</button></span>`
     : session.mode === 'mistakes'
-      ? '<span class="chip">My mistakes</span>'
-      : '';
+      ? `<span class="chip">${session.review ? 'This game’s mistakes' : 'My mistakes'}</span>`
+      : session.tags?.length
+        ? `<span class="chip">${esc(session.tags.map(t => displayTags([t])[0] || t).join(' · '))}</span>`
+        : '';
   return `<div class="focus-top">
     <span id="focus-progress" class="focus-progress">${esc(progress)}</span>
     ${chip}
@@ -180,14 +208,34 @@ function openMenu() {
 
 function draw() {
   if (!root || app.page !== 'train') return;
-  root.innerHTML = '<div class="focus">' + topLine() + '<div id="train-body"></div></div>';
+  root.innerHTML = '<div class="focus">' + topLine() + '<div id="guide"></div><div id="train-body"></div></div>';
   $('#train-menu', root).onclick = openMenu;
+  refreshGuide();
   $('#clear-theme', root)?.addEventListener('click', () => startSession('daily'));
   const body = $('#train-body', root);
   if (session.mode === 'vision') return drawVision(body);
   if (session.finished) return drawFinished(body);
   if (!current) return drawEmpty(body);
   drawPuzzle(body);
+}
+
+/** The next-step strip, hidden while you are doing the step it suggests. */
+function refreshGuide() {
+  const el = $('#guide', root);
+  if (!el || !session) return;
+  const step = guideStep();
+  const sameDrill = step.id === 'drill' && session.mode === 'mistakes' && (!session.review || session.review === step.action.params.review);
+  const sameDaily = ['puzzles', 'due'].includes(step.id) && session.mode === 'daily' && !session.theme;
+  const doingIt = (session.step === step.id || sameDrill || sameDaily) && !session.finished;
+  if (doingIt || session.mode === 'vision') {
+    el.innerHTML = step.note && !session.finished ? `<p class="guide-note small">${esc(step.note)}</p>` : '';
+    return;
+  }
+  el.innerHTML = `<div class="guide" role="region" aria-label="Next step">
+    <div class="guide-text"><span class="eyebrow">NEXT</span><strong>${esc(step.title)}</strong><span class="small">${esc(step.text)}</span>${step.note ? `<span class="small muted">${esc(step.note)}</span>` : ''}</div>
+    <button type="button" class="primary" id="guide-go">Go</button>
+  </div>`;
+  $('#guide-go', el).onclick = () => followStep(step);
 }
 
 function drawEmpty(body) {
@@ -203,10 +251,13 @@ function drawEmpty(body) {
 
 function drawFinished(body) {
   const change = app.state.puzzle.rating - session.ratingStart;
+  const step = guideStep();
   body.innerHTML = `<div class="panel dark-panel"><div class="eyebrow">SESSION COMPLETE</div><h2>Good work. Let it settle.</h2>
     <p>${session.clean} of ${session.done} positions solved without help.${change ? ` Puzzle rating ${change > 0 ? '+' : '−'}${Math.abs(change)} this session.` : ''} Missed and hinted positions return sooner.</p>
-    <div class="actions"><button type="button" id="again" class="lime">Train another session</button><button type="button" id="to-progress">See progress</button></div></div>`;
-  $('#again', body).onclick = () => startSession(session.mode, session.theme);
+    <p class="small"><strong>Next:</strong> ${esc(step.title)}. ${esc(step.why)}</p>
+    <div class="actions"><button type="button" id="next-step" class="lime">${esc(step.id === 'done' ? 'Try a drill' : step.title)}</button><button type="button" id="again">Another session</button><button type="button" id="to-progress">See progress</button></div></div>`;
+  $('#next-step', body).onclick = () => followStep(step);
+  $('#again', body).onclick = () => startSession(session.mode, session.theme, { tags: session.tags, review: session.review });
   $('#to-progress', body).onclick = () => app.navigate('progress');
 }
 

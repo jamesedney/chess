@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.1.0
+
+### The guided loop
+- The training page now shows the one thing to do next: drill the mistakes from your latest game, revisit positions that are due, solve puzzles on the tactics you missed, take a lesson for a pattern that keeps recurring, or play a game. The strip steps aside while you are doing what it suggests, and the session-complete screen leads straight to the next step.
+- New puzzles lean towards the tactics behind your recent mistakes (forks, pins, hanging pieces, mates…), not only your weakest theme.
+- The practice opponent adapts: score 60% or better over five games at a level and the next game is one rung up the ladder; 30% or worse steps down. The ladder interleaves Maia and Stockfish levels so each step is small. It can be turned off in Settings.
+
+### Automatic import
+- Link your Lichess or Chess.com username and your new games are fetched when the app opens, comes back online or returns to the foreground, then reviewed one at a time in the background. Finished reviews appear as a toast and their mistakes become your next drill.
+- Filters in Settings: rated games only, which time controls, and a daily cap. Unfinished games, variants, short games and games you did not play are skipped.
+- Games that carry Lichess analysis are reviewed almost instantly: Stockfish only looks at the moves Lichess already marked.
+- The game picker gains "queue them all" for pasted or fetched multi-game files.
+- Background analysis gives way to anything you are waiting for, and the queue survives a reload.
+
+### Engineering
+- Game analysis moved into a shared module used by the Review page and the import queue.
+- Saved data moves to version 4 (sync settings and the practice-game log) through the migration chain.
+
 ## 2.0.0
 
 ### Coaching

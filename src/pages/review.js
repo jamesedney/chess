@@ -2,21 +2,22 @@
 // manage the personal mistake bank that the analysis fills.
 import { Chess } from '../../vendor/chess.js';
 import { app } from '../app-context.js';
-import { engine, BUDGET } from '../engine.js';
+import { engine } from '../engine.js';
 import { BoardView } from '../board.js';
 import { $, esc, pageHead, confirmDialog, toast, plural, formatDate } from '../ui.js';
-import { splitPgn, loadGame, describeGame, detectColour, readHeaders } from '../pgn.js';
-import { moveToUci, playUci, opposite } from '../chess-utils.js';
-import { whitePov, winPercentLoss, classifyLoss, isTrainableMistake, formatScore } from '../evaluation.js';
-import { createMistake, archiveMistake, deleteMistake } from '../mistakes.js';
+import { splitPgn, describeGame, detectColour, readHeaders } from '../pgn.js';
+import { opposite } from '../chess-utils.js';
+import { formatScore } from '../evaluation.js';
+import { archiveMistake, deleteMistake } from '../mistakes.js';
 import { evalGraph, hydrateEvalGraph } from '../charts.js';
-import { MAX_REVIEWS } from '../state.js';
-import { readClocks, parseTimeControl, moveTime, timeSummary, formatClock } from '../clocks.js';
-import { identifyOpening, openingStats } from '../openings.js';
+import { moveTime, timeSummary, formatClock } from '../clocks.js';
+import { openingStats } from '../openings.js';
+import { analyseGame as runAnalysis, MAX_PLIES, MATE_EVAL } from '../analyse.js';
 import { scheduleDeepAnalysis } from '../deep.js';
+import { enqueue, remove as dequeue, snapshot as queueSnapshot, subscribe as watchQueue, syncNow } from '../queue.js';
+import { gameKey } from '../sync.js';
 
-export const MAX_PLIES = 200;
-export const MATE_EVAL = 10000;
+export { MAX_PLIES, MATE_EVAL };
 const SYMBOL = { inaccuracy: '?!', mistake: '?', blunder: '??' };
 
 let root = null;
@@ -28,6 +29,7 @@ let analysis = { running: false, token: 0, status: '' };
 let viewer = null; // { id, ply }
 let showArchived = false;
 let keyHandler = null;
+let unwatch = null;
 
 export function render(main, params = {}) {
   root = main;
@@ -40,6 +42,14 @@ export function render(main, params = {}) {
   }
   if (params.review) viewer = { id: params.review, ply: params.ply ?? 0 };
   if (params.list) viewer = null;
+  if (!unwatch)
+    unwatch = watchQueue(() => {
+      const el = $('#queue-panel');
+      if (el && app.page === 'review') {
+        el.innerHTML = queueHTML();
+        wireQueue();
+      }
+    });
   draw();
 }
 
@@ -93,6 +103,7 @@ function drawImport() {
         }
         </div>
         <div id="game-picker">${pickerHTML()}</div>
+        <div id="queue-panel">${queueHTML()}</div>
         <div class="field"><label for="review-colour">Which side did you play?</label><select id="review-colour"><option value="w">White</option><option value="b">Black</option></select></div>
         <div class="actions">
           <button type="button" id="analyse" class="primary" ${analysis.running ? 'disabled' : ''}>${selected ? 'Analyse selected game' : 'Find my missed opportunities'}</button>
@@ -155,6 +166,7 @@ function drawImport() {
     wireMistakes();
   };
   wirePicker();
+  wireQueue();
   wireReviews();
   wireMistakes();
 }
@@ -168,7 +180,7 @@ function pickerHTML() {
   if (!picker || !picker.games.length) return '';
   const names = usernames();
   return `<div class="picker" role="list" aria-label="Games found">
-    <p class="small">${plural(picker.games.length, 'game')} found. Choose one to analyse.</p>
+    <p class="small">${plural(picker.games.length, 'game')} found. Choose one, or <button type="button" class="link" id="analyse-all">queue them all</button> for background review.</p>
     ${picker.games
       .map((pgn, i) => {
         const d = describeGame(pgn);
@@ -180,6 +192,25 @@ function pickerHTML() {
 }
 
 function wirePicker() {
+  $('#analyse-all', root)?.addEventListener('click', () => {
+    const names = usernames();
+    const items = picker.games.map(pgn => ({
+      pgn,
+      colour: detectColour(pgn, names) || draft.colour,
+      source: picker.source,
+      key: gameKey(pgn),
+      added: Date.now(),
+    }));
+    const added = enqueue(items);
+    picker = null;
+    selected = null;
+    draw();
+    toast(
+      added
+        ? `${added} ${added === 1 ? 'game' : 'games'} queued. They are reviewed in the background while you train.`
+        : 'Those games are already queued or reviewed.',
+    );
+  });
   root.querySelectorAll('[data-pick]').forEach(
     b =>
       (b.onclick = () => {
@@ -279,103 +310,23 @@ function startAnalysis() {
   analyseGame(pgn, colour);
 }
 
-const clampEval = v => Math.max(-MATE_EVAL, Math.min(MATE_EVAL, Math.round(v)));
-
 async function analyseGame(pgn, colour) {
-  let game;
-  try {
-    game = loadGame(pgn);
-  } catch (e) {
-    return setStatus(e.message);
-  }
-  const moves = game.history({ verbose: true });
-  const limit = Math.min(moves.length, MAX_PLIES);
-  const key = colour + ':' + (moves[0]?.before || '') + ':' + moves.map(m => m.san).join(' ');
-  const existing = app.state.reviews.find(r => r.key === key && r.complete);
-  if (existing) {
-    toast('You have already reviewed this game. Opening it.');
-    return app.navigate('review', { review: existing.id, ply: 0 });
-  }
-  const d = describeGame(pgn);
-  const fens = [moves[0].before, ...moves.map(m => m.after)];
-  const tc = parseTimeControl(readHeaders(pgn).TimeControl);
-  const clocks = tc ? readClocks(pgn, moves.length) : null;
-  const review = {
-    id: 'r' + Date.now().toString(36),
-    key,
-    created: Date.now(),
-    white: d.white,
-    black: d.black,
-    result: d.result,
-    date: d.date,
-    event: d.event,
-    colour,
-    startFen: moves[0].before,
-    moves: moves.slice(0, limit).map(m => m.san),
-    evals: new Array(limit + 1).fill(null),
-    marks: [],
-    complete: false,
-    opening: identifyOpening(fens),
-    ...(clocks ? { clocks: clocks.slice(0, limit), tc } : {}),
-  };
   const token = ++analysis.token;
   analysis.running = true;
-  let found = 0;
-  const truncated = moves.length > MAX_PLIES ? ` Only the first ${MAX_PLIES} half-moves are analysed.` : '';
   draw();
   try {
-    for (let i = 0; i < limit; i++) {
-      if (token !== analysis.token) break;
-      const m = moves[i];
-      if (m.color !== colour) continue;
-      setStatus(
-        `Analysing move ${Math.floor(i / 2) + 1} of ${Math.ceil(limit / 2)} · ${plural(found, 'opportunity', 'opportunities')} found.${truncated}`,
-      );
-      const before = await engine.analyse(m.before, { nodes: BUDGET.review });
-      if (token !== analysis.token) break;
-      review.evals[i] = clampEval(whitePov(before.score, m.color));
-      if (moveToUci(m) === before.best) {
-        review.evals[i + 1] = review.evals[i];
-        continue;
-      }
-      const afterGame = new Chess(m.after);
-      let after;
-      if (afterGame.isCheckmate()) {
-        review.evals[i + 1] = m.color === 'w' ? MATE_EVAL : -MATE_EVAL;
-        continue;
-      } else if (afterGame.isDraw()) {
-        after = { score: 0, mate: null, pv: [], best: null };
-      } else {
-        after = await engine.analyse(m.after, { nodes: BUDGET.review });
-        if (token !== analysis.token) break;
-      }
-      review.evals[i + 1] = clampEval(whitePov(after.score, opposite(m.color)));
-      const loss = winPercentLoss(before.score, after.score);
-      const cls = classifyLoss(loss);
-      if (cls === 'good') continue;
-      const bestSan = playUci(new Chess(m.before), before.best).san;
-      const mark = { ply: i, cls, loss: Math.round(loss), best: before.best, bestSan };
-      if (isTrainableMistake(before.score, after.score)) {
-        const mistake = createMistake({
-          fen: m.before,
-          played: m.san,
-          before,
-          after,
-          loss,
-          source: { reviewId: review.id, ply: i },
-        })?.mistake;
-        if (mistake) {
-          mark.mistakeId = mistake.id;
-          mark.explanation = mistake.explanation;
-          found++;
-        }
-      }
-      review.marks.push(mark);
+    const { review, found, duplicate } = await runAnalysis(pgn, {
+      colour,
+      onProgress: setStatus,
+      isCancelled: () => token !== analysis.token,
+    });
+    if (duplicate) {
+      analysis.running = false;
+      analysis.status = '';
+      toast('You have already reviewed this game. Opening it.');
+      return app.navigate('review', { review: review.id, ply: 0 });
     }
-    review.complete = token === analysis.token;
-    app.state.reviews = [review, ...app.state.reviews.filter(r => r.key !== key)].slice(0, MAX_REVIEWS);
-    app.save();
-    analysis.status = `${review.complete ? 'Review complete' : 'Stopped'}. ${plural(found, 'practice position')} saved.${truncated}`;
+    analysis.status = `${review.complete ? 'Review complete' : 'Stopped'}. ${plural(found, 'practice position')} saved.`;
     analysis.running = false;
     selected = null;
     picker = null;
@@ -410,6 +361,41 @@ function reviewsHTML() {
         <div class="item-actions"><button type="button" data-open="${esc(r.id)}">Open</button><button type="button" class="icon-button" data-delete-review="${esc(r.id)}" aria-label="Delete review of ${esc(r.white)} – ${esc(r.black)}">✕</button></div></div>`;
     })
     .join('');
+}
+
+function queueHTML() {
+  const q = queueSnapshot();
+  const linked = usernames().length > 0;
+  if (!q.pending && !q.current && !q.syncing) {
+    return linked && app.state.sync.auto
+      ? `<p class="small muted">New games on your linked ${usernames().length === 2 ? 'accounts are' : 'account is'} imported and reviewed automatically while Rankup is open. <button type="button" class="link" id="queue-sync">Check now</button></p>`
+      : '';
+  }
+  return `<div class="queue" aria-live="polite">
+    ${q.syncing ? '<p class="small">Checking your accounts for new games…</p>' : ''}
+    ${q.current ? `<p class="small"><strong>Reviewing ${esc(q.current.label)}</strong><br>${esc(q.current.progress)}</p>` : ''}
+    ${q.items
+      .filter(i => i.key !== q.current?.key)
+      .map(
+        i =>
+          `<p class="small queue-item">Waiting: ${esc(i.label)} <button type="button" class="icon-button" data-dequeue="${esc(i.key)}" aria-label="Remove ${esc(i.label)} from the queue">✕</button></p>`,
+      )
+      .join('')}
+  </div>`;
+}
+
+function wireQueue() {
+  root.querySelectorAll('[data-dequeue]').forEach(b => (b.onclick = () => dequeue(b.dataset.dequeue)));
+  $('#queue-sync', root)?.addEventListener('click', async () => {
+    const { added, errors } = await syncNow({ force: true });
+    toast(
+      errors.length
+        ? errors.join(' ')
+        : added
+          ? `${added} new ${added === 1 ? 'game' : 'games'} queued.`
+          : 'No new games since the last check.',
+    );
+  });
 }
 
 function openingsHTML() {

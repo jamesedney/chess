@@ -11,6 +11,7 @@
 - **Coaching.** Diagnosis with no, little and enough data; time-trouble detection; Monday-based weeks; plan targets and progress from the log; adaptive targets; trend verdicts that stay "steady" within noise; personal lessons from three or more mistakes of one kind.
 - **Review data.** Clock parsing and time per move, rushed and time-trouble thresholds, opening identification and per-opening scores, and deep re-checks that confirm, correct or clear a mark without touching positions already practised.
 - **Drills.** Endgame judging for mate, promotion and defence goals, stalemate and move limits; visualisation questions that track a piece through the line; check finding.
+- **The loop.** Lichess export URLs and filters, time-control classes, game acceptance rules, deduplication and the daily cap, Chess.com archive mapping, Lichess evaluation parsing, the opponent ladder, focus tags, lesson recommendations, next-step ordering, and focus tags steering puzzle choice.
 - **Human-like opponents.** Maia input encoding, the network forward pass against a reference implementation, and move sampling.
 - **Imports.** Multi-game PGN splitting, colour detection, Lichess and Chess.com fetching with fake responses, and the Lichess CSV importer with plain and zstd files.
 - **Offline shell.** Versions agree, every precached file exists, and every module the app imports is in the offline cache.
@@ -30,6 +31,7 @@
 - The Coach page with seeded mistakes: diagnosis, plan, trends, and a personal lesson including an engine-approved alternative move.
 - Endgame drills played against Stockfish, a lost drill being recorded, visualisation and find every check.
 - A review with clock data and an opening, and the per-opening table.
+- A linked account synced against a mocked Lichess response: the game is queued, reviewed in the background from its Lichess evaluations, and becomes the next step; a second sync queues nothing; the next-step strip; the opponent ladder moving up after five wins.
 
 `npm run typecheck` type-checks `src/` with TypeScript in `checkJs` mode.
 

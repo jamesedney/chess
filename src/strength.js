@@ -18,6 +18,41 @@ export const LEVELS = [
 ];
 export const DEFAULT_LEVEL = 'maia1100';
 
+/** The order opponents are climbed when the level adapts to results. */
+export const LADDER = [
+  'beginner',
+  'novice',
+  'maia1100',
+  'improver',
+  'maia1500',
+  'elo1600',
+  'elo1800',
+  'maia1900',
+  'elo2000',
+  'elo2400',
+  'full',
+];
+export const LADDER_WINDOW = 5;
+
+/**
+ * Decide the level for the next game from recent results at the current one.
+ * Scoring 60% or more over the last five games at a level moves up one rung;
+ * 30% or less moves down. Returns { level, change: 'up' | 'down' | null }.
+ */
+export function adaptLevel(games, level) {
+  const i = LADDER.indexOf(level);
+  if (i < 0) return { level, change: null };
+  // Only the unbroken run of games at this level counts, so a step down does
+  // not immediately bounce back up on the wins that earned the step up.
+  const recent = [];
+  for (let k = games.length - 1; k >= 0 && games[k].level === level && recent.length < LADDER_WINDOW; k--) recent.push(games[k]);
+  if (recent.length < LADDER_WINDOW) return { level, change: null };
+  const score = recent.reduce((a, g) => a + g.r, 0) / recent.length;
+  if (score >= 0.6 && i < LADDER.length - 1) return { level: LADDER[i + 1], change: 'up' };
+  if (score <= 0.3 && i > 0) return { level: LADDER[i - 1], change: 'down' };
+  return { level, change: null };
+}
+
 export function levelById(id) {
   return LEVELS.find(l => l.id === id) || LEVELS.find(l => l.id === DEFAULT_LEVEL);
 }
