@@ -40,6 +40,7 @@ function newSession(mode = 'daily', theme = null, { tags = [], review = null, st
     seen: [],
     finished: false,
     total: null,
+    limit: null,
     ratingStart: app.state.puzzle.rating,
   };
   current = null;
@@ -69,9 +70,12 @@ function loadNext() {
     const mine = pool.filter(x => isMistake(x) && !x.archived);
     session.total = mine.length;
     if (mine.length && mine.every(x => session.seen.includes(x.id))) {
-      session.finished = true;
-      current = null;
-      return;
+      if (!session.limit) {
+        session.finished = true;
+        current = null;
+        return;
+      }
+      session.seen = []; // a second pass was asked for
     }
   }
   const p = choosePuzzle({
@@ -153,9 +157,19 @@ function startSession(mode, theme, { tags = [], review = null, step = null, redr
   if (redraw) draw();
 }
 
-/** How many positions this session runs to: the daily goal, or one pass over a mistakes pool. */
+/** How many positions this session runs to: the daily goal, one pass over a mistakes pool, or more if you chose to keep going. */
 function sessionGoal() {
+  if (session.limit) return session.limit;
   return session.mode === 'mistakes' && session.total ? Math.min(session.total, app.state.goal) : app.state.goal;
+}
+
+/** Carry on past the goal: another block of positions, with a mistakes pool allowed to repeat. */
+function keepGoing() {
+  session.limit = sessionGoal() + app.state.goal;
+  session.finished = false;
+  if (session.mode === 'mistakes') session.seen = [];
+  loadNext();
+  draw();
 }
 
 /** The thin line above the board: where you are in the session, and the menu. */
@@ -283,9 +297,9 @@ function drawFinished(body) {
   body.innerHTML = `<div class="panel dark-panel"><div class="eyebrow">SESSION COMPLETE</div><h2>Good work. Let it settle.</h2>
     <p>${session.clean} of ${session.done} positions solved without help.${change ? ` Puzzle rating ${change > 0 ? '+' : '−'}${Math.abs(change)} this session.` : ''} Missed and hinted positions return sooner.</p>
     <p class="small"><strong>Next:</strong> ${esc(step.title)}. ${esc(step.why)}</p>
-    <div class="actions"><button type="button" id="next-step" class="lime">${esc(step.id === 'done' ? 'Try a drill' : step.title)}</button><button type="button" id="again">Another session</button><button type="button" id="to-progress">See progress</button></div></div>`;
+    <div class="actions"><button type="button" id="next-step" class="lime">${esc(step.id === 'done' ? 'Try a drill' : step.title)}</button><button type="button" id="keep-going">Keep going</button><button type="button" id="to-progress">See progress</button></div></div>`;
   $('#next-step', body).onclick = () => followStep(step);
-  $('#again', body).onclick = () => startSession(session.mode, session.theme, { tags: session.tags, review: session.review });
+  $('#keep-going', body).onclick = keepGoing;
   $('#to-progress', body).onclick = () => app.navigate('progress');
 }
 

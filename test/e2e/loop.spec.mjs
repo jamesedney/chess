@@ -118,6 +118,10 @@ test('drilling a game with one saved position ends after it instead of repeating
   await expect(page.locator('#train-body')).toContainText('SESSION COMPLETE');
   await expect(page.locator('#train-body')).not.toContainText('Drill the mistake');
   await expect(page.locator('.guide')).not.toContainText('Drill the mistake');
+  // Cramming is allowed: keep going runs another block, repeating the pool.
+  await page.click('#keep-going');
+  await expect(page.locator('#focus-progress')).toContainText('2 of 9');
+  await expect(page.locator('#board-title')).toContainText('Find the improvement');
 });
 
 test('a second sync does not queue the same game again', async ({ page }) => {

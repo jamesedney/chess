@@ -51,7 +51,7 @@ export function dueCount(puzzles, records, now) {
  * Choose the next position.
  * Order: due reviews (personal mistakes first) → untried personal mistakes →
  * new puzzles near the target rating (preferring focus tags, else sometimes the weakest theme) →
- * the least recently seen position as extra practice.
+ * extra practice: the least cleanly solved, least recently seen positions.
  */
 export function choosePuzzle({
   puzzles,
@@ -70,7 +70,16 @@ export function choosePuzzle({
   const unseen = pool.filter(p => !seen.includes(p.id));
   if (unseen.length) pool = unseen;
   const rec = p => records[p.id];
-  const leastRecent = list => [...list].sort((a, b) => (rec(a)?.last || 0) - (rec(b)?.last || 0) || a.id.localeCompare(b.id))[0];
+  // Extra practice when nothing is due: the positions solved cleanly fewest
+  // times, then the least recently seen, with a little variety so consecutive
+  // sessions do not replay the same order.
+  const leastRecent = list => {
+    const ranked = [...list].sort(
+      (a, b) => (rec(a)?.clean || 0) - (rec(b)?.clean || 0) || (rec(a)?.last || 0) - (rec(b)?.last || 0) || a.id.localeCompare(b.id),
+    );
+    const top = ranked.slice(0, Math.min(3, ranked.length));
+    return top[Math.floor(rng() * top.length)];
+  };
 
   const due = pool.filter(p => isDue(rec(p), now));
   if (due.length) return due.sort((a, b) => isMistake(b) - isMistake(a) || rec(a).due - rec(b).due)[0];

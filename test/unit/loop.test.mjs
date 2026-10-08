@@ -273,3 +273,21 @@ test('focus tags steer new puzzles', () => {
   for (let i = 0; i < 20; i++) picks.add(choosePuzzle({ puzzles, records: {}, target: 1000, focusTags: ['fork'], rng: () => 0.1 }).id);
   assert.deepEqual([...picks], ['b']);
 });
+
+test('extra practice varies its order and prefers positions not yet solved cleanly', () => {
+  const now = NOW;
+  const puzzles = ['a', 'b', 'c', 'd'].map(id => ({ id: 'm' + id, fen: FEN, line: ['b8c6'], theme: 'Personal mistakes', tags: [] }));
+  // All tried, none due; a was seen longest ago but is the only one already solved cleanly.
+  const records = {
+    ma: { tries: 2, clean: 1, box: 1, due: now + 86400000, last: now - 4000 },
+    mb: { tries: 1, clean: 0, box: 0, due: now + 600000, last: now - 3000 },
+    mc: { tries: 1, clean: 0, box: 0, due: now + 600000, last: now - 2000 },
+    md: { tries: 1, clean: 0, box: 0, due: now + 600000, last: now - 1000 },
+  };
+  const firsts = new Set();
+  let seed = 3;
+  const rng = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 30; i++) firsts.add(choosePuzzle({ puzzles, records, mode: 'mistakes', now, rng }).id);
+  assert.ok(!firsts.has('ma'), 'the cleanly solved position is not served first');
+  assert.ok(firsts.size >= 2, 'consecutive sessions do not always open with the same position');
+});

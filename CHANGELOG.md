@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.3
+
+- Sessions no longer stop you: the session-complete screen has a Keep going button that runs another block of positions, and a mistakes session then repeats its pool so you can cram.
+- Fixed: when nothing was due, every My mistakes session opened with the same position, because the fallback always took the least recently seen one in a fixed order. It now prefers positions not yet solved cleanly and varies the order.
+
 ## 2.1.2
 
 - Fixed: drilling a game's mistakes (or My mistakes) repeated the same position to fill the session goal when there were only a few. A mistakes session is now one pass over its positions, the progress line shows that count, and the next step moves on to another game once each position has been attempted. A failed position still returns through spaced recall.
