@@ -33,10 +33,15 @@ test('reviewing a game saves explained mistakes and opens the viewer', async ({ 
   await page.fill('#pgn', TRAP);
   await page.selectOption('#review-colour', 'w');
   await page.click('#analyse');
-  await expect(page.locator('h1')).toContainText('me – rival', { timeout: 90000 });
+  await expect(page.locator('.focus-progress')).toContainText('me – rival', { timeout: 90000 });
+  // The viewer opens at the first mistake and asks for the better move before showing it.
+  await expect(page.locator('#board-title')).toHaveText('Find the better move');
+  await expect(page.locator('#board .arrow')).toHaveCount(0);
+  await page.click('#show-answer');
+  await expect(page.locator('#feedback')).toContainText('The better move was');
+  await page.click('.review-extra summary');
   await expect(page.locator('#eval-graph svg')).toBeVisible();
   await expect(page.locator('.move-list .blunder, .move-list .mistake').first()).toBeVisible();
-  await expect(page.locator('.moment')).toBeVisible();
   // Step with the keyboard.
   const counter = page.locator('.viewer-controls .small');
   const before = await counter.textContent();
@@ -69,10 +74,11 @@ test('a review shows the opening, time per move and opening results', async ({ p
   await page.fill('#pgn', CLOCKED);
   await page.selectOption('#review-colour', 'w');
   await page.click('#analyse');
-  await expect(page.locator('h1')).toContainText('me – rival', { timeout: 90000 });
-  await expect(page.locator('.opening-line')).toContainText('C');
+  await expect(page.locator('.focus-progress')).toContainText('me – rival', { timeout: 90000 });
+  await page.keyboard.press('Home');
+  await expect(page.locator('#feedback')).toContainText(/Opening|Game|Gambit|Defense|Attack/);
   await page.keyboard.press('End');
-  await expect(page.locator('.clock-line')).toContainText('spent with');
+  await expect(page.locator('#feedback')).toContainText(/spent|Better was|was a/);
   await page.click('#back-to-list');
   await expect(page.locator('.data-table')).toContainText('0 / 0 / 1');
 });

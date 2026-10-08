@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.0
+
+- Game review rebuilt around the board. The page shows the board, the move controls, one line of feedback and a Next mistake button; the evaluation graph, move list and game details fold away under "Graph, moves and details".
+- At each mistake the viewer asks you to find the better move before showing it. The stored move or any move Stockfish rates as just as good counts; Show answer reveals it. Solving a mistake here counts as drilling it, so the guided loop moves on and the position is scheduled like any other attempt.
+
 ## 2.1.3
 
 - Sessions no longer stop you: the session-complete screen has a Keep going button that runs another block of positions, and a mistakes session then repeats its pool so you can cram.

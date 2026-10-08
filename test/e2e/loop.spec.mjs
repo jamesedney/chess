@@ -66,7 +66,7 @@ test('the review-ready notification opens the game, even from behind the Setting
   // Tap the text of the notification, not its button, while the dialog is still open.
   await page.locator('#toast span').click();
   await expect(page).toHaveURL(/#review$/);
-  await expect(page.locator('h1')).toContainText('me – rival');
+  await expect(page.locator('.focus-progress')).toContainText('me – rival');
   await expect(page.locator('#modal')).not.toHaveAttribute('open');
 });
 
@@ -122,6 +122,59 @@ test('drilling a game with one saved position ends after it instead of repeating
   await page.click('#keep-going');
   await expect(page.locator('#focus-progress')).toContainText('2 of 9');
   await expect(page.locator('#board-title')).toContainText('Find the improvement');
+});
+
+test('a reviewed game asks for the better move at each mistake and counts a solve as drilling it', async ({ page }) => {
+  const FEN = 'r1b1kbnr/pppp1ppp/8/4N1q1/2BnP3/8/PPPP1PPP/RNBQK2R w KQkq - 1 5';
+  const now = Date.now();
+  await seed(page, {
+    profiles: { lichess: '', chesscom: '' },
+    mistakes: [
+      {
+        id: 'mseed',
+        title: 'Instead of Nxf7',
+        fen: FEN,
+        line: ['c4f7'],
+        theme: 'Personal mistakes',
+        tags: ['mate'],
+        goal: 'Find the improvement.',
+        explanation: 'Bxf7+ wins the queen after Kd8 Nxg5.',
+        played: 'Nxf7',
+        loss: 60,
+        created: now - 60000,
+        kind: 'missed-tactic',
+        source: { reviewId: 'rseed', ply: 8 },
+      },
+    ],
+    reviews: [
+      {
+        id: 'rseed',
+        complete: true,
+        created: now - 60000,
+        colour: 'w',
+        white: 'me',
+        black: 'rival',
+        result: '0-1',
+        startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+        moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Nd4', 'Nxe5', 'Qg5', 'Nxf7', 'Qxg2'],
+        evals: [20, 20, 20, 20, 20, 20, 90, -40, -60, -550, -580],
+        marks: [{ ply: 8, cls: 'blunder', loss: 60, best: 'c4f7', bestSan: 'Bxf7+', mistakeId: 'mseed' }],
+      },
+    ],
+  });
+  await open(page, 'review');
+  await page.click('[data-open="rseed"]');
+  await expect(page.locator('#board-title')).toHaveText('Find the better move');
+  await expect(page.locator('.focus-progress')).toContainText('0 of 1 mistake');
+  await move(page, 'c4', 'f7');
+  await expect(page.locator('#feedback')).toContainText('Yes: Bxf7+');
+  await expect(page.locator('#feedback')).toContainText('wins the queen');
+  await expect(page.locator('.focus-progress')).toContainText('1 of 1 mistake');
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')));
+  expect(saved.records.mseed).toMatchObject({ tries: 1, clean: 1 });
+  // Back on the training page the loop no longer asks to drill this game.
+  await page.click('nav a[data-page="train"]');
+  await expect(page.locator('#guide')).not.toContainText('Drill the mistake');
 });
 
 test('a second sync does not queue the same game again', async ({ page }) => {

@@ -2,11 +2,15 @@
 // manage the personal mistake bank that the analysis fills.
 import { Chess } from '../../vendor/chess.js';
 import { app } from '../app-context.js';
-import { engine } from '../engine.js';
+import { engine, BUDGET } from '../engine.js';
 import { BoardView } from '../board.js';
-import { $, esc, pageHead, confirmDialog, toast, plural, formatDate } from '../ui.js';
+import { $, esc, pageHead, confirmDialog, toast, plural, formatDate, choosePromotion } from '../ui.js';
 import { splitPgn, describeGame, detectColour, readHeaders } from '../pgn.js';
-import { opposite } from '../chess-utils.js';
+import { opposite, moveToUci } from '../chess-utils.js';
+import { judgeAlternative } from '../verify.js';
+import { schedule } from '../srs.js';
+import { logAttempt } from '../state.js';
+import { cue } from '../sound.js';
 import { formatScore } from '../evaluation.js';
 import { archiveMistake, deleteMistake } from '../mistakes.js';
 import { evalGraph, hydrateEvalGraph } from '../charts.js';
@@ -30,6 +34,7 @@ let viewer = null; // { id, ply }
 let showArchived = false;
 let keyHandler = null;
 let unwatch = null;
+let viewerBoard = null;
 
 export function render(main, params = {}) {
   root = main;
@@ -532,11 +537,12 @@ function drawViewer(review) {
   const total = review.moves.length;
   const ply = Math.max(0, Math.min(total, viewer.ply));
   viewer.ply = ply;
+  viewer.solved ||= {}; // ply -> 'clean' | 'help', for marks worked on in this visit
   const marks = review.marks.filter(m => !m.cleared);
   const markAt = marks.find(m => m.ply === ply); // the reviewed side is about to move here
   const markJust = marks.find(m => m.ply === ply - 1); // the move just played
   const clearedJust = review.marks.find(m => m.cleared && m.ply === ply - 1);
-  const timeJust = ply > 0 ? moveTime(review, ply - 1) : null;
+  const solving = !!markAt && !viewer.solved[ply];
   const ev = review.evals[ply];
   const whiteShare =
     ev === null || ev === undefined ? 50 : 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * Math.max(-1000, Math.min(1000, ev)))) - 1);
@@ -544,54 +550,70 @@ function drawViewer(review) {
   const moveLabel = ply === 0 ? 'Start position' : labels[ply - 1];
   const evText =
     ev === null || ev === undefined ? '' : Math.abs(ev) >= MATE_EVAL ? (ev > 0 ? 'White mating' : 'Black mating') : formatScore(ev);
-  const focus = markJust || markAt;
-  const mistake = focus?.mistakeId ? app.state.mistakes.find(m => m.id === focus.mistakeId) : null;
+  const done = marks.filter(m => viewer.solved[m.ply] || app.state.records[m.mistakeId]?.tries).length;
 
-  root.innerHTML =
-    pageHead(
-      'GAME REVIEW',
-      `${esc(review.white)} – ${esc(review.black)}`,
-      esc([review.result, formatDate(review.date), `you played ${review.colour === 'w' ? 'White' : 'Black'}`].filter(Boolean).join(' · ')),
-      '<button type="button" id="back-to-list">All reviews</button>',
-    ) +
-    `<div class="workspace">
-      <div class="board-card">
-        <div class="board-top"><strong id="board-title">${esc(moveLabel)}</strong><span class="chip">${esc(evText || 'not analysed')}</span></div>
-        <div class="viewer-board">
-          <div class="evalbar ${review.colour === 'b' ? 'flipped' : ''}" role="img" aria-label="Evaluation ${esc(evText || 'unknown')}"><span style="height:${whiteShare.toFixed(1)}%"></span></div>
-          <div class="board-wrap"><div id="board"></div></div>
-        </div>
-        <div class="viewer-controls" role="group" aria-label="Move navigation">
-          <button type="button" data-step="first" aria-label="First move">⏮</button>
-          <button type="button" data-step="prev" aria-label="Previous move">◀</button>
-          <span class="small">${ply} / ${total}</span>
-          <button type="button" data-step="next" aria-label="Next move">▶</button>
-          <button type="button" data-step="last" aria-label="Last move">⏭</button>
-          <button type="button" id="board-flip" class="secondary" aria-label="Flip board">⇅</button>
-        </div>
-      </div>
-      <div>
-        <section class="panel">
-          ${evalGraph('eval-graph', review.evals, marks, { current: ply })}
-          ${review.opening ? `<p class="small opening-line"><strong>${esc(review.opening.eco)}</strong> ${esc(review.opening.name)}</p>` : ''}
-          ${timeJust ? `<p class="small clock-line">${esc(labels[ply - 1])}: ${formatSpent(timeJust.spent)} spent with ${formatClock(timeJust.left)} on the clock${timeJust.trouble ? ' · time trouble' : ''}</p>` : ''}
-          ${clearedJust ? `<p class="status">A deeper engine check found ${esc(labels[ply - 1])} was fine. It is no longer marked.</p>` : ''}
-          ${focus ? momentHTML(review, focus, focus === markAt, mistake) : `<p class="muted small">Use the arrow keys or tap the graph to move through the game. Marked moves: ?! inaccuracy, ? mistake, ?? blunder.</p>`}
-          <div class="actions">
-            <button type="button" id="next-mark">Next marked move</button>
-            ${review.marks.some(m => m.mistakeId) ? '<button type="button" id="practise-game" class="primary">Practise this game’s positions</button>' : ''}
-          </div>
-        </section>
-        <section class="panel">
-          <div class="eyebrow">MOVES</div>
-          <ol class="move-list">${moveListHTML(review, ply)}</ol>
-        </section>
-      </div>
-    </div>`;
+  let title = moveLabel;
+  let message = '';
+  let tone = '';
+  if (solving) {
+    title = 'Find the better move';
+    message = viewer.message || `You played ${labels[ply]}${SYMBOL[markAt.cls]} here. What was better?`;
+    tone = viewer.tone || '';
+  } else if (markAt) {
+    message = momentText(review, markAt, viewer.solved[ply]);
+    tone = viewer.solved[ply] === 'clean' ? 'success' : 'warning';
+  } else if (markJust) {
+    message = momentText(review, markJust, null);
+    tone = 'warning';
+  } else if (clearedJust) {
+    message = `A deeper engine check found ${labels[ply - 1]} was fine. It is no longer marked.`;
+  } else if (ply === 0) {
+    message = `${review.opening ? review.opening.name + '. ' : ''}Step through with ◀ ▶ or the arrow keys. Next mistake jumps to each moment that cost you.`;
+  } else {
+    const t = moveTime(review, ply - 1);
+    message = t ? `${formatSpent(t.spent)} spent, ${formatClock(t.left)} left.` : evText ? `Evaluation ${evText}.` : '';
+  }
 
-  const board = new BoardView($('#board', root), { label: 'Game review board' });
+  root.innerHTML = `<div class="focus review-focus">
+    <div class="focus-top">
+      <button type="button" id="back-to-list" class="secondary focus-menu" style="margin-left:0" aria-label="Back to all reviews">‹ Reviews</button>
+      <span class="focus-progress">${esc(review.white)} – ${esc(review.black)}${marks.length ? ` · ${done} of ${marks.length} ${marks.length === 1 ? 'mistake' : 'mistakes'}` : ''}</span>
+    </div>
+    <div class="focus-prompt"><strong id="board-title">${esc(title)}</strong><span class="chip">${esc(evText || 'not analysed')}</span></div>
+    <div class="focus-board"><div class="viewer-board">
+      <div class="evalbar ${review.colour === 'b' ? 'flipped' : ''}" role="img" aria-label="Evaluation ${esc(evText || 'unknown')}"><span style="height:${whiteShare.toFixed(1)}%"></span></div>
+      <div class="board-wrap"><div id="board"></div></div>
+    </div></div>
+    <div class="viewer-controls" role="group" aria-label="Move navigation">
+      <button type="button" data-step="first" aria-label="First move">⏮</button>
+      <button type="button" data-step="prev" aria-label="Previous move">◀</button>
+      <span class="small">${ply} / ${total}</span>
+      <button type="button" data-step="next" aria-label="Next move">▶</button>
+      <button type="button" data-step="last" aria-label="Last move">⏭</button>
+      <button type="button" id="board-flip" class="secondary" aria-label="Flip board">⇅</button>
+    </div>
+    <div id="feedback" class="status ${tone}" role="status" aria-live="polite" ${message ? '' : 'hidden'}>${esc(message)}</div>
+    <div class="focus-actions">
+      ${solving ? '<button type="button" id="show-answer">Show answer</button>' : ''}
+      <button type="button" id="next-mark" class="${solving ? 'secondary' : 'primary'}">${marks.length ? 'Next mistake' : 'Next move'}</button>
+    </div>
+    <details class="review-extra" ${viewer.extra ? 'open' : ''}>
+      <summary>Graph, moves and details</summary>
+      <p class="small">${esc([review.result, formatDate(review.date), `you played ${review.colour === 'w' ? 'White' : 'Black'}`, review.opening?.name].filter(Boolean).join(' · '))}</p>
+      ${evalGraph('eval-graph', review.evals, marks, { current: ply })}
+      <ol class="move-list">${moveListHTML(review, ply)}</ol>
+      ${review.marks.some(m => m.mistakeId) ? '<div class="actions"><button type="button" id="practise-game">Practise this game’s positions in training</button></div>' : ''}
+    </details>
+  </div>`;
+
+  const board = new BoardView($('#board', root), {
+    label: 'Game review board',
+    askPromotion: choosePromotion,
+    onMove: solving ? move => trySolve(review, markAt, fens[ply], move) : null,
+  });
+  viewerBoard = board;
   const arrows = [];
-  if (markAt) {
+  if (markAt && !solving) {
     arrows.push({ from: markAt.best.slice(0, 2), to: markAt.best.slice(2, 4), kind: 'best' });
     const played = verbose[ply];
     if (played) arrows.push({ from: played.from, to: played.to, kind: 'played' });
@@ -600,8 +622,9 @@ function drawViewer(review) {
   board.set({
     game: new Chess(fens[ply]),
     orientation: viewer.orientation || review.colour,
-    interactive: false,
-    lastMove: last ? [last.from, last.to] : [],
+    interactive: solving && !viewer.busy,
+    movable: review.colour,
+    lastMove: last && !solving ? [last.from, last.to] : [],
     arrows,
   });
   $('#board-flip', root).onclick = () => {
@@ -610,6 +633,10 @@ function drawViewer(review) {
   };
   const go = p => {
     viewer.ply = Math.max(0, Math.min(total, p));
+    viewer.tries = 0;
+    viewer.message = '';
+    viewer.tone = '';
+    viewer.busy = false;
     drawViewer(review);
   };
   root
@@ -620,14 +647,15 @@ function drawViewer(review) {
   $('#next-mark', root).onclick = () => {
     const next = marks.find(m => m.ply > ply) || marks[0];
     if (next) go(next.ply);
-    else toast('No marked moves in this game.');
+    else go(ply + 1);
   };
+  $('#show-answer', root)?.addEventListener('click', () => solvedMark(review, markAt, 'help'));
   $('#practise-game', root)?.addEventListener('click', () => {
     const first = review.marks.find(m => m.mistakeId && app.state.mistakes.some(x => x.id === m.mistakeId && !x.archived));
-    if (first) app.navigate('train', { puzzle: first.mistakeId });
+    if (first) app.navigate('train', { mode: 'mistakes', review: review.id });
     else toast('These positions were removed from your mistakes.');
   });
-  $('#mark-practise', root)?.addEventListener('click', () => app.navigate('train', { puzzle: focus.mistakeId }));
+  $('.review-extra', root).addEventListener('toggle', e => (viewer.extra = e.target.open));
   hydrateEvalGraph(root, 'eval-graph', review.evals, labels, i => go(i));
   keyHandler = e => {
     if (app.page !== 'review') return;
@@ -641,21 +669,90 @@ function drawViewer(review) {
   document.addEventListener('keydown', keyHandler);
 }
 
-function momentHTML(review, mark, before, mistake) {
+/** The user tries a move at a marked moment: the stored best, or anything Stockfish rates as good. */
+async function trySolve(review, mark, fen, move) {
+  if (viewer.busy) return;
+  const g = new Chess(fen);
+  let m;
+  try {
+    m = g.move(move);
+  } catch {
+    return;
+  }
+  if (moveToUci(m) === mark.best || g.isCheckmate()) return solvedMark(review, mark, 'clean', m.san);
+  viewer.busy = true;
+  viewerBoard?.set({ interactive: false, lastMove: [m.from, m.to] });
+  say('Checking your move with Stockfish…');
+  let accepted = false;
+  try {
+    const before = await engine.analyse(fen, { nodes: BUDGET.verify });
+    const after = g.isGameOver() ? null : await engine.analyse(g.fen(), { nodes: BUDGET.verify });
+    accepted = judgeAlternative({ before, after, minWin: 0 }).accepted;
+  } catch {}
+  if (!viewer || viewer.ply !== mark.ply) return;
+  viewer.busy = false;
+  if (accepted) return solvedMark(review, mark, 'clean', `${m.san} works too`);
+  viewer.tries++;
+  cue('error');
+  viewerBoard?.set({ game: new Chess(fen), interactive: true, lastMove: [] });
+  viewerBoard?.flash(m.to);
+  say(viewer.tries >= 2 ? 'Not that. Think about what the opponent threatens, or use Show answer.' : 'Not that one. Try again.', 'error');
+}
+
+function say(text, tone = '') {
+  viewer.message = text;
+  viewer.tone = tone;
+  const el = $('#feedback', root);
+  if (el) {
+    el.textContent = text;
+    el.className = 'status ' + tone;
+    el.hidden = false;
+  }
+}
+
+/**
+ * A marked moment is done: solved cleanly, or shown. Working through a game's
+ * mistakes here counts as drilling them, so the saved position is scheduled
+ * like any other attempt and the guided loop moves on.
+ */
+function solvedMark(review, mark, how, san = '') {
+  viewer.solved[mark.ply] = how;
+  viewer.lastSan = san;
+  const clean = how === 'clean' && !viewer.tries;
+  const mistake = mark.mistakeId && app.state.mistakes.find(x => x.id === mark.mistakeId && !x.archived);
+  if (mistake && !viewer.recorded?.[mistake.id]) {
+    (viewer.recorded ||= {})[mistake.id] = true;
+    app.state.records[mistake.id] = schedule(app.state.records[mistake.id], clean, Date.now());
+    logAttempt(app.state, { kind: 'm', theme: mistake.kind || 'positional', clean });
+    const today = app.today();
+    today.attempts++;
+    if (clean) today.clean++;
+    app.save();
+  }
+  cue(clean ? 'success' : 'error');
+  viewer.busy = false;
+  viewer.message = '';
+  drawViewer(review);
+}
+
+/** What to say about a marked moment once the better move is known. */
+function momentText(review, mark, how) {
   const move = `${plyLabel(review, mark.ply)}${SYMBOL[mark.cls]}`;
-  const lead = before
-    ? `You are about to play ${move}. The green arrow shows ${esc(mark.bestSan)}.`
-    : `${move} was ${mark.cls === 'inaccuracy' ? 'an inaccuracy' : 'a ' + mark.cls}. Better was ${esc(mark.bestSan)}.`;
+  const mistake = mark.mistakeId ? app.state.mistakes.find(m => m.id === mark.mistakeId) : null;
+  const why = mistake?.explanation || mark.explanation || '';
   const t = moveTime(review, mark.ply);
   const timing = t
     ? t.rushed
       ? ` You spent ${formatSpent(t.spent)} on it: a critical moment played quickly.`
       : t.trouble
         ? ` You had ${formatClock(t.left)} left: time trouble.`
-        : ` You spent ${formatSpent(t.spent)} on it.`
+        : ''
     : '';
-  return `<div class="moment ${mark.cls}"><div class="eyebrow"><span class="badge ${mark.cls}">${SYMBOL[mark.cls]}</span> ${mark.cls.toUpperCase()} · −${mark.loss}% WINNING CHANCES${mark.deep ? ' · DEEP CHECKED' : ''}</div>
-    <p>${lead}${esc(timing)}</p>${mistake ? `<p class="muted">${esc(mistake.explanation)}</p><button type="button" id="mark-practise" class="primary">Practise this position</button>` : ''}</div>`;
+  const kind = mark.cls === 'inaccuracy' ? 'an inaccuracy' : 'a ' + mark.cls;
+  if (how === 'clean')
+    return `Yes: ${viewer.lastSan || mark.bestSan}. In the game you played ${move}, ${kind} costing ${mark.loss}% winning chances. ${why}${timing}`;
+  if (how === 'help') return `The better move was ${mark.bestSan}. You played ${move}, ${kind}. ${why}${timing}`;
+  return `${move} was ${kind}. Better was ${mark.bestSan}. ${why}${timing}`;
 }
 
 function formatSpent(s) {

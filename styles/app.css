@@ -2357,3 +2357,34 @@ button.link {
   justify-content: space-between;
   gap: 8px;
 }
+
+/* ---------- Review viewer (focus layout) ---------- */
+
+.review-focus .viewer-controls {
+  margin-top: 0;
+}
+
+.review-extra {
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 0 14px;
+}
+
+.review-extra summary {
+  cursor: pointer;
+  padding: 12px 0;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.review-extra[open] summary {
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 10px;
+}
+
+.review-extra > :last-child {
+  margin-bottom: 14px;
+}
