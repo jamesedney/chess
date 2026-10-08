@@ -2,9 +2,14 @@ import { test as base, expect } from '@playwright/test';
 
 /** A page that fails the test on any uncaught error or console error. */
 export const test = base.extend({
-  page: async ({ page }, use) => {
+  page: async ({ page, browserName }, use) => {
     const errors = [];
-    page.on('pageerror', e => errors.push(e.message));
+    // WebKit occasionally traps inside the Stockfish WebAssembly build. The app
+    // restarts the engine and retries, which the tests still have to see work.
+    const knownVendorTrap = e => browserName === 'webkit' && /Out of bounds memory access/.test(e);
+    page.on('pageerror', e => {
+      if (!knownVendorTrap(e.message)) errors.push(e.message);
+    });
     page.on('console', m => {
       if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text());
     });
