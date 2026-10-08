@@ -22,16 +22,18 @@ class FakeWorker {
   terminate() {}
 }
 
-test('a crashed engine rejects the search in flight and recovers on the next one', async () => {
+test('a worker error mid-search restarts the engine and the search still completes', async () => {
   globalThis.Worker = FakeWorker;
   const engine = new Engine('fake.js');
   assert.equal((await engine.analyse('fen')).best, 'e2e4');
-  FakeWorker.last.hang = true;
+  const crashed = FakeWorker.last;
+  crashed.hang = true;
   const pending = engine.analyse('fen');
   await new Promise(r => setTimeout(r, 10));
-  FakeWorker.last.onerror();
-  await assert.rejects(pending, /stopped/);
-  // The queue is not stuck: a fresh worker answers the next search.
+  crashed.onerror();
+  assert.equal((await pending).best, 'e2e4', 'retried on a fresh worker');
+  assert.notEqual(FakeWorker.last, crashed);
+  // The queue is not stuck afterwards either.
   assert.equal((await engine.analyse('fen')).best, 'e2e4');
   delete globalThis.Worker;
 });

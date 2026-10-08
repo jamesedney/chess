@@ -5,10 +5,11 @@ import { parseInfo, parseBestMove } from './uci-parse.js';
 export const BUDGET = { coach: 150000, review: 250000, verify: 120000, hint: 100000, opponent: 90000, deep: 1500000 };
 
 export class Engine {
-  constructor(url, { searchMs = 45000, deadMs = 4000 } = {}) {
+  constructor(url, { searchMs = 45000, deadMs = 4000, silenceMs = 15000 } = {}) {
     this.url = url;
     this.searchMs = searchMs;
     this.deadMs = deadMs;
+    this.silenceMs = silenceMs; // a searching engine that says nothing for this long has crashed
     this.queue = Promise.resolve();
     this.worker = null;
     this.ready = null;
@@ -85,8 +86,9 @@ export class Engine {
     this.worker = null;
     this.ready = null;
     this.status = 'idle';
-    this.queue = Promise.resolve();
-    this.abort?.(new Error(message));
+    const error = /** @type {Error & { restart?: boolean }} */ (new Error(message));
+    error.restart = true;
+    this.abort?.(error);
   }
 
   /**
@@ -104,13 +106,17 @@ export class Engine {
         this.worker?.postMessage('stop');
       }
     }
-    const job = async () => {
-      if (background && this.waiting > 0) return { interrupted: true, best: null, score: 0, mate: null, pv: [], depth: 0, lines: [] };
+    const attempt = async () => {
       await this.init();
       return new Promise((resolve, reject) => {
         const lines = {};
         let timedOut = false;
         let deadTimer = null;
+        let silence = null;
+        const watch = () => {
+          clearTimeout(silence);
+          silence = setTimeout(() => this.crash(), this.silenceMs);
+        };
         const timer = setTimeout(() => {
           // Stop and wait for bestmove so the next search starts clean. An
           // engine that does not even answer "stop" has crashed: restart it.
@@ -125,6 +131,7 @@ export class Engine {
         this.abort = error => {
           clearTimeout(timer);
           clearTimeout(deadTimer);
+          clearTimeout(silence);
           this.listener = null;
           this.searching = false;
           this.background = false;
@@ -132,12 +139,14 @@ export class Engine {
           reject(error);
         };
         this.listener = line => {
+          watch();
           const info = parseInfo(line);
           if (info) lines[info.multipv] = info;
           const best = parseBestMove(line);
           if (best === null) return;
           clearTimeout(timer);
           clearTimeout(deadTimer);
+          clearTimeout(silence);
           this.listener = null;
           this.searching = false;
           this.abort = null;
@@ -165,7 +174,18 @@ export class Engine {
         post('setoption name MultiPV value ' + multipv);
         post('position fen ' + fen);
         post('go ' + (depth ? `depth ${depth}` : nodes ? `nodes ${nodes}` : `movetime ${movetime || 300}`));
+        watch();
       });
+    };
+    const job = async () => {
+      if (background && this.waiting > 0) return { interrupted: true, best: null, score: 0, mate: null, pv: [], depth: 0, lines: [] };
+      try {
+        return await attempt();
+      } catch (/** @type {any} */ e) {
+        // One silent retry on a fresh worker after a crash; a second crash is reported.
+        if (!e.restart) throw e;
+        return attempt();
+      }
     };
     const run = background
       ? job

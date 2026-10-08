@@ -8,7 +8,7 @@ class FakeWorker {
   constructor() {
     FakeWorker.instances++;
     this.alive = true;
-    this.dead = false; // when true, searches never answer
+    this.dead = FakeWorker.deadOnStart || false; // when true, searches never answer
     FakeWorker.last = this;
   }
   postMessage(cmd) {
@@ -26,20 +26,25 @@ class FakeWorker {
   }
 }
 
-test('the engine restarts after a crash instead of hanging for ever', async () => {
+test('a crashed engine is restarted and the search retried once, silently', async () => {
   globalThis.Worker = FakeWorker;
   try {
-    const engine = new Engine('fake.js', { searchMs: 30, deadMs: 10 });
+    FakeWorker.instances = 0;
+    const engine = new Engine('fake.js', { searchMs: 30, deadMs: 10, silenceMs: 20 });
     const first = await engine.analyse('fen1', { nodes: 10 });
     assert.equal(first.best, 'e2e4');
     assert.equal(FakeWorker.instances, 1);
+    // The worker dies: the retry runs on a fresh one and the caller never notices.
     FakeWorker.last.dead = true;
-    await assert.rejects(engine.analyse('fen2', { nodes: 10 }), /restarted/);
-    assert.equal(engine.available, true, 'a crash is not a permanent failure');
-    FakeWorker.instances = 1;
-    const again = await engine.analyse('fen3', { nodes: 10 });
-    assert.equal(again.best, 'e2e4');
+    const second = await engine.analyse('fen2', { nodes: 10 });
+    assert.equal(second.best, 'e2e4');
     assert.equal(FakeWorker.instances, 2, 'a fresh worker was started');
+    assert.equal(engine.available, true, 'a crash is not a permanent failure');
+    // Two crashes in a row are reported.
+    FakeWorker.last.dead = true;
+    FakeWorker.deadOnStart = true;
+    await assert.rejects(engine.analyse('fen3', { nodes: 10 }), /restarted/);
+    FakeWorker.deadOnStart = false;
   } finally {
     delete globalThis.Worker;
   }
