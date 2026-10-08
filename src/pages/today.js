@@ -44,20 +44,19 @@ function ensurePlan() {
 function drawSetup() {
   const step = setup.step;
   root.innerHTML = `<div class="focus today setup">
-    <h1>Let’s get you better at chess</h1>
-    <p class="muted">Rankup plans everything from here: what to learn, what to drill, and who to play. It adapts as you improve.</p>
+    <h1>Set up your plan</h1>
+    <p class="muted">Your username is enough. Rankup reads your rating and games, then plans every session.</p>
     ${
       step === 'account'
         ? `<form id="setup-form" class="panel">
-            <h2>Where do you play?</h2>
-            <div class="pill-row" role="group" aria-label="Site">
+            <div class="segmented" role="group" aria-label="Where you play">
               <button type="button" data-site="lichess" class="${setup.site === 'lichess' ? 'active' : ''}" aria-pressed="${setup.site === 'lichess'}">Lichess</button>
               <button type="button" data-site="chesscom" class="${setup.site === 'chesscom' ? 'active' : ''}" aria-pressed="${setup.site === 'chesscom'}">Chess.com</button>
             </div>
             <div class="field"><label for="setup-name">Username</label><input id="setup-name" autocomplete="username" spellcheck="false" maxlength="40" placeholder="Your username"></div>
             ${setup.error ? `<p class="status error">${esc(setup.error)}</p>` : ''}
-            <div class="actions"><button type="submit" class="primary" ${setup.busy ? 'disabled' : ''}>${setup.busy ? 'Reading your games…' : 'Start'}</button></div>
-            <p class="small">Your rating, games and mistakes are read from your public profile. Nothing to fill in.</p>
+            <button type="submit" class="primary big" ${setup.busy ? 'disabled' : ''}>${setup.busy ? 'Reading your games…' : 'Start'}</button>
+            <p class="small">Only your public profile is read. Nothing leaves your device.</p>
           </form>
           <p class="center"><button type="button" class="link" id="no-account">I don’t play online</button></p>`
         : `<div class="panel">

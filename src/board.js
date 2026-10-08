@@ -449,7 +449,7 @@ export class BoardView {
 
 /** Board card markup shared by the pages. */
 export function boardCard({ id = 'board', title = '', chip = '', footer = '' } = {}) {
-  return `<div class="board-card"><div class="board-top"><strong id="${id}-title">${title}</strong><span class="chip" id="${id}-chip">${chip}</span></div><div class="board-wrap"><div id="${id}"></div></div><div class="board-bottom"><span id="${id}-note" class="board-note">${footer}</span><button type="button" id="${id}-flip" class="secondary" aria-label="Flip board">⇅ Flip</button></div></div>`;
+  return `<div class="board-card"><div class="board-top"><strong id="${id}-title">${title}</strong><span class="chip" id="${id}-chip">${chip}</span></div><div class="board-wrap"><div id="${id}"></div></div><div class="board-bottom"><span id="${id}-note" class="board-note">${footer}</span><button type="button" id="${id}-flip" class="secondary" aria-label="Flip board">Flip</button></div></div>`;
 }
 
 export function turnLabel(game) {

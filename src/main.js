@@ -120,6 +120,10 @@ function updateSessionBar() {
   const done = !!block.complete || blockDone(app.state, block);
   const last = !s.blocks.some((b, k) => k !== i && b.status === 'todo');
   el.hidden = false;
+  el.style.setProperty(
+    '--pct',
+    String(Math.round((s.blocks.filter(b => b.status === 'done' || b.status === 'skipped' || b.complete).length / s.blocks.length) * 100)),
+  );
   el.innerHTML = `<span class="session-step small">${i + 1} of ${s.blocks.length}</span>
     <strong class="session-title">${esc(block.title)}</strong>
     <button type="button" id="session-next" class="${done ? 'primary' : 'secondary'}">${done ? (last ? 'Finish ✓' : 'Next ›') : 'Skip'}</button>
@@ -458,7 +462,7 @@ function boot() {
     $('#install').hidden = true;
   };
   window.addEventListener('offline', () => setNetworkLabel('Offline mode'));
-  window.addEventListener('online', () => setNetworkLabel('Online'));
+  window.addEventListener('online', () => setNetworkLabel(''));
   registerServiceWorker();
   show(currentPage(), hashParams());
   // Re-check reviewed mistakes with a deeper search once the app has settled.

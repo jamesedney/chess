@@ -366,7 +366,7 @@ function queueHTML() {
   const linked = usernames().length > 0;
   if (!q.pending && !q.current && !q.syncing) {
     return linked && app.state.sync.auto
-      ? `<p class="small muted">New games on your linked ${usernames().length === 2 ? 'accounts are' : 'account is'} imported and reviewed automatically while Rankup is open. <button type="button" class="link" id="queue-sync">Check now</button></p>`
+      ? `<p class="small muted">New games from your linked ${usernames().length === 2 ? 'accounts' : 'account'} are imported and reviewed automatically while Rankup is open. <button type="button" class="link" id="queue-sync">Check now</button></p>`
       : '';
   }
   return `<div class="queue" aria-live="polite">
@@ -400,7 +400,6 @@ function openingsHTML() {
   const stats = openingStats(app.state.reviews);
   if (!stats.length) return '';
   return `<section class="panel">
-    <div class="eyebrow">YOUR OPENINGS</div>
     <h2>How your openings are going</h2>
     <p class="small">From the games you have reviewed, grouped by opening. Score counts a win as 1 and a draw as ½. A handful of games is not a verdict.</p>
     <div class="table-wrap"><table class="data-table">
@@ -583,7 +582,7 @@ function drawViewer(review) {
       <span class="small">${ply} / ${total}</span>
       <button type="button" data-step="next" aria-label="Next move">▶</button>
       <button type="button" data-step="last" aria-label="Last move">⏭</button>
-      <button type="button" id="board-flip" class="secondary" aria-label="Flip board">⇅</button>
+      <button type="button" id="board-flip" class="secondary" aria-label="Flip board"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 20V4M4.5 7.5 8 4l3.5 3.5M16 4v16M12.5 16.5 16 20l3.5-3.5"/></svg></button>
     </div>
     <div id="feedback" class="status ${tone}" role="status" aria-live="polite" ${message ? '' : 'hidden'}>${esc(message)}</div>
     <div class="focus-actions">

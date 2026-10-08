@@ -430,7 +430,7 @@ function drawComplete() {
   root.innerHTML = `<div class="focus">
     <div class="focus-top"><button type="button" id="lesson-exit" class="secondary focus-menu" style="margin-left:0">‹ Lessons</button></div>
     <div class="panel dark-panel">
-      <div class="eyebrow">LESSON COMPLETE</div>
+      <div class="eyebrow">Lesson complete</div>
       <h2>${esc(lesson.title)}</h2>
       <div class="callout">${esc(lesson.rule)}</div>
       <p>Carry the rule into the next thing you play.</p>

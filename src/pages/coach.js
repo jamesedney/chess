@@ -26,8 +26,7 @@ export function render(main) {
     pageHead('', 'Coach') +
     `<div class="two-col">
       <section class="panel" aria-labelledby="plan-title">
-        <div class="eyebrow">WEEK OF ${esc(formatDate(s.plan.week).toUpperCase())}</div>
-        <h2 id="plan-title">This week’s plan</h2>
+        <h2 id="plan-title">This week’s plan <span class="h2-note">from ${esc(formatDate(s.plan.week))}</span></h2>
         ${last ? `<p class="small">Last week: ${Math.round(last.ratio * 100)}% done. ${last.ratio >= 1 ? 'Targets are a little higher this week.' : last.ratio < 0.5 ? 'Targets are lighter this week so the plan stays doable.' : 'Targets stay the same.'}</p>` : '<p class="small">A new plan arrives every Monday and adapts to how the last one went.</p>'}
         <ol class="plan-list">${plan.items
           .map(
@@ -41,14 +40,12 @@ export function render(main) {
           .join('')}</ol>
       </section>
       <section class="panel" aria-labelledby="diag-title">
-        <div class="eyebrow">DIAGNOSIS · LAST 90 DAYS</div>
-        <h2 id="diag-title">What your games say</h2>
+        <h2 id="diag-title">What your games say <span class="h2-note">last 90 days</span></h2>
         ${diagnosisHTML(d)}
       </section>
     </div>
     <section class="panel" aria-labelledby="trend-title">
-      <div class="eyebrow">THIS MONTH VS LAST MONTH</div>
-      <h2 id="trend-title">Is it working?</h2>
+      <h2 id="trend-title">Is it working? <span class="h2-note">this month against last</span></h2>
       <p class="small">A change is only called when it is bigger than normal variation. Small samples say “not enough data” rather than guess.</p>
       <div class="table-wrap"><table class="data-table trend-table">
         <thead><tr><th scope="col">Measure</th><th scope="col">Last 30 days</th><th scope="col">30 days before</th><th scope="col">Verdict</th></tr></thead>
@@ -62,7 +59,6 @@ export function render(main) {
     </section>
     <div class="two-col">
       <section class="panel" aria-labelledby="mine-title">
-        <div class="eyebrow">LESSONS FROM YOUR GAMES</div>
         <h2 id="mine-title">Your own positions, as lessons</h2>
         ${
           lessons.length
@@ -76,7 +72,6 @@ export function render(main) {
         }
       </section>
       <section class="panel" aria-labelledby="open-title">
-        <div class="eyebrow">OPENINGS</div>
         <h2 id="open-title">Where your games start</h2>
         ${
           openings.length

@@ -28,7 +28,7 @@ const saved = page => page.evaluate(() => JSON.parse(localStorage.getItem('ranku
 test('a username is all it takes: rating, goal, level and today’s plan', async ({ page }) => {
   await mockLichess(page);
   await page.goto('./');
-  await expect(page.locator('h1')).toContainText('better at chess');
+  await expect(page.locator('h1')).toContainText('Set up your plan');
   await page.fill('#setup-name', 'me');
   await page.click('#setup-form button[type="submit"]');
   await expect(page.locator('.goal-card')).toContainText('1180');

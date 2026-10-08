@@ -243,7 +243,7 @@ function topLine() {
   return `<div class="focus-top">
     <span id="focus-progress" class="focus-progress">${esc(progress)}</span>
     ${chip}
-    <button type="button" id="train-menu" class="secondary focus-menu" aria-haspopup="dialog" aria-label="Training menu: modes and today’s numbers">☰ Mode</button>
+    <button type="button" id="train-menu" class="secondary focus-menu" aria-haspopup="dialog" aria-label="Training menu: modes and today’s numbers">Mode</button>
   </div>`;
 }
 
@@ -275,7 +275,7 @@ function openMenu() {
       <button type="button" data-drill="assess">Assess the position</button>
     </div>
     ${session.theme ? `<p class="small">Theme filter: ${esc(session.theme)}. Choosing a mode clears it.</p>` : ''}
-    <div class="actions"><button type="button" id="menu-flip">⇅ Flip board</button><button type="button" id="menu-progress">See progress</button></div>`);
+    <div class="actions"><button type="button" id="menu-flip">Flip board</button><button type="button" id="menu-progress">See progress</button></div>`);
   $$('#modal [data-mode]').forEach(
     b =>
       (b.onclick = () => {
@@ -331,7 +331,7 @@ function refreshGuide() {
     return;
   }
   el.innerHTML = `<div class="guide" role="region" aria-label="Next step">
-    <div class="guide-text"><span class="eyebrow">NEXT</span><strong>${esc(step.title)}</strong><span class="small">${esc(step.text)}</span>${step.note ? `<span class="small muted">${esc(step.note)}</span>` : ''}</div>
+    <div class="guide-text"><span class="eyebrow">Next</span><strong>${esc(step.title)}</strong><span class="small">${esc(step.text)}</span>${step.note ? `<span class="small muted">${esc(step.note)}</span>` : ''}</div>
     <button type="button" class="primary" id="guide-go">Go</button>
   </div>`;
   $('#guide-go', el).onclick = () => followStep(step);
@@ -353,7 +353,7 @@ function drawFinished(body) {
   const block = activeBlock();
   if (block) {
     const unit = unitById(session.unit);
-    body.innerHTML = `<div class="panel dark-panel"><div class="eyebrow">BLOCK COMPLETE</div><h2>${esc(block.title)}</h2>
+    body.innerHTML = `<div class="panel dark-panel"><div class="eyebrow">Block complete</div><h2>${esc(block.title)}</h2>
       <p>${session.clean} of ${session.done} solved without help.${change ? ` Puzzle rating ${change > 0 ? '+' : '−'}${Math.abs(change)}.` : ''}${unit ? ` ${esc(unit.title)} is ${Math.round(unitProgress(unit) * 100)}% mastered.` : ''}</p>
       <div class="actions"><button type="button" id="session-next" class="lime">Continue session</button><button type="button" id="keep-going">Keep going here</button></div></div>`;
     $('#session-next', body).onclick = continueSession;
@@ -362,7 +362,7 @@ function drawFinished(body) {
     return;
   }
   const step = guideStep();
-  body.innerHTML = `<div class="panel dark-panel"><div class="eyebrow">SESSION COMPLETE</div><h2>Good work. Let it settle.</h2>
+  body.innerHTML = `<div class="panel dark-panel"><div class="eyebrow">Session complete</div><h2>Good work. Let it settle.</h2>
     <p>${session.clean} of ${session.done} positions solved without help.${change ? ` Puzzle rating ${change > 0 ? '+' : '−'}${Math.abs(change)} this session.` : ''} Missed and hinted positions return sooner.</p>
     <p class="small"><strong>Next:</strong> ${esc(step.title)}. ${esc(step.why)}</p>
     <div class="actions"><button type="button" id="next-step" class="lime">${esc(step.id === 'done' ? 'Try a drill' : step.title)}</button><button type="button" id="keep-going">Keep going</button><button type="button" id="to-progress">See progress</button></div></div>`;

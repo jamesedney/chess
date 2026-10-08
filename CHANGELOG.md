@@ -12,6 +12,7 @@ Rankup now plans everything. Enter a username and it sets your goal, places you 
 - **You** replaces Progress: goal chart, path, milestones and skill bars first. Manual rating entry folds away under Ratings.
 - Navigation: Today, Path, Play, Games, You. Puzzles, drills and the Coach open from the plan, the path and the You page.
 - New app icon in the Rankup colours; the installed app opens on Today.
+- Redesigned interface: one sans typeface throughout, cooler neutrals with the icon's rust as the only accent, grouped lists instead of stacked cards, line icons in the navigation, underline tabs on phones, a compact header with the app icon, and plainer feedback boxes. Uppercase labels, stripe callouts and glyph icons are gone.
 - Saved data moves to version 6; earlier backups import as before.
 
 

@@ -137,8 +137,8 @@ export function hintForTags(tags) {
 }
 
 export const STAGES = [
-  { label: 'Foundation', rating: 800 },
-  { label: 'Pattern builder', rating: 1100 },
-  { label: 'Calculation', rating: 1400 },
-  { label: 'Mixed practice', rating: 1600 },
+  { label: 'Beginner', rating: 800 },
+  { label: 'Improver', rating: 1100 },
+  { label: 'Intermediate', rating: 1400 },
+  { label: 'Advanced', rating: 1600 },
 ];

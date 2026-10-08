@@ -110,7 +110,7 @@ function draw() {
   root.innerHTML = `<div class="focus">
     <div class="focus-top">
       <span class="focus-progress">${esc(shortLevel(app.state.strength))} · you play ${play.color === 'w' ? 'White' : 'Black'}</span>
-      <button type="button" id="play-menu" class="secondary focus-menu" aria-haspopup="dialog" aria-label="Game options: opponent, colour, coach, export and review">☰ Options</button>
+      <button type="button" id="play-menu" class="secondary focus-menu" aria-haspopup="dialog" aria-label="Game options: opponent, colour, coach, export and review">Options</button>
     </div>
     <div class="focus-prompt"><strong id="board-title">${esc(play.from ? `From: ${play.from}` : 'Practice game')}</strong><span class="chip" id="board-chip"></span></div>
     ${play.objective && !play.from ? `<p class="objective small"><strong>Objective:</strong> ${esc(play.objective)}</p>` : ''}
@@ -125,7 +125,7 @@ function draw() {
              ${app.state.settings.candidates ? `<button type="button" id="candidates" ${g.turn() === play.color && !g.isGameOver() && !play.thinking ? '' : 'disabled'}>Candidates</button>` : ''}
              <button type="button" id="undo-game" ${g.history().length && !play.thinking ? '' : 'disabled'}>Take back</button>`
       }
-      <button type="button" id="board-flip" class="secondary" aria-label="Flip board">⇅</button>
+      <button type="button" id="board-flip" class="secondary" aria-label="Flip board"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 20V4M4.5 7.5 8 4l3.5 3.5M16 4v16M12.5 16.5 16 20l3.5-3.5"/></svg></button>
     </div>
   </div>`;
   board = new BoardView($('#board', root), { onMove, askPromotion: choosePromotion, label: 'Practice board' });

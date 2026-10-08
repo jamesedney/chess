@@ -6,7 +6,7 @@ test('every page loads without errors', async ({ page }) => {
   await open(page);
   await expect(page.locator('#board .square')).toHaveCount(64);
   for (const [name, selector, text] of [
-    ['today', 'h1', 'better at chess'],
+    ['today', 'h1', 'Set up your plan'],
     ['path', 'h1', 'Your path'],
     ['play', '#board-title', 'Practice game'],
     ['review', 'h1', 'Your games'],

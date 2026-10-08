@@ -122,7 +122,7 @@ test('drilling a game with one saved position ends after it instead of repeating
   await move(page, 'b8', 'c6');
   await expect(page.locator('#feedback')).toContainText('Nc6 develops');
   await page.click('#next');
-  await expect(page.locator('#train-body')).toContainText('BLOCK COMPLETE');
+  await expect(page.locator('#train-body')).toContainText('Block complete');
   expect(
     await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')).session.blocks.find(b => b.id === 'review').complete),
   ).toBe(true);
