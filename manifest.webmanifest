@@ -2,8 +2,8 @@
   "id": "./",
   "name": "Rankup — Chess Training",
   "short_name": "Rankup",
-  "description": "Adaptive chess practice and a personal mistake coach.",
-  "start_url": "./#train",
+  "description": "A guided training plan that takes your chess rating where you want it.",
+  "start_url": "./#today",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f6f1e8",
@@ -15,7 +15,7 @@
     { "src": "./icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "Today’s training", "url": "./#train" },
+    { "name": "Today’s session", "url": "./#today" },
     { "name": "Review a game", "url": "./#review" }
   ]
 }

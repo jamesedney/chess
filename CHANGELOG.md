@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.0.0
+
+Rankup now plans everything. Enter a username and it sets your goal, places you on a curriculum and builds each day's session.
+
+- **Today** is the new home: your goal (rating → target, deadline, projection), your level, and one button that runs today's session block by block. Choose 10 to 60 minutes a day; the plan fits it.
+- **Zero-effort setup.** A Lichess or Chess.com username, or one tap on a rough level. Ratings and Lichess rating history are synced automatically every six hours.
+- **Automatic goal.** The next target and deadline come from your rating and daily time; the projection uses your results since the plan started. Reaching a target records a milestone and sets the next one.
+- **Curriculum.** Seven rating bands, about 45 units, each with a mastery gate. Placement marks the bands below your level as known. The Path tab is now the curriculum map; tap a unit for its concept, gate and training.
+- **Skill model.** Seven skill ratings updated by every rated puzzle and corrected by the mistakes in your reviewed games. The planner trains the widest gap; refreshers bring back an old unit when your games show it leaking.
+- **You** replaces Progress: goal chart, path, milestones and skill bars first. Manual rating entry folds away under Ratings.
+- Navigation: Today, Path, Play, Games, You. Puzzles, drills and the Coach open from the plan, the path and the You page.
+- New app icon in the Rankup colours; the installed app opens on Today.
+- Saved data moves to version 6; earlier backups import as before.
+
+
 ## 2.4.0
 
 ### Strategy

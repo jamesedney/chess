@@ -6,10 +6,11 @@ test('every page loads without errors', async ({ page }) => {
   await open(page);
   await expect(page.locator('#board .square')).toHaveCount(64);
   for (const [name, selector, text] of [
-    ['path', 'h1', 'Lessons'],
+    ['today', 'h1', 'better at chess'],
+    ['path', 'h1', 'Your path'],
     ['play', '#board-title', 'Practice game'],
     ['review', 'h1', 'Your games'],
-    ['progress', 'h1', 'Progress'],
+    ['progress', 'h1', 'You'],
   ]) {
     await page.click(`nav a[data-page="${name}"]`);
     await expect(page.locator(selector)).toContainText(text);
@@ -94,8 +95,11 @@ test('vision sprint scores a correct capture', async ({ page }) => {
 
 test('a lesson walks through reading, tapping, moving and deciding, and saves progress', async ({ page }) => {
   await open(page, 'path');
-  await expect(page.locator('.lesson')).toHaveCount(23);
-  await page.locator('[data-lesson="mating-net"]').click();
+  await expect(page.locator('.band')).toHaveCount(7);
+  // Lessons belong to curriculum units: open the unit, then its lesson.
+  await page.locator('[data-unit="f-mate1"]').click();
+  await expect(page.locator('#modal .gate')).toContainText('puzzles cleanly');
+  await page.click('#unit-lesson');
   await expect(page).toHaveURL(/#path\?lesson=mating-net/);
   await expect(page.locator('.focus-progress')).toContainText('1 of 6');
   await page.click('#lesson-next');
@@ -114,8 +118,9 @@ test('a lesson walks through reading, tapping, moving and deciding, and saves pr
   await expect(page.locator('#lesson-feedback')).toContainText('Qg7#');
   // Leave and come back: progress is kept.
   await page.click('#lesson-exit');
-  await expect(page.locator('.lesson:has([data-lesson="mating-net"])')).toContainText('4 of 6');
-  await page.locator('[data-lesson="mating-net"]').click();
+  await expect(page.locator('h1')).toContainText('Your path');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')).lessons['mating-net'].step)).toBe(4);
+  await page.goto('./#path?lesson=mating-net');
   await expect(page.locator('.focus-progress')).toContainText('5 of 6');
   await page.click('#lesson-answer');
   await expect(page.locator('#lesson-feedback')).toContainText('Qxf7#');
@@ -123,9 +128,8 @@ test('a lesson walks through reading, tapping, moving and deciding, and saves pr
   await page.locator('[data-choice="0"]').click();
   await expect(page.locator('[data-choice="0"]')).toHaveClass(/right/);
   await page.click('#lesson-next');
-  await expect(page.locator('h2')).toContainText('Recognise the mating net');
+  await expect(page.locator('#main h2')).toContainText('Recognise the mating net');
   await page.click('#lesson-practise');
   await expect(page.locator('.focus-top .chip')).toContainText('King safety');
-  await page.goto('./#path');
-  await expect(page.locator('.lesson:has([data-lesson="mating-net"])')).toContainText('Completed');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')).lessons['mating-net'].done)).toBe(true);
 });

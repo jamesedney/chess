@@ -15,6 +15,9 @@ import { archiveMistake } from '../mistakes.js';
 import { cue } from '../sound.js';
 import { nextStep } from '../guide.js';
 import { snapshot as queueSnapshot, subscribe as watchQueue } from '../queue.js';
+import { recordSkillPuzzle } from '../skills.js';
+import { recordUnitPuzzle, unitById } from '../curriculum.js';
+import { activeBlock, continueSession } from '../session.js';
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const SPRINT_MS = 60000;
@@ -28,22 +31,51 @@ let vision = null;
 let seeds = null;
 let unwatch = null;
 
-function newSession(mode = 'daily', theme = null, { tags = [], review = null, step = null } = {}) {
+/**
+ * Session options: tags (focus, or the only tags when strict), review (one
+ * game's positions), limit (positions before the session ends), unit (the
+ * curriculum unit being trained), rating (the level to pick puzzles near),
+ * due (only positions due for recall).
+ */
+function newSession(
+  mode = 'daily',
+  theme = null,
+  { tags = [], review = null, step = null, limit = null, strict = false, unit = null, rating = null, due = false } = {},
+) {
   session = {
     mode,
     theme,
     tags,
     review,
     step,
+    strict,
+    unit,
+    rating,
+    due,
     done: 0,
     clean: 0,
     seen: [],
     finished: false,
     total: null,
-    limit: null,
+    limit,
     ratingStart: app.state.puzzle.rating,
   };
   current = null;
+}
+
+/** Session options from address or navigation parameters. */
+function optionsFrom(params) {
+  const list = v => (Array.isArray(v) ? v : typeof v === 'string' && v ? v.split(',') : []);
+  return {
+    tags: list(params.tags),
+    review: params.review || null,
+    step: params.step || null,
+    limit: Number(params.limit) || null,
+    strict: !!Number(params.strict || 0),
+    unit: params.unit || null,
+    rating: Number(params.rating) || null,
+    due: !!Number(params.due || 0),
+  };
 }
 
 /** The guided next step, computed from the saved state and the import queue. */
@@ -60,7 +92,7 @@ function followStep(step) {
 }
 
 function loadNext() {
-  const target = app.state.puzzle.rating + app.state.difficulty;
+  const target = (session.rating || app.state.puzzle.rating) + app.state.difficulty;
   let pool = app.allPuzzles();
   // Drilling one game: only the positions saved from that review.
   if (session.review) pool = pool.filter(x => x.source?.reviewId === session.review);
@@ -87,8 +119,16 @@ function loadNext() {
     target,
     weakTheme: weakestTheme(app.state.themes),
     focusTags: session.tags,
+    strictTags: session.strict,
+    dueOnly: session.due,
     now: Date.now(),
   });
+  // A due-only block with nothing left to recall is simply finished.
+  if (!p && session.due && session.done) {
+    session.finished = true;
+    current = null;
+    return;
+  }
   loadPuzzle(p);
 }
 
@@ -128,12 +168,7 @@ export function render(main, params = {}) {
     newSession(p && isMistake(p) ? 'mistakes' : 'daily');
     if (p) loadPuzzle(p);
   } else if (params.mode) {
-    startSession(params.mode, params.theme || null, {
-      tags: params.tags || [],
-      review: params.review || null,
-      step: params.step || null,
-      redraw: false,
-    });
+    startSession(params.mode, params.theme || null, { ...optionsFrom(params), redraw: false });
   }
   if (!session) startSession('daily', null, { redraw: false });
   if (!unwatch) unwatch = watchQueue(() => app.page === 'train' && refreshGuide());
@@ -149,9 +184,15 @@ export function leave() {
   stopVisionTimer();
 }
 
-function startSession(mode, theme, { tags = [], review = null, step = null, redraw = true } = {}) {
+/**
+ * @param {string} mode
+ * @param {string | null} [theme]
+ * @param {{ redraw?: boolean, tags?: string[], review?: string | null, step?: string | null, limit?: number | null,
+ *   strict?: boolean, unit?: string | null, rating?: number | null, due?: boolean }} [options]
+ */
+function startSession(mode, theme, { redraw = true, ...options } = {}) {
   stopVisionTimer();
-  newSession(mode, theme, { tags, review, step });
+  newSession(mode, theme, options);
   if (mode === 'vision') vision = { phase: 'ready', score: 0, misses: 0 };
   else {
     vision = null;
@@ -164,6 +205,13 @@ function startSession(mode, theme, { tags = [], review = null, step = null, redr
 function sessionGoal() {
   if (session.limit) return session.limit;
   return session.mode === 'mistakes' && session.total ? Math.min(session.total, app.state.goal) : app.state.goal;
+}
+
+function unitProgress(unit) {
+  const p = app.state.curriculum.units[unit.id];
+  if (!p) return 0;
+  if (p.done) return 1;
+  return Math.min(1, p.clean / unit.gate.puzzles);
 }
 
 /** Carry on past the goal: another block of positions, with a mistakes pool allowed to repeat. */
@@ -269,6 +317,11 @@ function draw() {
 function refreshGuide() {
   const el = $('#guide', root);
   if (!el || !session) return;
+  // During today's session the session bar leads; the old next-step strip steps aside.
+  if (activeBlock() || app.state.onboarded) {
+    el.innerHTML = '';
+    return;
+  }
   const step = guideStep();
   const sameDrill = step.id === 'drill' && session.mode === 'mistakes' && (!session.review || session.review === step.action.params.review);
   const sameDaily = ['puzzles', 'due'].includes(step.id) && session.mode === 'daily' && !session.theme;
@@ -297,6 +350,17 @@ function drawEmpty(body) {
 
 function drawFinished(body) {
   const change = app.state.puzzle.rating - session.ratingStart;
+  const block = activeBlock();
+  if (block) {
+    const unit = unitById(session.unit);
+    body.innerHTML = `<div class="panel dark-panel"><div class="eyebrow">BLOCK COMPLETE</div><h2>${esc(block.title)}</h2>
+      <p>${session.clean} of ${session.done} solved without help.${change ? ` Puzzle rating ${change > 0 ? '+' : '−'}${Math.abs(change)}.` : ''}${unit ? ` ${esc(unit.title)} is ${Math.round(unitProgress(unit) * 100)}% mastered.` : ''}</p>
+      <div class="actions"><button type="button" id="session-next" class="lime">Continue session</button><button type="button" id="keep-going">Keep going here</button></div></div>`;
+    $('#session-next', body).onclick = continueSession;
+    $('#keep-going', body).onclick = keepGoing;
+    $('#session-next', body).focus({ preventScroll: true });
+    return;
+  }
   const step = guideStep();
   body.innerHTML = `<div class="panel dark-panel"><div class="eyebrow">SESSION COMPLETE</div><h2>Good work. Let it settle.</h2>
     <p>${session.clean} of ${session.done} positions solved without help.${change ? ` Puzzle rating ${change > 0 ? '+' : '−'}${Math.abs(change)} this session.` : ''} Missed and hinted positions return sooner.</p>
@@ -499,8 +563,11 @@ function finish(c, revealed) {
     s.puzzle = { rating: u.rating, count: s.puzzle.count + 1, history: pushHistory(s.puzzle.history, dateKey(), u.rating) };
     const tu = updateRating(t.rating, t.count, p.rating, clean ? 1 : 0);
     s.themes[p.theme] = { rating: tu.rating, count: t.count + 1 };
+    recordSkillPuzzle(s.skills, p.tags || [], p.rating, clean);
     ratingNote = ` Puzzle rating ${u.rating} (${u.delta >= 0 ? '+' : '−'}${Math.abs(u.delta)}).`;
   }
+  const mastered = isMistake(p) ? [] : recordUnitPuzzle(s, p.tags || [], clean, dateKey());
+  if (mastered.length) ratingNote += ` Unit mastered: ${mastered.map(m => m.title).join(', ')}.`;
   const today = app.today();
   today.attempts++;
   if (clean) today.clean++;

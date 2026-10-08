@@ -7,10 +7,11 @@
 - **Puzzle content.** Every puzzle and lesson example is legal and ends correctly. Mates end in mate, themes are covered, ratings are in range, the original starter ids survive, and the data file stays under its size budget.
 - **Training logic.** Spaced-repetition scheduling, puzzle selection order, puzzle rating updates, streaks, and the alternative-solution judge.
 - **Analysis.** UCI parsing, win-percentage maths, mistake thresholds, the tactic tagger (fork, pin, skewer, discovered attack, double check, smothered and back-rank mate, free pieces) and mistake explanations.
-- **Saved data.** The migration chain from version 1 to 3 with no gaps, kind inference for old mistakes, validation of every new field, the bounded attempt log, and recovery of unreadable data.
+- **Saved data.** The migration chain from version 1 to 6 with no gaps, kind inference for old mistakes, validation of every new field, the bounded attempt log, and recovery of unreadable data.
 - **Coaching.** Diagnosis with no, little and enough data; time-trouble detection; Monday-based weeks; plan targets and progress from the log; adaptive targets; trend verdicts that stay "steady" within noise; personal lessons from three or more mistakes of one kind.
 - **Review data.** Clock parsing and time per move, rushed and time-trouble thresholds, opening identification and per-opening scores, and deep re-checks that confirm, correct or clear a mark without touching positions already practised.
 - **Drills.** Endgame judging for mate, promotion and defence goals, stalemate and move limits; visualisation questions that track a piece through the line; check finding.
+- **The plan.** The curriculum is well formed (every unit's tags train a skill and have enough puzzles, every lesson exists); goal targets, deadlines and the projection measured only from the plan's start; Lichess and Chess.com rating readers with fake responses and the rating log merge; skill ratings from puzzles and leaks from reviewed games; placement, unit choice by weakest skill, mastery gates for accuracy and lessons, refreshers; session plans that fit the time, put a fresh game first and add volume when behind; block completion; goals switching to a real rating and moving on when reached; and the version 6 migration.
 - **The loop.** Lichess export URLs and filters, time-control classes, game acceptance rules, deduplication and the daily cap, Chess.com archive mapping, Lichess evaluation parsing, the opponent ladder, focus tags, lesson recommendations, next-step ordering, and focus tags steering puzzle choice.
 - **Strategy.** Pawn-structure facts (isolated, doubled, passed, backward pawns, outposts, open and half-open files, bad bishops, loose king squares), assessment buckets, scoring, bias and calibration, position picking from reviews, the candidate-move counter, and the Strategy theme.
 - **Human-like opponents.** Maia input encoding, the network forward pass against a reference implementation, and move sampling.
@@ -34,7 +35,8 @@
 - A review with clock data and an opening, and the per-opening table.
 - The assessment drill from a seeded review, its empty state, candidate moves before a practice move, and a strategy lesson's verified tap step.
 - The viewer opening at the first mistake with the answer hidden, Show answer, and solving a mistake in place, which records the attempt and clears the drill step.
-- A linked account synced against a mocked Lichess response: the game is queued, reviewed in the background from its Lichess evaluations, and becomes the next step; a second sync queues nothing; the next-step strip; the opponent ladder moving up after five wins.
+- Setup from a username against a mocked Lichess account: goal, level, placement and today's plan; an unknown username's error and the no-account level path; the session runner's bar, skip, pause and continue, and changing the daily time; a path unit's gate and making it today's unit.
+- A linked account synced against a mocked Lichess response: the game is queued, reviewed in the background from its Lichess evaluations, and becomes the first block of today's session; a second sync queues nothing; the next-step strip; the opponent ladder moving up after five wins.
 
 `npm run typecheck` type-checks `src/` with TypeScript in `checkJs` mode.
 

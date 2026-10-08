@@ -8,10 +8,11 @@ import { LEVELS, DEFAULT_LEVEL } from './strength.js';
 import { KIND_IDS, kindFromExplanation } from './mistake-kinds.js';
 import { BOARD_THEMES, PIECE_SETS, DEFAULT_APPEARANCE } from './appearance.js';
 import { DEFAULT_SYNC, CONTROLS } from './sync.js';
+import { SKILLS } from '../data/curriculum.js';
 
 export const STORAGE_KEY = 'rankup-v1'; // Kept for continuity; the version lives inside.
 export const RECOVERY_PREFIX = 'rankup-recovery-';
-export const CURRENT_VERSION = 5;
+export const CURRENT_VERSION = 6;
 export const MAX_GAMES = 50;
 export const MAX_REVIEWS = 20;
 export const MAX_LOG = 4000;
@@ -45,8 +46,31 @@ export function defaults() {
     games: [], // finished practice games: { d: date, level, r: 1 win | 0.5 draw | 0 loss }
     // Added in version 5.
     candidates: { asked: 0, hit: 0, last: [] }, // candidate-move checks in practice games: { d, h: 1 | 0 }
+    // Added in version 6.
+    onboarded: false,
+    minutes: 20, // daily training time the planner fills
+    target: null, // { perf, start: { rating, date }, target, by, minutes }
+    milestones: [], // targets reached: { date, perf, rating, target }
+    skills: seedSkills(STAGES[0].rating), // skill id -> { rating, count }
+    curriculum: { units: {}, current: null, placed: false },
+    session: null, // today's plan; see program.js
   };
 }
+
+/** Skill ratings all starting at one rating. */
+export function seedSkills(rating) {
+  return Object.fromEntries(Object.keys(SKILLS).map(s => [s, { rating, count: 0 }]));
+}
+
+const THEME_SKILL = {
+  'Board vision': 'safety',
+  'King safety': 'mating',
+  Tactics: 'tactics',
+  Calculation: 'calculation',
+  Strategy: 'strategy',
+  Endgames: 'endgames',
+  'Opening habits': 'openings',
+};
 
 export const emptyDrillStats = () => ({ best: 0, runs: 0, last: [] });
 
@@ -106,6 +130,29 @@ export const MIGRATIONS = [
     },
   },
   {
+    from: 5,
+    run(s) {
+      // Seed each skill from the matching theme rating where there is one.
+      const skills = seedSkills(s.puzzle?.rating || STAGES[0].rating);
+      for (const [theme, skill] of Object.entries(THEME_SKILL)) {
+        const t = s.themes?.[theme];
+        if (t?.count) skills[skill] = { rating: t.rating, count: t.count };
+      }
+      const active = !!(s.profiles?.lichess || s.profiles?.chesscom || s.puzzle?.count || s.reviews?.length);
+      return {
+        ...s,
+        onboarded: active,
+        minutes: 20,
+        target: null,
+        milestones: [],
+        skills,
+        curriculum: { units: {}, current: null, placed: false },
+        session: null,
+        sync: { ...s.sync, ratingsAt: 0 },
+      };
+    },
+  },
+  {
     from: 4,
     run(s) {
       return {
@@ -137,6 +184,8 @@ export function migrate(input) {
     settings: { ...base.settings, ...s.settings },
     calc: { ...base.calc, ...s.calc },
     sync: { ...base.sync, ...s.sync },
+    skills: { ...base.skills, ...s.skills },
+    curriculum: { ...base.curriculum, ...s.curriculum },
   };
 }
 
@@ -203,6 +252,26 @@ export function validate(s) {
   if (typeof st.autoLevel !== 'boolean' || typeof st.candidates !== 'boolean') return 'settings';
   if (!s.candidates || !finite(s.candidates.asked, 0) || !finite(s.candidates.hit, 0) || !Array.isArray(s.candidates.last))
     return 'candidates';
+  if (typeof s.onboarded !== 'boolean' || ![10, 20, 30, 45, 60].includes(s.minutes)) return 'onboarding';
+  if (s.target !== null) {
+    const t = s.target;
+    if (
+      typeof t !== 'object' ||
+      typeof t.perf !== 'string' ||
+      !finite(t.target, 100, 3500) ||
+      !isDate(t.by) ||
+      !finite(t.start?.rating, 100, 3500)
+    )
+      return 'target';
+  }
+  if (!Array.isArray(s.milestones)) return 'milestones';
+  if (!s.skills || typeof s.skills !== 'object') return 'skills';
+  for (const v of Object.values(s.skills)) if (!finite(v?.rating, 100, 3500) || !finite(v?.count, 0)) return 'skill';
+  if (!s.curriculum || typeof s.curriculum.units !== 'object' || typeof s.curriculum.placed !== 'boolean') return 'curriculum';
+  for (const [id, u] of Object.entries(s.curriculum.units))
+    if (!/^[a-z0-9-]+$/.test(id) || !finite(u?.tries, 0) || !finite(u?.clean, 0) || !Array.isArray(u.recent)) return 'unit progress';
+  if (s.session !== null && (typeof s.session !== 'object' || !isDate(s.session.date) || !Array.isArray(s.session.blocks)))
+    return 'session';
   const sy = s.sync;
   if (!sy || typeof sy.auto !== 'boolean' || typeof sy.ratedOnly !== 'boolean' || !Array.isArray(sy.controls)) return 'sync';
   if (!sy.controls.every(c => CONTROLS.includes(c)) || !finite(sy.minMoves, 0, 60) || !finite(sy.dailyCap, 1, 50)) return 'sync';

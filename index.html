@@ -27,7 +27,7 @@
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
     <header>
-      <a class="brand" href="#train" aria-label="Rankup home"
+      <a class="brand" href="#today" aria-label="Rankup home"
         ><span class="brand-icon" aria-hidden="true">♞</span> rankup<span class="brand-tag">CHESS LAB</span></a
       >
       <div class="header-right">
@@ -38,21 +38,22 @@
     </header>
     <div class="shell">
       <aside class="sidebar">
-        <div class="eyebrow">YOUR TRAINING SPACE</div>
         <nav aria-label="Main navigation">
-          <a href="#train" data-page="train"><span aria-hidden="true">◈</span> <span>Today’s training</span></a>
-          <a href="#coach" data-page="coach"><span aria-hidden="true">✦</span> <span>Your coach</span></a>
-          <a href="#path" data-page="path"><span aria-hidden="true">▤</span> <span>Learning path</span></a>
-          <a href="#play" data-page="play"><span aria-hidden="true">♞</span> <span>Practice game</span></a>
-          <a href="#review" data-page="review"><span aria-hidden="true">⌕</span> <span>Review a game</span></a>
-          <a href="#progress" data-page="progress"><span aria-hidden="true">◷</span> <span>Your progress</span></a>
+          <a href="#today" data-page="today"><span aria-hidden="true">◈</span> <span>Today</span></a>
+          <a href="#path" data-page="path"><span aria-hidden="true">▤</span> <span>Path</span></a>
+          <a href="#play" data-page="play"><span aria-hidden="true">♞</span> <span>Play</span></a>
+          <a href="#review" data-page="review"><span aria-hidden="true">⌕</span> <span>Games</span></a>
+          <a href="#progress" data-page="progress"><span aria-hidden="true">◷</span> <span>You</span></a>
         </nav>
         <div class="sidebar-bottom">
           <div class="goal-line" aria-hidden="true"><span id="goal-bar"></span></div>
           <small id="goal-text">Puzzle rating</small>
         </div>
       </aside>
-      <main id="main" tabindex="-1"></main>
+      <div class="content">
+        <div id="session-bar" class="session-bar" role="region" aria-label="Today’s session" hidden></div>
+        <main id="main" tabindex="-1"></main>
+      </div>
     </div>
     <dialog id="modal" aria-labelledby="modal-content">
       <div id="modal-content"></div>

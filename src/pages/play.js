@@ -65,6 +65,11 @@ export function render(main, params = {}) {
   root = main;
   // The user keeps the side they solved the puzzle with; Stockfish replies first.
   if (params.fen) newGame({ fen: params.fen, from: params.from || 'a puzzle', color: params.colour || new Chess(params.fen).turn() });
+  // A session game: a fresh game unless one is under way, with one thing to practise.
+  if (params.objective) {
+    play.objective = params.objective;
+    if (play.game.isGameOver() || play.from || play.recorded) newGame({ color: play.color });
+  }
   draw();
   if (play.game.turn() !== play.color && !play.game.isGameOver() && !play.thinking) engineTurn();
 }
@@ -108,6 +113,7 @@ function draw() {
       <button type="button" id="play-menu" class="secondary focus-menu" aria-haspopup="dialog" aria-label="Game options: opponent, colour, coach, export and review">☰ Options</button>
     </div>
     <div class="focus-prompt"><strong id="board-title">${esc(play.from ? `From: ${play.from}` : 'Practice game')}</strong><span class="chip" id="board-chip"></span></div>
+    ${play.objective && !play.from ? `<p class="objective small"><strong>Objective:</strong> ${esc(play.objective)}</p>` : ''}
     <div class="focus-board"><div id="board"></div></div>
     <div id="history" class="history small">${esc(moveRecord())}</div>
     <div id="play-status" class="status" role="status" aria-live="polite">${esc((play.note ? play.note + ' ' : '') + gameStatus())}</div>

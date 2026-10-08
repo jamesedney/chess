@@ -65,7 +65,7 @@ test('backup export and import round-trip, and dark mode applies', async ({ page
   const file = info.outputPath('backup.json');
   await download.saveAs(file);
   const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
-  expect(saved.version).toBe(5);
+  expect(saved.version).toBe(6);
   expect(saved.records.p001.clean).toBe(1);
   // Reset, then restore.
   await page.click('#reset');
@@ -85,6 +85,7 @@ test('backup export and import round-trip, and dark mode applies', async ({ page
 
 test('a logged rating appears in the trend and can be deleted', async ({ page }) => {
   await open(page, 'progress');
+  await page.evaluate(() => document.querySelector('.ratings-log')?.setAttribute('open', ''));
   await page.fill('#platform', 'Lichess rapid');
   await page.fill('#rating', '1234');
   await page.click('#rating-form button[type="submit"]');
@@ -94,7 +95,7 @@ test('a logged rating appears in the trend and can be deleted', async ({ page })
   await expect(page.locator('.rating-list')).not.toContainText('1234');
 });
 
-for (const name of ['train', 'coach', 'path', 'play', 'review', 'progress', 'drills?drill=endgames', 'drills?drill=visualise']) {
+for (const name of ['today', 'train', 'coach', 'path', 'play', 'review', 'progress', 'drills?drill=endgames', 'drills?drill=visualise']) {
   test(`no horizontal overflow on a phone: ${name} @mobile`, async ({ page }) => {
     await open(page, name);
     await page.waitForTimeout(300);

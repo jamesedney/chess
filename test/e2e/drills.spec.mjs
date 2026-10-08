@@ -6,7 +6,7 @@ test('the training menu opens the drills', async ({ page }) => {
   await page.click('#modal [data-drill="endgames"]');
   await expect(page).toHaveURL(/#drills\?drill=endgames/);
   await expect(page.locator('.drill')).toHaveCount(7);
-  await expect(page.locator('nav a[data-page="train"]')).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('nav a[data-page="today"]')).toHaveAttribute('aria-current', 'page');
 });
 
 test('an endgame drill is played against Stockfish and judged', async ({ page }) => {

@@ -1,6 +1,6 @@
 // Rankup service worker: precache the app for offline use.
 // Bump VERSION (and package.json) for every release; tests check they match.
-const VERSION = '2.4.0';
+const VERSION = '3.0.0';
 const CACHE = 'rankup-v' + VERSION;
 const FILES = [
   './',
@@ -42,6 +42,15 @@ const FILES = [
   './src/guide.js',
   './src/structure.js',
   './src/assess.js',
+  './src/skills.js',
+  './src/goal.js',
+  './src/ratings.js',
+  './src/rating-sync.js',
+  './src/progress-model.js',
+  './src/curriculum.js',
+  './src/program.js',
+  './src/session.js',
+  './src/pages/today.js',
   './src/maia.js',
   './src/maia-core.js',
   './src/maia-worker.js',
@@ -58,6 +67,7 @@ const FILES = [
   './data/openings.js',
   './data/endgames.js',
   './data/strategy-lessons.js',
+  './data/curriculum.js',
   './vendor/chess.js',
   './vendor/stockfish-17.1-lite-single-03e3232.js',
   './vendor/stockfish-17.1-lite-single-03e3232.wasm',

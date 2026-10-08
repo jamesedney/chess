@@ -1,0 +1,490 @@
+// The curriculum: rating bands, each with the units that hold players at that
+// level. A unit names one skill, a short concept, and what trains it: an
+// interactive lesson, puzzle tags, a drill. Mastery gates decide when a unit is
+// done. The planner (src/program.js) walks this in order, adapting to the
+// player's skills and games.
+//
+// skills: safety (not losing material), tactics, mating, calculation,
+//         strategy, endgames, openings
+
+export const SKILLS = {
+  safety: { label: 'Board safety', short: 'Safety' },
+  tactics: { label: 'Tactics', short: 'Tactics' },
+  mating: { label: 'Attacking the king', short: 'Mating' },
+  calculation: { label: 'Calculation', short: 'Calculation' },
+  strategy: { label: 'Strategy and judgement', short: 'Strategy' },
+  endgames: { label: 'Endgames', short: 'Endgames' },
+  openings: { label: 'Openings', short: 'Openings' },
+};
+
+export const BANDS = [
+  { id: 'b1', label: 'Foundations', floor: 0, ceiling: 800 },
+  { id: 'b2', label: 'Pattern builder', floor: 800, ceiling: 1000 },
+  { id: 'b3', label: 'Calculator', floor: 1000, ceiling: 1200 },
+  { id: 'b4', label: 'Positional player', floor: 1200, ceiling: 1400 },
+  { id: 'b5', label: 'Planner', floor: 1400, ceiling: 1600 },
+  { id: 'b6', label: 'Competitor', floor: 1600, ceiling: 1800 },
+  { id: 'b7', label: 'Expert path', floor: 1800, ceiling: 2200 },
+];
+
+/**
+ * gate: what "mastered" means.
+ *   puzzles  clean solves needed in this unit's tags
+ *   accuracy share of clean solves over the last ten attempts
+ *   lesson   the interactive lesson must be finished (when the unit has one)
+ *   drill    { type: 'endgame', id } won, { type: 'vision', score }, { type: 'visual', score },
+ *            { type: 'checks', score } or { type: 'assess', runs }
+ */
+export const UNITS = [
+  // ---------- Foundations ----------
+  {
+    id: 'f-scan',
+    band: 'b1',
+    skill: 'safety',
+    title: 'Checks, captures, threats',
+    concept:
+      'Before every move, look at every check, capture and threat, for both sides. Most games under 1000 are decided by a piece left loose.',
+    lesson: 'checks-captures-threats',
+    tags: ['hangingPiece'],
+    gate: { puzzles: 8, accuracy: 0.7 },
+  },
+  {
+    id: 'f-loose',
+    band: 'b1',
+    skill: 'safety',
+    title: 'Stop giving pieces away',
+    concept: 'A piece nobody defends can be taken for free. Count attackers and defenders before you leave a piece where it is.',
+    lesson: 'loose-pieces',
+    tags: ['hangingPiece'],
+    drill: { type: 'vision', score: 6 },
+    gate: { puzzles: 10, accuracy: 0.75 },
+  },
+  {
+    id: 'f-mate1',
+    band: 'b1',
+    skill: 'mating',
+    title: 'Mate in one',
+    concept: 'Checkmate is the king attacked with no escape squares, no capture of the attacker and no block. Look at every check first.',
+    lesson: 'mating-net',
+    tags: ['mateIn1', 'backRankMate'],
+    gate: { puzzles: 10, accuracy: 0.8 },
+  },
+  {
+    id: 'f-defend',
+    band: 'b1',
+    skill: 'safety',
+    title: 'Get out of check well',
+    concept: 'Three ways out of check: move the king, capture the attacker, or block. Choose the one that leaves you safest.',
+    lesson: 'out-of-check',
+    tags: ['mateIn1', 'defensiveMove'],
+    gate: { puzzles: 6, accuracy: 0.7 },
+  },
+  {
+    id: 'f-forks',
+    band: 'b1',
+    skill: 'tactics',
+    title: 'Forks',
+    concept: 'One piece attacking two targets. Knights fork best, but pawns, queens and kings fork too. Checks are the most forcing forks.',
+    lesson: 'forks',
+    tags: ['fork'],
+    gate: { puzzles: 10, accuracy: 0.7 },
+  },
+  {
+    id: 'f-queenmate',
+    band: 'b1',
+    skill: 'endgames',
+    title: 'Mate with the queen',
+    concept:
+      'King and queen against king: box the king in with the queen a knight’s move away, then bring your king. Never leave it without moves: stalemate.',
+    drill: { type: 'endgame', id: 'kq-k' },
+    tags: ['queenEndgame', 'mateIn1'],
+    gate: { puzzles: 4, accuracy: 0.7 },
+  },
+  {
+    id: 'f-opening',
+    band: 'b1',
+    skill: 'openings',
+    title: 'Opening principles',
+    concept:
+      'Centre pawns, knights before bishops, castle early, do not move the same piece twice without a reason, and do not bring the queen out early.',
+    lesson: 'opening-habits',
+    tags: ['opening', 'attackingF2F7'],
+    gate: { puzzles: 6, accuracy: 0.65 },
+  },
+
+  // ---------- Pattern builder ----------
+  {
+    id: 'p-pins',
+    band: 'b2',
+    skill: 'tactics',
+    title: 'Pins and skewers',
+    concept: 'A pin freezes a piece in front of something bigger. A skewer attacks the big piece first and wins what is behind it.',
+    lesson: 'pins-skewers',
+    tags: ['pin', 'skewer'],
+    gate: { puzzles: 10, accuracy: 0.7 },
+  },
+  {
+    id: 'p-discovered',
+    band: 'b2',
+    skill: 'tactics',
+    title: 'Discovered attacks',
+    concept: 'Move one piece out of the way and another one attacks. If the moving piece also attacks, the opponent cannot answer both.',
+    lesson: 'discovered-attacks',
+    tags: ['discoveredAttack', 'doubleCheck'],
+    gate: { puzzles: 8, accuracy: 0.7 },
+  },
+  {
+    id: 'p-mate2',
+    band: 'b2',
+    skill: 'mating',
+    title: 'Mate in two',
+    concept: 'Forcing moves first: a check that takes away squares, then the mate. Ask what the king can do after each check.',
+    tags: ['mateIn2', 'backRankMate', 'smotheredMate'],
+    gate: { puzzles: 10, accuracy: 0.7 },
+  },
+  {
+    id: 'p-traps',
+    band: 'b2',
+    skill: 'openings',
+    title: 'Opening traps',
+    concept:
+      'Most early losses come from a handful of traps around f7 and f2 and loose pieces in the opening. Know them, and you will win games instead of losing them.',
+    lesson: 'opening-traps',
+    tags: ['opening', 'attackingF2F7'],
+    gate: { puzzles: 8, accuracy: 0.7 },
+  },
+  {
+    id: 'p-rookmate',
+    band: 'b2',
+    skill: 'endgames',
+    title: 'Mate with the rook',
+    concept:
+      'King and rook against king: the rook cuts the king off, your king takes the opposition, and the box shrinks one line at a time.',
+    lesson: 'rook-mate',
+    drill: { type: 'endgame', id: 'kr-k' },
+    tags: ['rookEndgame', 'mateIn2'],
+    gate: { puzzles: 4, accuracy: 0.7 },
+  },
+  {
+    id: 'p-promote',
+    band: 'b2',
+    skill: 'endgames',
+    title: 'Promote the pawn',
+    concept: 'King in front of the pawn, take the opposition, and the pawn walks home. Passed pawns must be pushed.',
+    lesson: 'promotion',
+    drill: { type: 'endgame', id: 'kp-win' },
+    tags: ['promotion', 'advancedPawn'],
+    gate: { puzzles: 6, accuracy: 0.7 },
+  },
+  {
+    id: 'p-count',
+    band: 'b2',
+    skill: 'safety',
+    title: 'Count attackers and defenders',
+    concept:
+      'A capture works when you have more attackers than they have defenders, counting the value of what is traded. Count before you take.',
+    lesson: 'counting',
+    tags: ['hangingPiece', 'capturingDefender'],
+    drill: { type: 'checks', score: 8 },
+    gate: { puzzles: 8, accuracy: 0.7 },
+  },
+
+  // ---------- Calculator ----------
+  {
+    id: 'c-reply',
+    band: 'b3',
+    skill: 'calculation',
+    title: 'Calculate the reply',
+    concept: 'Every move has an answer. Before you play, find the opponent’s best reply, not the one you hope for.',
+    lesson: 'calculate-reply',
+    tags: ['long', 'defensiveMove'],
+    gate: { puzzles: 10, accuracy: 0.65 },
+  },
+  {
+    id: 'c-deflect',
+    band: 'b3',
+    skill: 'tactics',
+    title: 'Deflection and decoys',
+    concept: 'Pull a defender away from what it guards, or lure a piece onto a bad square. Ask: what is each enemy piece holding together?',
+    tags: ['deflection', 'attraction'],
+    gate: { puzzles: 10, accuracy: 0.65 },
+  },
+  {
+    id: 'c-sacrifice',
+    band: 'b3',
+    skill: 'mating',
+    title: 'Sacrifice for the king',
+    concept: 'Material matters less than the king. A sacrifice that opens lines to the king pays when you can follow it with checks.',
+    tags: ['sacrifice', 'kingsideAttack', 'exposedKing'],
+    gate: { puzzles: 10, accuracy: 0.65 },
+  },
+  {
+    id: 'c-visual',
+    band: 'b3',
+    skill: 'calculation',
+    title: 'See it before you play it',
+    concept:
+      'Calculation is holding the position in your head while the moves change it. Train it directly: follow lines without moving the pieces.',
+    drill: { type: 'visual', score: 18 },
+    tags: ['long'],
+    gate: { puzzles: 6, accuracy: 0.65 },
+  },
+  {
+    id: 'c-kpdraw',
+    band: 'b3',
+    skill: 'endgames',
+    title: 'Hold the pawn ending',
+    concept:
+      'Defending king and pawn against king: stay in front of the pawn and take the opposition. Know which endings are draws and you will save half points.',
+    drill: { type: 'endgame', id: 'kp-draw' },
+    tags: ['pawnEndgame'],
+    gate: { puzzles: 6, accuracy: 0.65 },
+  },
+  {
+    id: 'c-structure',
+    band: 'b3',
+    skill: 'strategy',
+    title: 'Read the pawn structure',
+    concept: 'Isolated, doubled and passed pawns decide the long game. Weak pawns are targets; passed pawns are plans.',
+    lesson: 'pawn-structure',
+    drill: { type: 'assess', runs: 1 },
+    tags: ['quietMove', 'advancedPawn'],
+    gate: { puzzles: 6, accuracy: 0.6 },
+  },
+
+  // ---------- Positional player ----------
+  {
+    id: 's-outposts',
+    band: 'b4',
+    skill: 'strategy',
+    title: 'Outposts',
+    concept: 'A square in their half that your pawn defends and no enemy pawn can ever attack. A knight there is worth more than a bishop.',
+    lesson: 'outposts',
+    tags: ['quietMove'],
+    gate: { puzzles: 6, accuracy: 0.6 },
+  },
+  {
+    id: 's-files',
+    band: 'b4',
+    skill: 'strategy',
+    title: 'Open files and the seventh rank',
+    concept: 'Rooks need open files. Own the file, then invade the seventh rank where the pawns and the king live.',
+    lesson: 'open-files',
+    tags: ['rookEndgame', 'quietMove'],
+    gate: { puzzles: 6, accuracy: 0.6 },
+  },
+  {
+    id: 's-bishops',
+    band: 'b4',
+    skill: 'strategy',
+    title: 'Good bishop, bad bishop',
+    concept: 'A bishop blocked by its own pawns is a tall pawn. Trade it, free it, or put your pawns on the other colour.',
+    lesson: 'bishops',
+    tags: ['bishopEndgame', 'quietMove'],
+    gate: { puzzles: 6, accuracy: 0.6 },
+  },
+  {
+    id: 's-worst',
+    band: 'b4',
+    skill: 'strategy',
+    title: 'Improve your worst piece',
+    concept: 'No tactic? Find the piece doing the least and give it a better square. Small improvements add up to a winning position.',
+    lesson: 'worst-piece',
+    drill: { type: 'assess', runs: 2 },
+    tags: ['quietMove', 'defensiveMove'],
+    gate: { puzzles: 6, accuracy: 0.6 },
+  },
+  {
+    id: 't-intermezzo',
+    band: 'b4',
+    skill: 'calculation',
+    title: 'In-between moves',
+    concept:
+      'Before recapturing, ask whether there is a stronger move first: a check or a bigger threat. The automatic recapture is often a mistake.',
+    tags: ['intermezzo', 'defensiveMove'],
+    gate: { puzzles: 8, accuracy: 0.6 },
+  },
+  {
+    id: 'e-lucena',
+    band: 'b4',
+    skill: 'endgames',
+    title: 'Lucena: win the rook ending',
+    concept: 'King on the queening square, pawn on the seventh: cut the king off and build a bridge with your rook on the fourth rank.',
+    drill: { type: 'endgame', id: 'lucena' },
+    tags: ['rookEndgame'],
+    gate: { puzzles: 6, accuracy: 0.6 },
+  },
+  {
+    id: 'e-philidor',
+    band: 'b4',
+    skill: 'endgames',
+    title: 'Philidor: hold the rook ending',
+    concept: 'Defending a rook ending a pawn down: rook on the third rank until the pawn advances, then check from behind.',
+    drill: { type: 'endgame', id: 'philidor' },
+    tags: ['rookEndgame', 'defensiveMove'],
+    gate: { puzzles: 6, accuracy: 0.6 },
+  },
+
+  // ---------- Planner ----------
+  {
+    id: 's-breaks',
+    band: 'b5',
+    skill: 'strategy',
+    title: 'Pawn breaks and space',
+    concept: 'Attack a pawn chain at its base with a pawn. The side with more space keeps pieces on; the cramped side wants trades.',
+    lesson: 'pawn-breaks',
+    tags: ['quietMove', 'advancedPawn'],
+    gate: { puzzles: 8, accuracy: 0.6 },
+  },
+  {
+    id: 's-trade',
+    band: 'b5',
+    skill: 'strategy',
+    title: 'Trade when ahead',
+    concept:
+      'Ahead in material, trade pieces and keep pawns. Behind, keep pieces and trade pawns. Every trade changes who the position favours.',
+    lesson: 'trade-when-ahead',
+    tags: ['quietMove', 'endgame'],
+    gate: { puzzles: 8, accuracy: 0.65 },
+  },
+  {
+    id: 's-king',
+    band: 'b5',
+    skill: 'mating',
+    title: 'Plan the king attack',
+    concept: 'Find the squares next to the king nothing defends, bring more attackers than they have defenders, then strike.',
+    lesson: 'king-plan',
+    tags: ['kingsideAttack', 'exposedKing', 'mateIn3'],
+    gate: { puzzles: 8, accuracy: 0.6 },
+  },
+  {
+    id: 't-lines',
+    band: 'b5',
+    skill: 'tactics',
+    title: 'Clearance and interference',
+    concept: 'Clear a line for another piece, or block one of theirs. These are the tactics hiding behind the obvious ones.',
+    tags: ['clearance', 'interference', 'xRayAttack'],
+    gate: { puzzles: 8, accuracy: 0.6 },
+  },
+  {
+    id: 't-trapped',
+    band: 'b5',
+    skill: 'tactics',
+    title: 'Trap a piece',
+    concept: 'A piece with no safe squares can be won without a fork or pin. Look for pieces that have wandered in too far.',
+    tags: ['trappedPiece'],
+    gate: { puzzles: 6, accuracy: 0.6 },
+  },
+  {
+    id: 'e-pawns',
+    band: 'b5',
+    skill: 'endgames',
+    title: 'Pawn endings and zugzwang',
+    concept:
+      'In pawn endings every tempo counts. Opposition, triangulation and zugzwang decide them, and a king and pawn ending can be calculated to the end.',
+    tags: ['pawnEndgame', 'zugzwang'],
+    gate: { puzzles: 8, accuracy: 0.6 },
+  },
+  {
+    id: 'c-long',
+    band: 'b5',
+    skill: 'calculation',
+    title: 'Long lines',
+    concept: 'Combinations of four moves and more. Calculate forcing moves first and stop where the position is quiet and clear.',
+    drill: { type: 'visual', score: 26 },
+    tags: ['veryLong'],
+    gate: { puzzles: 8, accuracy: 0.55 },
+  },
+
+  // ---------- Competitor ----------
+  {
+    id: 't-defence',
+    band: 'b6',
+    skill: 'calculation',
+    title: 'Find the only move',
+    concept:
+      'Strong players defend as well as they attack. When you are under pressure, look for the one move that holds: a counter-threat, a block or an exchange.',
+    tags: ['defensiveMove'],
+    gate: { puzzles: 10, accuracy: 0.6 },
+  },
+  {
+    id: 's-quiet',
+    band: 'b6',
+    skill: 'strategy',
+    title: 'The quiet move',
+    concept:
+      'Sometimes the strongest move is neither a check nor a capture. It improves a piece or takes away the opponent’s only good plan.',
+    tags: ['quietMove', 'zugzwang'],
+    drill: { type: 'assess', runs: 3 },
+    gate: { puzzles: 10, accuracy: 0.55 },
+  },
+  {
+    id: 'e-minor',
+    band: 'b6',
+    skill: 'endgames',
+    title: 'Minor-piece endings',
+    concept: 'Knight against bishop, bishop against bishop: pawn colours, outside passed pawns and the active king decide them.',
+    tags: ['bishopEndgame', 'knightEndgame'],
+    gate: { puzzles: 8, accuracy: 0.55 },
+  },
+  {
+    id: 'e-queen',
+    band: 'b6',
+    skill: 'endgames',
+    title: 'Queen endings',
+    concept:
+      'Queen endings are about checks and the passed pawn. The side with the more advanced passed pawn and the safer king usually wins.',
+    tags: ['queenEndgame', 'advancedPawn'],
+    gate: { puzzles: 6, accuracy: 0.55 },
+  },
+  {
+    id: 't-combo',
+    band: 'b6',
+    skill: 'tactics',
+    title: 'Combinations',
+    concept:
+      'Real tactics combine motifs: a deflection to set up a fork, a sacrifice to open a pin. Look for the second idea behind the first.',
+    tags: ['sacrifice', 'deflection', 'attraction', 'clearance'],
+    gate: { puzzles: 10, accuracy: 0.55 },
+  },
+
+  // ---------- Expert path ----------
+  {
+    id: 'x-endgames',
+    band: 'b7',
+    skill: 'endgames',
+    title: 'Technical endgames',
+    concept: 'Converting won endings and holding lost ones. Every endgame type, mixed, at your level.',
+    tags: ['rookEndgame', 'pawnEndgame', 'bishopEndgame', 'knightEndgame', 'queenEndgame'],
+    gate: { puzzles: 12, accuracy: 0.55 },
+  },
+  {
+    id: 'x-defence',
+    band: 'b7',
+    skill: 'calculation',
+    title: 'Defence and counter-attack',
+    concept: 'The hardest puzzles are defensive. Find resources in bad positions and you will save games stronger players lose.',
+    tags: ['defensiveMove', 'quietMove', 'zugzwang'],
+    gate: { puzzles: 12, accuracy: 0.5 },
+  },
+  {
+    id: 'x-attack',
+    band: 'b7',
+    skill: 'mating',
+    title: 'Attacking chess',
+    concept: 'Long mating attacks and sacrificial combinations against the king.',
+    tags: ['mateIn3', 'sacrifice', 'kingsideAttack', 'veryLong'],
+    gate: { puzzles: 12, accuracy: 0.5 },
+  },
+];
+
+/** The habit a game objective asks for, by the skill being trained. */
+export const OBJECTIVES = {
+  safety: 'Before every move, check: after it, is any of my pieces undefended?',
+  tactics: 'Each move, look for a fork, pin or loose piece for both sides.',
+  mating: 'When their king is short of squares, look at every check first.',
+  calculation: 'At every capture, calculate their best reply before you play.',
+  strategy: 'When nothing is happening, improve your worst piece.',
+  endgames: 'In the endgame, activate your king and push passed pawns.',
+  openings: 'Develop every piece and castle before move ten.',
+};

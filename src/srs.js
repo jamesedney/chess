@@ -62,10 +62,18 @@ export function choosePuzzle({
   target = 1000,
   weakTheme = null,
   focusTags = [],
+  strictTags = false,
+  dueOnly = false,
   now = Date.now(),
   rng = Math.random,
 }) {
   let pool = puzzles.filter(p => !p.archived && (!theme || p.theme === theme) && (mode !== 'mistakes' || isMistake(p)));
+  // A curriculum block trains one skill: only puzzles with its tags, when there are any.
+  if (strictTags && focusTags.length) {
+    const tagged = pool.filter(p => (p.tags || []).some(t => focusTags.includes(t)));
+    if (tagged.length) pool = tagged;
+  }
+  if (dueOnly) pool = pool.filter(p => isDue(records[p.id], now));
   if (!pool.length) return null;
   const unseen = pool.filter(p => !seen.includes(p.id));
   if (unseen.length) pool = unseen;
@@ -91,7 +99,7 @@ export function choosePuzzle({
   let fresh = pool.filter(p => !isMistake(p) && !rec(p)?.tries);
   if (fresh.length) {
     // Tactics you missed in your own games come first; otherwise your weakest theme sometimes.
-    if (focusTags.length && rng() < 0.6) {
+    if (focusTags.length && !strictTags && rng() < 0.6) {
       const focused = fresh.filter(p => (p.tags || []).some(t => focusTags.includes(t)));
       if (focused.length) fresh = focused;
     } else if (!theme && weakTheme && rng() < 0.35) {

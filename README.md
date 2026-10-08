@@ -1,14 +1,18 @@
-# Rankup — your chess training loop
+# Rankup — a guided plan to raise your chess rating
 
 A mobile-friendly, installable chess trainer that runs entirely in the browser. There is no server, account, API key or subscription. Stockfish runs on your device, and your progress stays in your browser.
 
-It is built for improving players, roughly 600 to 1600, who want a daily routine that turns their own games into practice.
+Enter your Lichess or Chess.com username and Rankup does the rest: it reads your rating, sets your next target with a deadline, places you on a curriculum, and plans every day's session. It is built for players from beginner to about 2000.
 
 ## What it does
 
-### The loop
-- **One next step.** The training page tells you what to do now: drill the mistakes from your latest game, revisit what is due, solve puzzles on the tactics you missed, take a lesson for a recurring pattern, or play a game. Finish a step and the next one is waiting.
-- **Your games import themselves.** Link a Lichess or Chess.com username and new games are fetched whenever the app is open, then reviewed in the background. Games with Lichess analysis review almost instantly. Filters: rated only, time controls, a daily cap.
+### The plan
+- **Zero-effort setup.** A username is all it asks for. Your rating and its history are read from your public profile; without an online account, one tap on a rough level is enough.
+- **A goal that tracks itself.** The next target is the next round hundred at least 150 points up, with a deadline from a realistic pace for your rating and daily time. Your real rating is synced every few hours and projected forward: on track, or how many weeks behind. Reach it and the next target is set.
+- **A full curriculum.** Seven bands from Foundations (under 800) to the Expert path (1800–2200), about 45 units across board safety, tactics, attacking the king, calculation, strategy, endgames and openings. Each unit has a concept, a puzzle set, and often a lesson and a drill. A unit is mastered when its gate is met: enough clean solves at a set accuracy, the lesson finished, the drill passed. Bands below your rating are placed as known.
+- **A skill map.** Every rated puzzle updates a rating for each skill it trains, and your reviewed games correct it: each serious mistake per game in a skill counts against it. The plan always trains the skill furthest below what your target needs.
+- **Today: one button.** Each day's session fits the time you choose (10 to 60 minutes): the mistakes from your latest game while they are fresh, positions due for recall, the current unit's lesson, puzzles and drill, your weakest other skill, and a game with one objective. A bar at the top steps you through it. If your games show an old weakness coming back, a refresher is added; if you fall behind the goal, the volume goes up.
+- **Your games import themselves.** New games from your account are fetched whenever the app is open and reviewed in the background. Their mistakes become tomorrow's first block.
 - **The opponent adapts.** Score well over five practice games and the next one is a rung higher on a ladder that interleaves Maia and Stockfish levels; struggle and it steps down.
 
 ### Coaching
@@ -36,7 +40,7 @@ It is built for improving players, roughly 600 to 1600, who want a daily routine
 
 ### Everything else
 - **Themes and sound.** Seven board colours, five piece sets, synthesised move sounds and vibration on supported phones, all in Settings.
-- **Honest progress.** A puzzle rating with trend chart, per-theme strength, a practice calendar and streak, and a separate log of your real online rating.
+- **You.** Your goal with its chart, path progress, milestones and the skill map, plus the puzzle rating, per-theme strength, a practice calendar and streak.
 - **Works offline and installs as an app.** After the first visit, about 10 MB, everything including Stockfish works offline. Each Maia level downloads about 1.7 MB the first time you play it.
 
 ## Publish on GitHub Pages
@@ -136,6 +140,6 @@ Saved progress uses the `rankup-v1` storage key with a version field inside (cur
 - Strength labels for practice opponents are approximate and are not calibrated ratings. Maia levels describe the players each network was trained on.
 - The coach's diagnosis is only as good as the games you review. With few games it says so.
 - Personal data stays in one browser: there is no sync between devices. Use the backup to move progress.
-- No app can promise 1500. Rankup helps you build habits and review evidence; rated games measure strength.
+- Your real rating is the measure: Rankup tracks it automatically from Lichess (with history) or Chess.com (current rating only).
 
 See `THIRD-PARTY.md` and the accompanying licences for source, attribution and redistribution details.

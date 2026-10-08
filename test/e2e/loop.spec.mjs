@@ -16,6 +16,14 @@ const LICHESS_PGN = `[Event "Rated blitz game"]
 
 /** Start with a saved state that already links a Lichess account (short test games are allowed). */
 async function seed(page, extra = {}) {
+  // The account's ratings, read in the background for the goal.
+  await page.route('https://lichess.org/api/user/**', route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(route.request().url().endsWith('/rating-history') ? [] : { perfs: { blitz: { rating: 1150, games: 60 } } }),
+    }),
+  );
   await page.addInitScript(
     state => {
       if (!localStorage.getItem('rankup-v1')) localStorage.setItem('rankup-v1', JSON.stringify(state));
@@ -41,13 +49,13 @@ test('a linked account is synced, the game is reviewed in the background, and th
   await page.click('#close-modal');
   // The review finishes in the background and offers itself; the saved mistakes become the next step.
   await expect(page.locator('#toast')).toContainText('me – rival reviewed', { timeout: 120000 });
-  await expect(page.locator('.guide')).toContainText('mistake', { timeout: 20000 });
-  await expect(page.locator('.guide')).toContainText('against rival');
-  await page.click('#guide-go');
+  // Today's session now starts with that game's mistakes.
+  await page.goto('./#today');
+  await expect(page.locator('.agenda')).toContainText('Your game against rival');
+  await page.locator('.agenda-item', { hasText: 'against rival' }).locator('button').click();
   await expect(page.locator('.focus-meta')).toContainText('you played');
   await expect(page.locator('#focus-progress')).toBeVisible();
-  // While drilling that game, the strip steps aside.
-  await expect(page.locator('.guide')).toHaveCount(0);
+  await expect(page.locator('#session-bar')).toContainText('against rival');
   // The review itself carries the opening, Lichess evaluations and time data.
   await page.click('nav a[data-page="review"]');
   await expect(page.locator('.review-item').first()).toContainText('me – rival');
@@ -108,16 +116,17 @@ test('drilling a game with one saved position ends after it instead of repeating
       },
     ],
   });
-  await open(page, 'train');
-  await expect(page.locator('.guide')).toContainText('Drill the mistake from your game against rival');
-  await page.click('#guide-go');
+  await open(page, 'today');
+  await page.locator('.agenda-item', { hasText: 'Your game against rival' }).locator('button').click();
   await expect(page.locator('#focus-progress')).toContainText('1 of 1');
   await move(page, 'b8', 'c6');
   await expect(page.locator('#feedback')).toContainText('Nc6 develops');
   await page.click('#next');
-  await expect(page.locator('#train-body')).toContainText('SESSION COMPLETE');
-  await expect(page.locator('#train-body')).not.toContainText('Drill the mistake');
-  await expect(page.locator('.guide')).not.toContainText('Drill the mistake');
+  await expect(page.locator('#train-body')).toContainText('BLOCK COMPLETE');
+  expect(
+    await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')).session.blocks.find(b => b.id === 'review').complete),
+  ).toBe(true);
+  await expect(page.locator('#session-bar #session-next')).toContainText('Next');
   // Cramming is allowed: keep going runs another block, repeating the pool.
   await page.click('#keep-going');
   await expect(page.locator('#focus-progress')).toContainText('2 of 9');
@@ -172,9 +181,10 @@ test('a reviewed game asks for the better move at each mistake and counts a solv
   await expect(page.locator('.focus-progress')).toContainText('1 of 1 mistake');
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')));
   expect(saved.records.mseed).toMatchObject({ tries: 1, clean: 1 });
-  // Back on the training page the loop no longer asks to drill this game.
-  await page.click('nav a[data-page="train"]');
-  await expect(page.locator('#guide')).not.toContainText('Drill the mistake');
+  // Today's plan no longer asks to drill this game.
+  await page.click('nav a[data-page="today"]');
+  await expect(page.locator('.agenda')).toBeVisible();
+  await expect(page.locator('.agenda')).not.toContainText('against rival');
 });
 
 test('a second sync does not queue the same game again', async ({ page }) => {

@@ -30,8 +30,6 @@ let board = null;
 let view = null; // the drill on screen
 let seeds = null;
 
-export const navAs = 'train';
-
 export function render(main, params = {}) {
   root = main;
   const kind = params.drill || 'endgames';

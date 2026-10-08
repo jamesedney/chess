@@ -29,7 +29,7 @@ test('the coach diagnoses, plans and builds a lesson from your mistakes', async 
     localStorage.setItem('rankup-v1', JSON.stringify({ ...s, ...state }));
   }, seeded());
   await page.reload();
-  await page.click('nav a[data-page="coach"]');
+  await page.goto('./#coach');
   await expect(page.locator('h1')).toContainText('Coach');
   await expect(page.locator('.callout')).toContainText('en prise');
   await expect(page.locator('.plan-item')).toHaveCount(5);

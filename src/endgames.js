@@ -4,6 +4,7 @@ import { ENDGAME_DRILLS } from '../data/endgames.js';
 export { ENDGAME_DRILLS };
 
 export const drillById = id => ENDGAME_DRILLS.find(d => d.id === id) || null;
+export const endgameTitle = id => drillById(id)?.title || id;
 
 function count(game, color, type) {
   let n = 0;

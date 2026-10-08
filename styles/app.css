@@ -2445,3 +2445,398 @@ button.link {
   display: grid;
   gap: 8px;
 }
+
+/* ---------- V3: Today, goal card, agenda, session bar ---------- */
+
+.content {
+  min-width: 0;
+}
+
+.session-bar {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.session-bar .session-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+}
+
+.session-bar .session-step {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.session-bar button {
+  padding: 6px 12px;
+  min-height: 36px;
+}
+
+.session-bar.done {
+  border-bottom-color: var(--success-line);
+}
+
+.today h1 {
+  margin-top: 6px;
+}
+
+.goal-card {
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.goal-top {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+}
+
+.goal-numbers {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 4px 0 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.goal-numbers strong {
+  font:
+    600 34px/1.1 Georgia,
+    serif;
+}
+
+.goal-numbers strong:last-child {
+  color: var(--accent);
+}
+
+.goal-track {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.goal-track span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+}
+
+.goal-status {
+  margin: 8px 0 0;
+}
+
+.goal-status.behind {
+  color: var(--danger);
+}
+
+.goal-status.reached,
+.goal-status.on-track {
+  color: var(--success-line);
+}
+
+.level-line {
+  margin: 4px 0;
+  color: var(--muted);
+}
+
+.level-line strong {
+  color: var(--ink);
+}
+
+button.big {
+  width: 100%;
+  padding: 16px;
+  font-size: 18px;
+  border-radius: 14px;
+}
+
+.agenda {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.agenda-item button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: inherit;
+}
+
+.agenda-text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.agenda-text .small {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.agenda-mark {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.agenda-item.done .agenda-mark {
+  background: var(--success-line);
+  border-color: var(--success-line);
+  color: #fff;
+}
+
+.agenda-item.done strong {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.agenda-item.active button {
+  border-color: var(--accent);
+}
+
+.agenda-time {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.today-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted);
+  margin-top: 8px;
+}
+
+.today-foot select {
+  width: auto;
+  padding: 4px 8px;
+  min-height: 0;
+}
+
+.setup .choices .choice {
+  text-align: left;
+}
+
+.center {
+  text-align: center;
+}
+
+/* ---------- Path: curriculum map ---------- */
+
+.band {
+  margin: 0 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 0 14px;
+}
+
+.band summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  padding: 14px 0;
+  cursor: pointer;
+}
+
+.band-name {
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.band-past .band-name {
+  color: var(--muted);
+}
+
+.band-now {
+  border-color: var(--accent);
+}
+
+.units {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.unit button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  color: inherit;
+}
+
+.unit.current button {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.unit-ring {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  color: #fff;
+  background: conic-gradient(var(--accent) calc(var(--pct) * 1%), var(--line) 0);
+}
+
+.unit.done .unit-ring {
+  background: var(--success-line);
+}
+
+.unit-text {
+  display: grid;
+  gap: 2px;
+}
+
+.unit-text .small {
+  color: var(--muted);
+}
+
+.gate {
+  padding-left: 20px;
+  line-height: 1.6;
+}
+
+.gate li.ok {
+  color: var(--success-line);
+}
+
+.gate li.ok::marker {
+  content: '✓  ';
+}
+
+.objective {
+  margin: -4px 0 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+  border-radius: 6px;
+}
+
+/* ---------- You: skills ---------- */
+
+.skill-bars {
+  display: grid;
+  gap: 10px;
+}
+
+.skill-bar {
+  display: grid;
+  grid-template-columns: 92px 1fr 56px;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.skill-track {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--line);
+}
+
+.skill-fill {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  background: var(--accent);
+}
+
+.skill-fill.ahead {
+  background: var(--success-line);
+}
+
+.skill-target {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--ink);
+}
+
+.button-link {
+  padding: 8px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  text-decoration: none;
+  color: inherit;
+  font-weight: 600;
+}
+
+.session-bar[hidden] {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .sidebar nav a {
+    padding-left: 10px;
+    padding-right: 10px;
+    gap: 6px;
+  }
+}
+
+@media (max-width: 420px) {
+  .sidebar nav a > span[aria-hidden='true'] {
+    display: none;
+  }
+}
+
+.ratings-log summary {
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.ratings-log summary h2 {
+  display: inline;
+}

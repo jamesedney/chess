@@ -12,12 +12,20 @@ import * as review from './pages/review.js';
 import * as progress from './pages/progress.js';
 import * as drills from './pages/drills.js';
 import * as coach from './pages/coach.js';
+import * as today from './pages/today.js';
+import { activeBlock, continueSession, pauseSession, checkSession, todaysSession, sessionProgress } from './session.js';
+import { blockDone } from './program.js';
+import { refreshMastery } from './curriculum.js';
+import { syncRatings } from './rating-sync.js';
+import { goalStatus, PUZZLE_PERF } from './progress-model.js';
 import { scheduleDeepAnalysis } from './deep.js';
 import { startAutoSync, syncNow } from './queue.js';
 import { CONTROLS } from './sync.js';
 
-export const VERSION = '2.4.0';
-const PAGES = { train, coach, path, play, review, progress, drills };
+export const VERSION = '3.0.0';
+const PAGES = { today, train, coach, path, play, review, progress, drills };
+// Pages without their own tab light up the tab they belong to.
+const NAV_AS = { train: 'today', drills: 'today', coach: 'progress' };
 // Parameters that are part of a page's address, so reloads and the back button return to them.
 const ADDRESS_KEYS = ['lesson', 'drill', 'id'];
 const THEME_KEY = 'rankup-theme';
@@ -25,13 +33,13 @@ let pendingParams = null;
 
 function currentPage() {
   const name = location.hash.replace(/^#/, '').split('?')[0];
-  return PAGES[name] ? name : 'train';
+  return PAGES[name] ? name : 'today';
 }
 
 function show(name, params = {}) {
   if (app.page && app.page !== name) PAGES[app.page].leave?.();
   app.page = name;
-  const nav = PAGES[name].navAs || name;
+  const nav = NAV_AS[name] || name;
   $$('[data-page]').forEach(a => {
     const active = a.dataset.page === nav;
     a.classList.toggle('active', active);
@@ -50,6 +58,7 @@ function show(name, params = {}) {
     );
   }
   updateSidebar();
+  updateSessionBar();
   main.focus({ preventScroll: true });
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
@@ -70,7 +79,8 @@ function hashParams() {
   const q = location.hash.split('?')[1];
   if (!q) return {};
   const out = {};
-  for (const [k, v] of new URLSearchParams(q)) if (['puzzle', 'theme', 'mode', ...ADDRESS_KEYS].includes(k)) out[k] = v;
+  for (const [k, v] of new URLSearchParams(q))
+    if (['puzzle', 'theme', 'mode', 'review', 'tags', 'strict', 'limit', 'unit', 'rating', 'due', ...ADDRESS_KEYS].includes(k)) out[k] = v;
   if (out.theme && !out.mode) out.mode = 'daily';
   return out;
 }
@@ -82,11 +92,65 @@ window.addEventListener('hashchange', () => {
 });
 
 function updateSidebar() {
-  const r = app.state.puzzle.rating;
+  const s = app.state;
+  const g = goalStatus(s);
   const bar = $('#goal-bar');
-  if (bar) bar.style.width = Math.min(100, (r / 1500) * 100) + '%';
   const text = $('#goal-text');
-  if (text) text.textContent = `Puzzle rating ${r} of 1500`;
+  if (!g) {
+    if (bar) bar.style.width = '0%';
+    if (text) text.textContent = '';
+    return;
+  }
+  const span = Math.max(1, s.target.target - s.target.start.rating);
+  if (bar) bar.style.width = Math.max(2, Math.min(100, ((g.current - s.target.start.rating) / span) * 100)) + '%';
+  if (text) text.textContent = `${s.target.perf === PUZZLE_PERF ? 'Rankup rating' : s.target.perf} ${g.current} → ${s.target.target}`;
+}
+
+/** The slim bar that follows you through today's session on every page. */
+function updateSessionBar() {
+  const el = $('#session-bar');
+  if (!el) return;
+  const block = activeBlock();
+  if (!block || app.page === 'today') {
+    el.hidden = true;
+    return;
+  }
+  const s = app.state.session;
+  const i = s.blocks.indexOf(block);
+  const done = !!block.complete || blockDone(app.state, block);
+  const last = !s.blocks.some((b, k) => k !== i && b.status === 'todo');
+  el.hidden = false;
+  el.innerHTML = `<span class="session-step small">${i + 1} of ${s.blocks.length}</span>
+    <strong class="session-title">${esc(block.title)}</strong>
+    <button type="button" id="session-next" class="${done ? 'primary' : 'secondary'}">${done ? (last ? 'Finish ✓' : 'Next ›') : 'Skip'}</button>
+    <button type="button" id="session-pause" class="icon-button" aria-label="Back to Today">✕</button>`;
+  el.classList.toggle('done', done);
+  $('#session-next', el).onclick = continueSession;
+  $('#session-pause', el).onclick = pauseSession;
+}
+
+// Every save may finish a session block: check, then refresh the bar.
+{
+  const rawSave = app.save.bind(app);
+  let checking = false;
+  app.save = () => {
+    rawSave();
+    if (checking) return;
+    checking = true;
+    try {
+      // Lessons and drills finished anywhere count towards the curriculum.
+      const mastered = refreshMastery(app.state, dateKey());
+      if (mastered.length) {
+        rawSave();
+        toast(`Unit mastered: ${mastered.map(u => u.title).join(', ')}.`);
+      }
+      checkSession();
+    } finally {
+      checking = false;
+    }
+    updateSessionBar();
+    updateSidebar();
+  };
 }
 
 // ---------- Theme ----------
@@ -400,6 +464,8 @@ function boot() {
   // Re-check reviewed mistakes with a deeper search once the app has settled.
   scheduleDeepAnalysis(15000);
   startAutoSync();
+  // Ratings follow the linked accounts, so the goal tracks itself.
+  setTimeout(() => syncRatings().then(r => r.changed && today.refresh()), 3000);
   if (app.recovered) toast('Saved progress could not be read, so a copy was kept. See Settings to download it.', { duration: 9000 });
   else if (!app.storageOK) toast('This browser is not saving progress (private mode?). Export a backup in Settings.');
 }

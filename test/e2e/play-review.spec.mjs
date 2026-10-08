@@ -143,7 +143,7 @@ test('arrow keys in the viewer do not pile up or leak into other pages', async (
   await page.keyboard.press('Home');
   for (let i = 0; i < 25; i++) await page.keyboard.press('ArrowRight');
   await expect(page.locator('.viewer-controls .small')).toHaveText('14 / 14');
-  await page.click('nav a[data-page="train"]');
+  await page.goto('./#train');
   await page.keyboard.press('ArrowLeft');
   await expect(page.locator('#focus-progress')).toBeVisible();
   await expect(page.locator('.viewer-controls')).toHaveCount(0);
