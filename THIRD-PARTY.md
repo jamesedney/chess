@@ -36,7 +36,7 @@ The piece sets in `pieces/` are distributed by Lichess (https://github.com/liche
 
 ## App icons
 
-The knight in `icons/` and the header is rasterised from DejaVu Sans, based on Bitstream Vera. DejaVu fonts are distributed under the permissive Bitstream Vera and public-domain modification terms. Font notice included in `vendor/DEJAVU-LICENSE.txt`.
+The knight in the app icons (`icons/`) is the `cburnett` knight above (GNU GPL v2 or later), recoloured by `tools/build-icons.mjs`. The DejaVu font notice in `vendor/DEJAVU-LICENSE.txt` is kept for earlier releases that used its knight glyph.
 
 ## Positions
 
