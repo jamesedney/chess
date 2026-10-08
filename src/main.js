@@ -16,7 +16,7 @@ import { scheduleDeepAnalysis } from './deep.js';
 import { startAutoSync, syncNow } from './queue.js';
 import { CONTROLS } from './sync.js';
 
-export const VERSION = '2.1.0';
+export const VERSION = '2.1.1';
 const PAGES = { train, coach, path, play, review, progress, drills };
 // Parameters that are part of a page's address, so reloads and the back button return to them.
 const ADDRESS_KEYS = ['lesson', 'drill', 'id'];
@@ -55,6 +55,7 @@ function show(name, params = {}) {
 }
 
 app.navigate = (name, params = {}) => {
+  closeModal(); // moving to a page always leaves any open dialog behind
   pendingParams = params;
   const query = new URLSearchParams(ADDRESS_KEYS.filter(k => params[k]).map(k => [k, params[k]])).toString();
   const target = name + (query ? '?' + query : '');

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.1
+
+- Fixed: the "game reviewed" notification could not be tapped while the Settings dialog was open (the dialog makes everything behind it inert), and only its small button was tappable. Notifications now appear inside an open dialog, the whole notification is tappable, those with an action stay for 20 seconds, and opening a page from one closes the dialog.
+
 ## 2.1.0
 
 ### The guided loop

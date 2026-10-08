@@ -11,18 +11,50 @@ export const esc = s =>
 export const plural = (n, word, many = word + 's') => `${n} ${n === 1 ? word : many}`;
 
 let toastTimer;
-/** Show a short status message, optionally with one action button. */
-export function toast(text, { action = null, duration = 4500 } = {}) {
+
+function hideToast(el) {
+  el.classList.remove('show');
+  el.onclick = null;
+}
+
+/**
+ * While a modal dialog is open everything outside it is inert, so a toast
+ * shown then would be unreadable and untappable. Toasts therefore live inside
+ * the open dialog and move back to the page when it closes.
+ */
+function toastElement() {
   const el = $('#toast');
+  const host = document.querySelector('dialog[open]') || document.body;
+  if (el.parentElement !== host) host.append(el);
+  return el;
+}
+if (typeof document !== 'undefined')
+  document.addEventListener(
+    'close',
+    e => {
+      const el = $('#toast');
+      if (el && /** @type {Element} */ (e.target).contains?.(el)) document.body.append(el);
+    },
+    true,
+  );
+
+/**
+ * Show a short status message, optionally with one action. A toast with an
+ * action stays longer and the whole toast is tappable, not only its button.
+ */
+export function toast(text, { action = null, duration = 4500 } = {}) {
+  const el = toastElement();
   el.innerHTML = `<span>${esc(text)}</span>${action ? `<button type="button" class="lime">${esc(action.label)}</button>` : ''}`;
-  if (action)
-    el.querySelector('button').onclick = () => {
-      el.classList.remove('show');
-      action.onClick();
-    };
+  el.classList.toggle('actionable', !!action);
+  el.onclick = action
+    ? () => {
+        hideToast(el);
+        action.onClick();
+      }
+    : null;
   el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), action ? duration * 3 : duration);
+  toastTimer = setTimeout(() => hideToast(el), action ? Math.max(duration * 3, 20000) : duration);
 }
 
 /** Open the shared modal dialog. Returns the content element. */

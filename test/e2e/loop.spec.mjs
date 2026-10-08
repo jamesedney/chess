@@ -54,6 +54,20 @@ test('a linked account is synced, the game is reviewed in the background, and th
   await expect(page.locator('#queue-panel')).toContainText('imported and reviewed automatically');
 });
 
+test('the review-ready notification opens the game, even from behind the Settings dialog', async ({ page }) => {
+  await page.route('https://lichess.org/api/games/user/**', route => route.fulfill({ status: 200, contentType: 'application/x-chess-pgn', body: LICHESS_PGN }));
+  await seed(page);
+  await open(page, 'train');
+  await page.click('#settings');
+  await page.click('#sync-now');
+  await expect(page.locator('#toast')).toContainText('me – rival reviewed', { timeout: 120000 });
+  // Tap the text of the notification, not its button, while the dialog is still open.
+  await page.locator('#toast span').click();
+  await expect(page).toHaveURL(/#review$/);
+  await expect(page.locator('h1')).toContainText('me – rival');
+  await expect(page.locator('#modal')).not.toHaveAttribute('open');
+});
+
 test('a second sync does not queue the same game again', async ({ page }) => {
   await page.route('https://lichess.org/api/games/user/**', route =>
     route.fulfill({ status: 200, contentType: 'application/x-chess-pgn', body: LICHESS_PGN }),
