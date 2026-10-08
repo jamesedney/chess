@@ -5,8 +5,10 @@ import { parseInfo, parseBestMove } from './uci-parse.js';
 export const BUDGET = { coach: 150000, review: 250000, verify: 120000, hint: 100000, opponent: 90000, deep: 1500000 };
 
 export class Engine {
-  constructor(url) {
+  constructor(url, { searchMs = 45000, deadMs = 4000 } = {}) {
     this.url = url;
+    this.searchMs = searchMs;
+    this.deadMs = deadMs;
     this.queue = Promise.resolve();
     this.worker = null;
     this.ready = null;
@@ -47,7 +49,10 @@ export class Engine {
         fail('This browser cannot start the chess engine.');
         return;
       }
-      this.worker.onerror = () => fail('The chess engine could not load. Refresh while online.');
+      this.worker.onerror = () => {
+        if (this.status === 'ready') this.crash();
+        else fail('The chess engine could not load. Refresh while online.');
+      };
       this.worker.onmessage = e => {
         const line = String(e.data);
         if (line === 'uciok') {
@@ -67,6 +72,21 @@ export class Engine {
 
   get available() {
     return this.status !== 'failed';
+  }
+
+  /**
+   * The engine died mid-search (WebAssembly can trap on some browsers).
+   * Throw the worker away; the next request starts a fresh one.
+   */
+  crash(message = 'The chess engine stopped and was restarted. Try that again.') {
+    try {
+      this.worker?.terminate();
+    } catch {}
+    this.worker = null;
+    this.ready = null;
+    this.status = 'idle';
+    this.queue = Promise.resolve();
+    this.abort?.(new Error(message));
   }
 
   /**
@@ -90,17 +110,21 @@ export class Engine {
       return new Promise((resolve, reject) => {
         const lines = {};
         let timedOut = false;
+        let deadTimer = null;
         const timer = setTimeout(() => {
-          // Stop and wait for bestmove so the next search starts clean.
+          // Stop and wait for bestmove so the next search starts clean. An
+          // engine that does not even answer "stop" has crashed: restart it.
           timedOut = true;
-          if (this.worker) this.worker.postMessage('stop');
-          else this.abort?.(new Error('Analysis timed out. Try again.'));
-        }, 45000);
+          if (!this.worker) return this.abort?.(new Error('Analysis timed out. Try again.'));
+          this.worker.postMessage('stop');
+          deadTimer = setTimeout(() => this.crash(), this.deadMs);
+        }, this.searchMs);
         this.searching = true;
         this.background = background;
         this.preempted = false;
         this.abort = error => {
           clearTimeout(timer);
+          clearTimeout(deadTimer);
           this.listener = null;
           this.searching = false;
           this.background = false;
@@ -113,6 +137,7 @@ export class Engine {
           const best = parseBestMove(line);
           if (best === null) return;
           clearTimeout(timer);
+          clearTimeout(deadTimer);
           this.listener = null;
           this.searching = false;
           this.abort = null;
