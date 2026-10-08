@@ -42,6 +42,7 @@ export class BoardView {
     this.squares = null;
     this.builtFor = null;
     this.skipAnimation = false; // set when the piece is already where the user put it (a drag)
+    this.renderedGame = null; // the game object the last render showed
 
     el.classList.add('board');
     el.setAttribute('role', 'group');
@@ -351,8 +352,11 @@ export class BoardView {
       }
     }
     if (!this.skipAnimation && this.builtFor === this.orientation) this.animateChanges(vanished, appeared);
-    // One move's worth of change on a board that already had pieces: a move was played.
-    if (vanished.length && appeared.length && vanished.length + appeared.length <= 6)
+    // One move's worth of change within the same game: a move was played.
+    // A different game object is a new position being shown, not a move.
+    const sameGame = this.renderedGame === this.game;
+    this.renderedGame = this.game;
+    if (sameGame && vanished.length && appeared.length && vanished.length + appeared.length <= 6)
       cue(this.game.isCheck() ? 'check' : vanished.length > appeared.length ? 'capture' : 'move');
     this.skipAnimation = false;
     this.el.dataset.fen = this.game.fen();

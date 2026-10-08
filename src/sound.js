@@ -82,7 +82,9 @@ const VIBRATIONS = { move: 8, capture: 14, check: [10, 40, 10], success: [12, 60
 
 /** Play the cue for an event: move, capture, check, success or error. */
 export function cue(kind) {
-  if (prefs.haptics && VIBRATIONS[kind] !== undefined) {
+  // Browsers block vibration (and log an error) before the user has interacted with the page.
+  const active = typeof navigator === 'undefined' || !navigator.userActivation || navigator.userActivation.hasBeenActive;
+  if (prefs.haptics && active && VIBRATIONS[kind] !== undefined) {
     try {
       navigator.vibrate?.(VIBRATIONS[kind]);
     } catch {}
