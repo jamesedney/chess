@@ -29,7 +29,19 @@ let seeds = null;
 let unwatch = null;
 
 function newSession(mode = 'daily', theme = null, { tags = [], review = null, step = null } = {}) {
-  session = { mode, theme, tags, review, step, done: 0, clean: 0, seen: [], finished: false, ratingStart: app.state.puzzle.rating };
+  session = {
+    mode,
+    theme,
+    tags,
+    review,
+    step,
+    done: 0,
+    clean: 0,
+    seen: [],
+    finished: false,
+    total: null,
+    ratingStart: app.state.puzzle.rating,
+  };
   current = null;
 }
 
@@ -51,6 +63,17 @@ function loadNext() {
   let pool = app.allPuzzles();
   // Drilling one game: only the positions saved from that review.
   if (session.review) pool = pool.filter(x => x.source?.reviewId === session.review);
+  // A mistakes session is one pass over the positions: once each has been
+  // seen, it ends rather than repeating the same position to fill the goal.
+  if (session.mode === 'mistakes') {
+    const mine = pool.filter(x => isMistake(x) && !x.archived);
+    session.total = mine.length;
+    if (mine.length && mine.every(x => session.seen.includes(x.id))) {
+      session.finished = true;
+      current = null;
+      return;
+    }
+  }
   const p = choosePuzzle({
     puzzles: pool,
     records: app.state.records,
@@ -130,10 +153,15 @@ function startSession(mode, theme, { tags = [], review = null, step = null, redr
   if (redraw) draw();
 }
 
+/** How many positions this session runs to: the daily goal, or one pass over a mistakes pool. */
+function sessionGoal() {
+  return session.mode === 'mistakes' && session.total ? Math.min(session.total, app.state.goal) : app.state.goal;
+}
+
 /** The thin line above the board: where you are in the session, and the menu. */
 function topLine() {
   const s = app.state;
-  const goal = s.goal;
+  const goal = sessionGoal();
   let progress;
   if (session.mode === 'vision') progress = `Vision sprint · best ${s.vision.best}`;
   else {
@@ -308,7 +336,7 @@ function drawPuzzle(body) {
 function skip() {
   const c = current;
   if (!c || c.complete) return;
-  if (session.done >= app.state.goal) session.finished = true;
+  if (session.done >= sessionGoal()) session.finished = true;
   else loadNext();
   draw();
 }
@@ -329,7 +357,7 @@ function refreshBoard() {
   if (chip) chip.textContent = turnLabel(c.game);
   const prog = $('#focus-progress');
   if (prog)
-    prog.textContent = `${Math.max(1, Math.min(session.done + (c.complete ? 0 : 1), app.state.goal))} of ${app.state.goal} · rating ${app.state.puzzle.rating}`;
+    prog.textContent = `${Math.max(1, Math.min(session.done + (c.complete ? 0 : 1), sessionGoal()))} of ${sessionGoal()} · rating ${app.state.puzzle.rating}`;
 }
 
 function feedback(message, tone = '') {
@@ -536,7 +564,7 @@ async function showSolution() {
 }
 
 function next() {
-  if (session.done >= app.state.goal) session.finished = true;
+  if (session.done >= sessionGoal()) session.finished = true;
   else loadNext();
   draw();
 }

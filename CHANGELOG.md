@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.2
+
+- Fixed: drilling a game's mistakes (or My mistakes) repeated the same position to fill the session goal when there were only a few. A mistakes session is now one pass over its positions, the progress line shows that count, and the next step moves on to another game once each position has been attempted. A failed position still returns through spaced recall.
+
 ## 2.1.1
 
 - Fixed: the "game reviewed" notification could not be tapped while the Settings dialog was open (the dialog makes everything behind it inert), and only its small button was tappable. Notifications now appear inside an open dialog, the whole notification is tappable, those with an action stay for 20 seconds, and opening a page from one closes the dialog.

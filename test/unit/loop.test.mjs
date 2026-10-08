@@ -236,8 +236,8 @@ test('the guided loop picks the next step in order', () => {
   assert.equal(step.id, 'drill');
   assert.match(step.title, /against rival/);
   assert.deepEqual(step.action.params, { mode: 'mistakes', review: 'r1' });
-  // Solved cleanly: puzzles now lean on what was missed.
-  s.records[m.id] = { tries: 1, clean: 1, box: 1, due: NOW + 86400000, last: NOW };
+  // Attempted (even unsuccessfully): the drill is done, and puzzles now lean on what was missed.
+  s.records[m.id] = { tries: 1, clean: 0, box: 0, due: NOW + 600000, last: NOW };
   s.mistakes[0].tags = ['fork'];
   step = nextStep(s, { now: NOW, puzzles });
   assert.equal(step.id, 'puzzles');

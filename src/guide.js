@@ -81,14 +81,15 @@ export function recommendedLesson(state, now = Date.now()) {
   return null;
 }
 
-/** The newest reviewed game whose mistakes you have not yet solved cleanly. */
+/** The newest reviewed game whose mistakes you have not yet attempted. */
 function undrilledReview(state, now) {
   for (const r of state.reviews) {
     if (!r.complete || (r.created || 0) < now - 3 * DAY) continue;
     const ids = r.marks.filter(m => m.mistakeId && !m.cleared).map(m => m.mistakeId);
+    // Attempted once counts as drilled: a failed position comes back through spaced recall.
     const open = ids.filter(id => {
       const m = state.mistakes.find(x => x.id === id);
-      return m && !m.archived && !(state.records[id]?.clean > 0);
+      return m && !m.archived && !(state.records[id]?.tries > 0);
     });
     if (open.length) return { review: r, open: open.length };
   }

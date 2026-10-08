@@ -70,6 +70,56 @@ test('the review-ready notification opens the game, even from behind the Setting
   await expect(page.locator('#modal')).not.toHaveAttribute('open');
 });
 
+test('drilling a game with one saved position ends after it instead of repeating it', async ({ page }) => {
+  const FEN = 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2';
+  const now = Date.now();
+  await seed(page, {
+    profiles: { lichess: '', chesscom: '' },
+    mistakes: [
+      {
+        id: 'mone',
+        title: 'Instead of Qh4',
+        fen: FEN,
+        line: ['b8c6'],
+        theme: 'Personal mistakes',
+        tags: [],
+        goal: 'Find the improvement.',
+        explanation: 'Nc6 develops a piece.',
+        played: 'Qh4',
+        loss: 30,
+        created: now - 60000,
+        kind: 'positional',
+        source: { reviewId: 'rone', ply: 3 },
+      },
+    ],
+    reviews: [
+      {
+        id: 'rone',
+        complete: true,
+        created: now - 60000,
+        colour: 'b',
+        white: 'rival',
+        black: 'me',
+        result: '1-0',
+        startFen: FEN,
+        moves: [],
+        evals: [],
+        marks: [{ ply: 3, cls: 'blunder', best: 'b8c6', bestSan: 'Nc6', mistakeId: 'mone' }],
+      },
+    ],
+  });
+  await open(page, 'train');
+  await expect(page.locator('.guide')).toContainText('Drill the mistake from your game against rival');
+  await page.click('#guide-go');
+  await expect(page.locator('#focus-progress')).toContainText('1 of 1');
+  await move(page, 'b8', 'c6');
+  await expect(page.locator('#feedback')).toContainText('Nc6 develops');
+  await page.click('#next');
+  await expect(page.locator('#train-body')).toContainText('SESSION COMPLETE');
+  await expect(page.locator('#train-body')).not.toContainText('Drill the mistake');
+  await expect(page.locator('.guide')).not.toContainText('Drill the mistake');
+});
+
 test('a second sync does not queue the same game again', async ({ page }) => {
   await page.route('https://lichess.org/api/games/user/**', route =>
     route.fulfill({ status: 200, contentType: 'application/x-chess-pgn', body: LICHESS_PGN }),
