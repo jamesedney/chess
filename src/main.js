@@ -13,7 +13,7 @@ import * as progress from './pages/progress.js';
 import * as drills from './pages/drills.js';
 import * as coach from './pages/coach.js';
 import * as today from './pages/today.js';
-import { activeBlock, continueSession, pauseSession, checkSession, todaysSession, sessionProgress } from './session.js';
+import { activeBlock, continueSession, pauseSession, checkSession, todaysSession, sessionProgress, onSessionChange } from './session.js';
 import { blockDone } from './program.js';
 import { refreshMastery } from './curriculum.js';
 import { syncRatings } from './rating-sync.js';
@@ -23,7 +23,7 @@ import { scheduleDeepAnalysis } from './deep.js';
 import { startAutoSync, syncNow } from './queue.js';
 import { CONTROLS } from './sync.js';
 
-export const VERSION = '3.0.1';
+export const VERSION = '3.0.2';
 const PAGES = { today, train, coach, path, play, review, progress, drills };
 // Pages without their own tab light up the tab they belong to.
 const NAV_AS = { train: 'today', drills: 'today', coach: 'progress' };
@@ -473,6 +473,8 @@ function boot() {
   startAutoSync();
   // Ratings follow the linked accounts, so the goal tracks itself.
   setTimeout(() => syncRatings().then(r => r.changed && today.refresh()), 3000);
+  // A game reviewed in the background can add to today's plan while it is on screen.
+  onSessionChange(() => app.page === 'today' && today.refresh());
   if (app.recovered) toast('Saved progress could not be read, so a copy was kept. See Settings to download it.', { duration: 9000 });
   else if (!app.storageOK) toast('This browser is not saving progress (private mode?). Export a backup in Settings.');
 }

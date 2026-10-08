@@ -1,6 +1,6 @@
 // Rankup service worker: precache the app for offline use.
 // Bump VERSION (and package.json) for every release; tests check they match.
-const VERSION = '3.0.1';
+const VERSION = '3.0.2';
 const CACHE = 'rankup-v' + VERSION;
 const FILES = [
   './',

@@ -49,6 +49,25 @@ function route(block) {
   }
 }
 
+/**
+ * A game reviewed after today's plan was made: add its block before the next
+ * thing to do, leaving the rest of the plan as it is.
+ */
+export function mergeNewGames() {
+  const s = app.state;
+  const plan = s.session;
+  if (!plan || plan.date !== dateKey()) return;
+  if (plan.blocks.some(b => b.type === 'review' && b.status === 'todo')) return;
+  const fresh = planSession(s, { puzzles: app.allPuzzles(), target: s.target?.target || null });
+  const review = fresh.blocks.find(b => b.type === 'review');
+  if (!review || plan.blocks.some(b => b.type === 'review' && b.params.review === review.params.review)) return;
+  if (plan.blocks.some(b => b.id === review.id)) review.id = `review-${plan.blocks.length}`;
+  const at = plan.blocks.findIndex(b => b.status === 'todo');
+  plan.blocks.splice(at < 0 ? plan.blocks.length : at, 0, review);
+  app.save();
+  changed();
+}
+
 /** Start a block by index: remember the counters it is measured from, then open it. */
 export function startBlock(i) {
   const s = todaysSession();

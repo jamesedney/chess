@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.0.2
+
+- Background game reviews no longer send a notification per game. One message covers everything reviewed together ("3 games reviewed: 5 new positions to practise"), and it has a close button and clears after ten seconds.
+- A game reviewed after today's plan was made is added to the plan, before the next thing to do, so it appears on Today without a reload.
+
+
 ## 3.0.1
 
 - Choose which rating your goal follows: Auto, Bullet, Blitz, Rapid or Classical. Pick it at setup, from Rating on Today, or in Settings; the goal moves to that rating straight away. Auto now follows the time control you play most (it used to prefer rapid whenever you had ten rapid games).

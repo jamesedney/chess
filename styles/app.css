@@ -2972,3 +2972,17 @@ button.big {
   padding: 7px 12px;
   font-size: 14px;
 }
+
+#toast .toast-close {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0.7;
+  padding: 4px;
+  margin-right: -6px;
+}
+
+#toast .toast-close .icon {
+  width: 18px;
+  height: 18px;
+}

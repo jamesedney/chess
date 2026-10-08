@@ -42,19 +42,29 @@ if (typeof document !== 'undefined')
  * Show a short status message, optionally with one action. A toast with an
  * action stays longer and the whole toast is tappable, not only its button.
  */
+/**
+ * A short message at the bottom of the screen. With an action, tapping it runs
+ * the action; the close button always dismisses it without doing anything.
+ */
 export function toast(text, { action = null, duration = 4500 } = {}) {
   const el = toastElement();
-  el.innerHTML = `<span>${esc(text)}</span>${action ? `<button type="button" class="lime">${esc(action.label)}</button>` : ''}`;
+  el.innerHTML = `<span>${esc(text)}</span>${action ? `<button type="button" class="primary toast-action">${esc(action.label)}</button>` : ''}<button type="button" class="toast-close" aria-label="Dismiss"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>`;
   el.classList.toggle('actionable', !!action);
-  el.onclick = action
-    ? () => {
-        hideToast(el);
-        action.onClick();
-      }
-    : null;
+  el.onclick = e => {
+    if (/** @type {Element} */ (e.target).closest('.toast-close')) return hideToast(el);
+    if (!action) return;
+    hideToast(el);
+    action.onClick();
+  };
   el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => hideToast(el), action ? Math.max(duration * 3, 20000) : duration);
+  toastTimer = setTimeout(() => hideToast(el), action ? Math.max(duration * 2, 10000) : duration);
+}
+
+/** Dismiss whatever toast is showing. */
+export function dismissToast() {
+  const el = $('#toast');
+  if (el) hideToast(el);
 }
 
 /** Open the shared modal dialog. Returns the content element. */

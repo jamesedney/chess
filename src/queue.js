@@ -8,6 +8,7 @@ import { fetchLichessNew, fetchChessComNew, selectNew } from './sync.js';
 import { describeGame } from './pgn.js';
 import { toast } from './ui.js';
 import { scheduleDeepAnalysis } from './deep.js';
+import { mergeNewGames } from './session.js';
 
 const KEY = 'rankup-queue';
 const MAX_QUEUE = 12;
@@ -19,6 +20,8 @@ let running = false;
 let lastSync = 0;
 let syncing = false;
 const listeners = new Set();
+// Games reviewed since the queue last emptied: reported once, together.
+let batch = { games: 0, found: 0, last: null };
 
 function load() {
   try {
@@ -107,13 +110,10 @@ export function runQueue(delay = 1500) {
       });
       queue = queue.filter(i => i !== item);
       persist();
-      if (!duplicate && app.page !== 'review') {
-        toast(
-          `${label(item)} reviewed: ${found ? found + ' new position' + (found === 1 ? '' : 's') + ' to practise.' : 'no serious mistakes.'}`,
-          {
-            action: { label: 'Open', onClick: () => app.navigate('review', { review: review.id, ply: 0 }) },
-          },
-        );
+      if (!duplicate) {
+        batch.games++;
+        batch.found += found || 0;
+        batch.last = { id: review.id, label: label(item) };
       }
       scheduleDeepAnalysis();
     } catch (e) {
@@ -126,7 +126,26 @@ export function runQueue(delay = 1500) {
     running = false;
     notify();
     if (queue.length) runQueue(4000);
+    else reportBatch();
   }, delay);
+}
+
+/** One message for everything reviewed in the background, and today's plan picks the games up. */
+function reportBatch() {
+  const { games, found, last } = batch;
+  batch = { games: 0, found: 0, last: null };
+  if (!games) return;
+  mergeNewGames();
+  if (app.page === 'review') return;
+  const positions = found ? `${found} new position${found === 1 ? '' : 's'} to practise` : 'no serious mistakes';
+  if (games === 1)
+    toast(`${last.label} reviewed: ${positions}.`, {
+      action: { label: 'Open', onClick: () => app.navigate('review', { review: last.id, ply: 0 }) },
+    });
+  else
+    toast(`${games} games reviewed: ${positions}.${found ? ' They are in today’s session.' : ''}`, {
+      action: { label: 'Today', onClick: () => app.navigate('today') },
+    });
 }
 
 /**

@@ -78,6 +78,41 @@ test('the review-ready notification opens the game, even from behind the Setting
   await expect(page.locator('#modal')).not.toHaveAttribute('open');
 });
 
+test('several games reviewed in the background give one dismissable message and join today’s plan', async ({ page }) => {
+  // A different game: White walks into a queen mate on f2.
+  const second = `[Event "Rated blitz game"]
+[Site "https://lichess.org/sync0002"]
+[Date "2026.10.08"]
+[White "me"]
+[Black "rival2"]
+[Result "0-1"]
+[UTCDate "2026.10.08"]
+[UTCTime "10:00:00"]
+[Variant "Standard"]
+[TimeControl "300+0"]
+
+1. e4 e5 2. Bc4 Bc5 3. Nc3 Qh4 4. d3 Qxf2# 0-1`;
+  await page.route('https://lichess.org/api/games/user/**', route =>
+    route.fulfill({ status: 200, contentType: 'application/x-chess-pgn', body: `${LICHESS_PGN}\n\n${second}` }),
+  );
+  await seed(page, { sync: { minMoves: 3, auto: false } });
+  // Today's plan exists before the games arrive.
+  await open(page, 'today');
+  await expect(page.locator('.agenda')).toBeVisible();
+  await expect(page.locator('.agenda')).not.toContainText('Your game against');
+  await page.click('#settings');
+  await page.click('#sync-now');
+  await page.click('#close-modal');
+  await expect(page.locator('#toast')).toContainText('2 games reviewed', { timeout: 150000 });
+  await expect(page.locator('#toast')).not.toContainText('me – rival reviewed');
+  // The plan picked the newest game up without a reload.
+  await expect(page.locator('.agenda')).toContainText('Your game against');
+  // Close dismisses without navigating.
+  await page.click('#toast .toast-close');
+  await expect(page.locator('#toast')).toBeHidden();
+  await expect(page).toHaveURL(/#today/);
+});
+
 test('drilling a game with one saved position ends after it instead of repeating it', async ({ page }) => {
   const FEN = 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2';
   const now = Date.now();
