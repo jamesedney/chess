@@ -401,14 +401,14 @@ main:focus {
   justify-content: space-between;
   align-items: center;
   gap: 15px;
-  margin-bottom: 25px;
+  margin-bottom: 14px;
 }
 h1 {
   font:
-    38px/1.15 Georgia,
+    26px/1.2 Georgia,
     serif;
-  letter-spacing: -1px;
-  margin: 7px 0 8px;
+  letter-spacing: -0.5px;
+  margin: 0 0 4px;
 }
 h2 {
   font:
@@ -1175,6 +1175,15 @@ textarea {
   background: var(--surface-2);
   padding: 12px;
   border-radius: 8px;
+}
+/* On the practice page the record is a single scrolling line under the board. */
+.focus .history {
+  max-height: none;
+  white-space: nowrap;
+  overflow-x: auto;
+  padding: 8px 12px;
+  line-height: 1.4;
+  color: var(--muted);
   white-space: pre-wrap;
 }
 .empty {
@@ -2387,4 +2396,47 @@ button.link {
 
 .review-extra > :last-child {
   margin-bottom: 14px;
+}
+
+/* ---------- Vision sprint countdown ---------- */
+
+.sprint-clock {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 64px;
+  text-align: center;
+}
+
+.sprint-clock.urgent {
+  background: var(--error);
+  color: var(--danger);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.sprint-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.sprint-bar span {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--accent);
+  transition: width 0.2s linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sprint-clock.urgent {
+    animation: none;
+  }
 }

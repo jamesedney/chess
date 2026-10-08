@@ -220,7 +220,10 @@ test('the practice opponent climbs the ladder after five wins', async ({ page })
   await move(page, 'h5', 'f7');
   await expect(page.locator('#play-status')).toContainText('Checkmate', { timeout: 30000 });
   await expect(page.locator('#play-status')).toContainText('Next game: Improver');
+  await expect(page.locator('.focus-progress')).toContainText('Improver 1200');
+  await page.click('#play-menu');
   await expect(page.locator('#difficulty')).toHaveValue('improver');
+  await page.click('#close-modal');
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')));
   expect(saved.games).toHaveLength(5);
   expect(saved.strength).toBe('improver');

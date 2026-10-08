@@ -30,7 +30,7 @@ test('the coach diagnoses, plans and builds a lesson from your mistakes', async 
   }, seeded());
   await page.reload();
   await page.click('nav a[data-page="coach"]');
-  await expect(page.locator('h1')).toContainText('What to work on');
+  await expect(page.locator('h1')).toContainText('Coach');
   await expect(page.locator('.callout')).toContainText('en prise');
   await expect(page.locator('.plan-item')).toHaveCount(5);
   await expect(page.locator('.plan-item').nth(1)).toContainText('board vision');

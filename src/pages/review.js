@@ -81,10 +81,10 @@ function usernames() {
 function drawImport() {
   const p = app.state.profiles;
   root.innerHTML =
-    pageHead('YOUR GAMES, YOUR CURRICULUM', 'Turn a loss into a lesson.', 'Bring a game. Find the turning points. Train the better move.') +
+    pageHead('', 'Your games') +
     `<div class="two-col">
       <section class="panel">
-        <h2>Bring a game</h2>
+        <h2>Review a game</h2>
         <div class="tabs" role="tablist" aria-label="Game source">
           ${[
             ['paste', 'Paste or file'],
@@ -114,19 +114,16 @@ function drawImport() {
           <button type="button" id="analyse" class="primary" ${analysis.running ? 'disabled' : ''}>${selected ? 'Analyse selected game' : 'Find my missed opportunities'}</button>
           <button type="button" id="cancel-review" ${analysis.running ? '' : 'hidden'}>Stop analysis</button>
         </div>
-        <div id="review-status" class="status" role="status" aria-live="polite">${esc(analysis.status || `One game at a time · up to ${MAX_PLIES} half-moves · about 1–2 minutes on a phone`)}</div>
-        <small>Stockfish flags moves that cost at least 20% winning chances. These are practice candidates, not definitive verdicts.</small>
+        <div id="review-status" class="status" role="status" aria-live="polite">${esc(analysis.status || 'Stockfish marks the moves that cost you at least 20% winning chances. About a minute per game.')}</div>
       </section>
       <section class="panel">
-        <div class="eyebrow">REVIEWED GAMES</div>
-        <h2>Step through your games</h2>
+        <h2>Reviewed games</h2>
         ${reviewsHTML()}
       </section>
     </div>
     ${openingsHTML()}
     <section class="panel">
-      <div class="eyebrow">PERSONAL MISTAKE BANK</div>
-      <div class="panel-head"><h2>Lessons you actually need</h2><label class="small toggle"><input type="checkbox" id="show-archived" ${showArchived ? 'checked' : ''}> Show removed</label></div>
+      <div class="panel-head"><h2>Your mistakes</h2><label class="small toggle"><input type="checkbox" id="show-archived" ${showArchived ? 'checked' : ''}> Show removed</label></div>
       <div id="mistake-list">${mistakesHTML()}</div>
     </section>`;
 
@@ -353,11 +350,7 @@ function firstMarkPly(review) {
 
 function reviewsHTML() {
   const list = app.state.reviews;
-  if (!list.length)
-    return `<p class="muted">No reviews yet. Your first review builds a training queue from the moves that mattered.</p>
-      <div class="step"><span class="step-number">1</span><p>Fetch or paste a game and choose your colour.</p></div>
-      <div class="step"><span class="step-number">2</span><p>Step through it with the evaluation graph. Mistakes are marked.</p></div>
-      <div class="step"><span class="step-number">3</span><p>Solve the saved positions until the idea becomes familiar.</p></div>`;
+  if (!list.length) return `<p class="muted">No reviews yet. Link an account in Settings or bring a game here.</p>`;
   return list
     .map(r => {
       const counts = ['blunder', 'mistake', 'inaccuracy'].map(c => r.marks.filter(m => m.cls === c && !m.cleared).length);

@@ -151,6 +151,7 @@ export function formatDate(key) {
   return isNaN(d.getTime()) ? key : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-export function pageHead(eyebrow, title, sub, right = '') {
-  return `<div class="page-head"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p class="muted">${sub}</p></div>${right}</div>`;
+/** A page heading: just the title. The eyebrow and subtitle arguments are accepted for callers but no longer shown. */
+export function pageHead(eyebrow, title, sub = '', right = '') {
+  return `<div class="page-head"><h1>${title}</h1>${right}</div>`;
 }

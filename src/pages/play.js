@@ -2,8 +2,8 @@
 import { Chess } from '../../vendor/chess.js';
 import { app } from '../app-context.js';
 import { engine, BUDGET } from '../engine.js';
-import { BoardView, boardCard, turnLabel } from '../board.js';
-import { $, esc, pageHead, choosePromotion, confirmDialog, download, toast, settle } from '../ui.js';
+import { BoardView, turnLabel } from '../board.js';
+import { $, esc, choosePromotion, confirmDialog, download, toast, settle, showModal, closeModal } from '../ui.js';
 import { moveToUci, playUci, opposite } from '../chess-utils.js';
 import { LEVELS, levelById, pickNoisyMove, adaptLevel } from '../strength.js';
 import { humanMove } from '../maia.js';
@@ -90,74 +90,93 @@ function moveRecord() {
   return out.trim();
 }
 
+/** "Maia 1100", "Club 1400", "Full strength". */
+function shortLevel(id) {
+  return levelById(id)
+    .label.replace(/^Plays like a (\d+) player \(Maia\)$/, 'Maia $1')
+    .replace(' · about ', ' ');
+}
+
 function draw() {
   if (!root) return;
   const g = play.game;
-  const level = app.state.strength;
-  root.innerHTML =
-    pageHead('PRACTICE LAB', 'Make the thinking a habit.', 'A patient opponent. A chance to learn from every move.') +
-    `<div class="workspace">
-      ${boardCard({ title: esc(play.from ? `From: ${play.from}` : 'Practice game') })}
-      <div>
-        <section class="panel">
-          <div class="eyebrow">YOUR OPPONENT</div>
-          <h2>Stockfish sparring partner</h2>
-          <div class="field"><label for="difficulty">Opponent</label><select id="difficulty">
-            <optgroup label="Human-like (Maia)">${LEVELS.filter(l => l.mode === 'maia')
-              .map(l => `<option value="${l.id}" ${l.id === level ? 'selected' : ''}>${esc(l.label)}</option>`)
-              .join('')}</optgroup>
-            <optgroup label="Stockfish">${LEVELS.filter(l => l.mode !== 'maia')
-              .map(l => `<option value="${l.id}" ${l.id === level ? 'selected' : ''}>${esc(l.label)}</option>`)
-              .join('')}</optgroup>
-          </select></div>
-          <div class="field"><label for="play-colour">Your colour (next game)</label><select id="play-colour"><option value="w">White</option><option value="b">Black</option><option value="r">Random</option></select></div>
-          <div class="checks"><label><input type="checkbox" id="coach" ${app.state.coach ? 'checked' : ''}> Coach: save my missed opportunities</label></div>
-          <small>Maia opponents were trained on millions of human games and make the mistakes real players make. Stockfish levels play engine moves with a strength limit. All ratings are approximate.</small>
-          <div id="play-status" class="status" role="status" aria-live="polite">${esc((play.note ? play.note + ' ' : '') + gameStatus())}</div>
-          <div class="actions">
-            <button type="button" id="new-game" class="primary">New game</button>
-            <button type="button" id="undo-game" ${g.history().length && !play.thinking ? '' : 'disabled'}>Take back</button>
-            <button type="button" id="export-game" ${g.history().length ? '' : 'disabled'}>Export PGN</button>
-            <button type="button" id="review-game" ${g.history().length >= 6 ? '' : 'disabled'}>Review this game</button>
-          </div>
-        </section>
-        <section class="panel">
-          <div class="eyebrow">MOVE RECORD</div>
-          <div id="history" class="history">${esc(moveRecord())}</div>
-          <p class="footer-note">The coach uses a short engine search and can miss deeper ideas. Takebacks also remove mistakes saved for the moves you take back.</p>
-        </section>
-      </div>
-    </div>`;
+  root.innerHTML = `<div class="focus">
+    <div class="focus-top">
+      <span class="focus-progress">${esc(shortLevel(app.state.strength))} · you play ${play.color === 'w' ? 'White' : 'Black'}</span>
+      <button type="button" id="play-menu" class="secondary focus-menu" aria-haspopup="dialog" aria-label="Game options: opponent, colour, coach, export and review">☰ Options</button>
+    </div>
+    <div class="focus-prompt"><strong id="board-title">${esc(play.from ? `From: ${play.from}` : 'Practice game')}</strong><span class="chip" id="board-chip"></span></div>
+    <div class="focus-board"><div id="board"></div></div>
+    <div id="history" class="history small">${esc(moveRecord())}</div>
+    <div id="play-status" class="status" role="status" aria-live="polite">${esc((play.note ? play.note + ' ' : '') + gameStatus())}</div>
+    <div class="focus-actions">
+      <button type="button" id="new-game" class="primary">New game</button>
+      <button type="button" id="undo-game" ${g.history().length && !play.thinking ? '' : 'disabled'}>Take back</button>
+      <button type="button" id="board-flip" class="secondary" aria-label="Flip board">⇅</button>
+    </div>
+  </div>`;
   board = new BoardView($('#board', root), { onMove, askPromotion: choosePromotion, label: 'Practice board' });
   refreshBoard();
   $('#board-flip', root).onclick = () => board.set({ orientation: opposite(board.orientation) });
-  $('#play-colour', root).value = play.color;
-  $('#difficulty', root).onchange = e => {
+  $('#play-menu', root).onclick = openMenu;
+  $('#new-game', root).onclick = () => startNewGame(play.color);
+  $('#undo-game', root).onclick = takeBack;
+}
+
+async function startNewGame(colour) {
+  if (play.game.history().length && !play.game.isGameOver()) {
+    const ok = await confirmDialog({
+      title: 'Start a new game?',
+      body: 'The current game will be replaced. Export the PGN first if you want to keep it.',
+      confirm: 'New game',
+    });
+    if (!ok) return;
+  }
+  const c = colour === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : colour;
+  newGame({ color: c });
+  draw();
+  if (play.color === 'b') engineTurn();
+}
+
+/** Opponent, colour, coach, export and review live behind one button. */
+function openMenu() {
+  const level = app.state.strength;
+  const g = play.game;
+  const option = l => `<option value="${l.id}" ${l.id === level ? 'selected' : ''}>${esc(l.label)}</option>`;
+  showModal(`<h2>Game options</h2>
+    <div class="field"><label for="difficulty">Opponent</label><select id="difficulty">
+      <optgroup label="Human-like (Maia)">${LEVELS.filter(l => l.mode === 'maia')
+        .map(option)
+        .join('')}</optgroup>
+      <optgroup label="Stockfish">${LEVELS.filter(l => l.mode !== 'maia')
+        .map(option)
+        .join('')}</optgroup>
+    </select><small>${app.state.settings.autoLevel ? 'Adjusts to your results after five games at a level. Turn that off in Settings to pin one.' : 'Maia plays like people of that rating; Stockfish levels play engine moves with a strength limit.'}</small></div>
+    <div class="field"><label for="play-colour">Your colour</label><select id="play-colour"><option value="w">White</option><option value="b">Black</option><option value="r">Random</option></select></div>
+    <div class="checks"><label><input type="checkbox" id="coach" ${app.state.coach ? 'checked' : ''}> Coach: save my missed opportunities as exercises</label></div>
+    <div class="actions">
+      <button type="button" id="menu-new" class="primary">New game</button>
+      <button type="button" id="export-game" ${g.history().length ? '' : 'disabled'}>Export PGN</button>
+      <button type="button" id="review-game" ${g.history().length >= 6 ? '' : 'disabled'}>Review this game</button>
+    </div>`);
+  $('#play-colour').value = play.color;
+  $('#difficulty').onchange = e => {
     app.state.strength = e.target.value;
     app.save();
+    const line = $('.focus-progress', root);
+    if (line) line.textContent = `${shortLevel(app.state.strength)} · you play ${play.color === 'w' ? 'White' : 'Black'}`;
   };
-  $('#coach', root).onchange = e => {
+  $('#coach').onchange = e => {
     app.state.coach = e.target.checked;
     app.save();
   };
-  $('#new-game', root).onclick = async () => {
-    if (play.game.history().length && !play.game.isGameOver()) {
-      const ok = await confirmDialog({
-        title: 'Start a new game?',
-        body: 'The current game will be replaced. Export the PGN first if you want to keep it.',
-        confirm: 'New game',
-      });
-      if (!ok) return;
-    }
-    let c = $('#play-colour', root).value;
-    if (c === 'r') c = Math.random() < 0.5 ? 'w' : 'b';
-    newGame({ color: c });
-    draw();
-    if (play.color === 'b') engineTurn();
+  $('#menu-new').onclick = () => {
+    const c = $('#play-colour').value;
+    closeModal();
+    startNewGame(c);
   };
-  $('#undo-game', root).onclick = takeBack;
-  $('#export-game', root).onclick = () => download(`rankup-practice-${dateKey()}.pgn`, pgnWithHeaders(), 'application/x-chess-pgn');
-  $('#review-game', root).onclick = () => app.navigate('review', { pgn: pgnWithHeaders(), colour: play.color });
+  $('#export-game').onclick = () => download(`rankup-practice-${dateKey()}.pgn`, pgnWithHeaders(), 'application/x-chess-pgn');
+  $('#review-game').onclick = () => app.navigate('review', { pgn: pgnWithHeaders(), colour: play.color });
 }
 
 function pgnWithHeaders() {
@@ -210,6 +229,8 @@ function recordResult() {
       toast(play.note);
       const sel = $('#difficulty');
       if (sel) sel.value = next.level;
+      const line = $('.focus-progress', root);
+      if (line) line.textContent = `${shortLevel(next.level)} · you play ${play.color === 'w' ? 'White' : 'Black'}`;
     }
   }
   app.save();
@@ -235,7 +256,7 @@ function refreshBoard() {
   }
   const undo = $('#undo-game');
   if (undo) undo.disabled = !g.history().length || play.thinking;
-  for (const id of ['#export-game']) if ($(id)) $(id).disabled = !g.history().length;
+  if ($('#export-game')) $('#export-game').disabled = !g.history().length;
   if ($('#review-game')) $('#review-game').disabled = g.history().length < 6;
 }
 

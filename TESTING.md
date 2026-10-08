@@ -31,6 +31,7 @@
 - The Coach page with seeded mistakes: diagnosis, plan, trends, and a personal lesson including an engine-approved alternative move.
 - Endgame drills played against Stockfish, a lost drill being recorded, visualisation and find every check.
 - A review with clock data and an opening, and the per-opening table.
+- The viewer opening at the first mistake with the answer hidden, Show answer, and solving a mistake in place, which records the attempt and clears the drill step.
 - A linked account synced against a mocked Lichess response: the game is queued, reviewed in the background from its Lichess evaluations, and becomes the next step; a second sync queues nothing; the next-step strip; the opponent ladder moving up after five wins.
 
 `npm run typecheck` type-checks `src/` with TypeScript in `checkJs` mode.

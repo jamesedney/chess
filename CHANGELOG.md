@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.3.0
+
+- Practice game rebuilt in the board-first layout: the board, a one-line move record, a status line and three buttons. Opponent, colour, coach, export and review live behind one Options button.
+- Every page lost its slogan and subtitle. Page titles are one word, the sidebar keeps only the puzzle-rating line, and the games page drops its how-to blurb.
+- Vision sprint: a three-second countdown before the clock starts, a large clock next to the board title that turns red in the last ten seconds, and a draining time bar under the board.
+
 ## 2.2.0
 
 - Game review rebuilt around the board. The page shows the board, the move controls, one line of feedback and a Next mistake button; the evaluation graph, move list and game details fold away under "Graph, moves and details".

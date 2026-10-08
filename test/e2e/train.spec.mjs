@@ -5,18 +5,18 @@ import { test, expect, move, open, sq } from './helpers.mjs';
 test('every page loads without errors', async ({ page }) => {
   await open(page);
   await expect(page.locator('#board .square')).toHaveCount(64);
-  for (const [name, heading] of [
-    ['path', 'Build the habits'],
-    ['play', 'Make the thinking'],
-    ['review', 'Turn a loss'],
-    ['progress', 'Your progress'],
+  for (const [name, selector, text] of [
+    ['path', 'h1', 'Lessons'],
+    ['play', '#board-title', 'Practice game'],
+    ['review', 'h1', 'Your games'],
+    ['progress', 'h1', 'Progress'],
   ]) {
     await page.click(`nav a[data-page="${name}"]`);
-    await expect(page.locator('h1')).toContainText(heading);
+    await expect(page.locator(selector)).toContainText(text);
     await expect(page.locator(`nav a[data-page="${name}"]`)).toHaveAttribute('aria-current', 'page');
   }
   await page.goBack();
-  await expect(page.locator('h1')).toContainText('Turn a loss');
+  await expect(page.locator('h1')).toContainText('Your games');
 });
 
 test('solving a puzzle cleanly updates the rating and reveals its tags', async ({ page }) => {
@@ -60,8 +60,7 @@ test('hints escalate and the solution plays out', async ({ page }) => {
   await expect(page.locator('#feedback')).toContainText('Study this line');
   await expect(page.locator('#play-out')).toBeVisible();
   await page.click('#play-out');
-  await expect(page.locator('h1')).toContainText('Make the thinking');
-  await expect(page.locator('.board-top')).toContainText('From:');
+  await expect(page.locator('#board-title')).toContainText('From:');
 });
 
 test('generated puzzles start with the opponent’s move', async ({ page }) => {
@@ -81,6 +80,10 @@ test('vision sprint scores a correct capture', async ({ page }) => {
   await page.click('#train-menu');
   await page.click('#modal [data-mode="vision"]');
   await page.click('#sprint-start');
+  // A three-second countdown, then the clock runs.
+  await expect(page.locator('#sprint-count')).toHaveText('3');
+  await expect(page.locator('#sprint-time')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('#sprint-time')).toHaveText(/^0:5\d$/);
   const fen = await page.locator('#board').getAttribute('data-fen');
   const [target] = hangingPieces(Chess, fen, { minValue: 3 }).filter(h => h.gain >= 3);
   const g = new Chess(fen);

@@ -56,11 +56,7 @@ export function leave() {
 function drawList() {
   const nextUp = lessons.find(l => !progressOf(l).done);
   root.innerHTML =
-    pageHead(
-      'YOUR LEARNING PATH',
-      'Build the habits behind 1500.',
-      'Short lessons you play on the board. Every step asks you to find, tap or decide something.',
-    ) +
+    pageHead('', 'Lessons') +
     [PERSONAL_SECTION, ...SECTIONS]
       .map(section => {
         const items = allLessons().filter(l => l.section === section);

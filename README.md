@@ -29,6 +29,7 @@ It is built for improving players, roughly 600 to 1600, who want a daily routine
 ### Playing and review
 - **Human-like opponents.** Maia networks at about 1100, 1500 and 1900, trained on millions of human games, run on your device and make the mistakes people make. Stockfish levels are there too, up to full strength.
 - **Your games become the curriculum.** Fetch recent games from Lichess or Chess.com by username, or paste a PGN. The reviewer marks inaccuracies, mistakes and blunders, explains them and saves the important moments as exercises.
+- **A board-first game viewer.** Step through the game with an evaluation bar, and at each mistake find the better move yourself before it is shown. The graph, move list and details fold away.
 - **Richer review.** Each game is matched to its named opening, and a table shows your results and mistakes per opening. Clock data shows how long you spent on each move and flags critical moves played too fast. While the engine is idle, marked moves are re-checked with a much deeper search: wrong suggestions are corrected, and false alarms are cleared.
 
 ### Everything else

@@ -142,7 +142,10 @@ export function render(main, params = {}) {
 
 export function leave() {
   // A sprint cannot pause: leaving the page abandons it.
-  if (vision?.phase === 'running') vision = { phase: 'ready', score: 0, misses: 0 };
+  if (vision?.phase === 'running' || vision?.phase === 'countdown') {
+    stopVisionTimer();
+    vision = { phase: 'ready', score: 0, misses: 0 };
+  }
   stopVisionTimer();
 }
 
@@ -606,17 +609,26 @@ function drawVision(body) {
   const v = vision;
   const best = app.state.vision.best;
   body.innerHTML = `
-    <div class="focus-prompt"><strong id="board-title">Find the free piece</strong><span class="chip" id="board-chip"></span></div>
+    <div class="focus-prompt"><strong id="board-title">${v.phase === 'countdown' ? 'Get ready' : 'Find the free piece'}</strong>${
+      v.phase === 'running'
+        ? `<span class="chip sprint-clock" id="sprint-time" role="timer" aria-live="off">${clockText(SPRINT_MS)}</span>`
+        : v.phase === 'countdown'
+          ? `<span class="chip sprint-clock" id="sprint-count" role="timer" aria-live="polite">${v.count}</span>`
+          : '<span class="chip" id="board-chip"></span>'
+    }</div>
     <div class="focus-board"><div id="board"></div></div>
     ${
       v.phase === 'running'
-        ? `<div class="sprint"><div><small>Time</small><strong id="sprint-time">60</strong></div><div><small>Found</small><strong id="sprint-score">${v.score}</strong></div></div>
+        ? `<div class="sprint-bar" aria-hidden="true"><span id="sprint-fill"></span></div>
+           <div class="sprint"><div><small>Time left</small><strong id="sprint-left">${clockText(SPRINT_MS)}</strong></div><div><small>Found</small><strong id="sprint-score">${v.score}</strong></div></div>
            <div id="feedback" class="status" role="status" aria-live="polite">Capture the one enemy piece that is free to take.</div>`
-        : `<div class="status" role="status">${
-            v.phase === 'done'
-              ? `${plural(v.score, 'piece')} found. ${v.score >= best && v.score > 0 ? 'A new best score.' : `Your best is ${best}.`}`
-              : 'One minute. Each position has exactly one enemy piece you can take for free. Find it and capture it. A wrong move costs three seconds.'
-          }</div>
+        : v.phase === 'countdown'
+          ? `<div id="feedback" class="status" role="status" aria-live="polite">Starting in ${v.count}… Each position has one enemy piece free to take.</div>`
+          : `<div class="status" role="status">${
+              v.phase === 'done'
+                ? `${plural(v.score, 'piece')} found. ${v.score >= best && v.score > 0 ? 'A new best score.' : `Your best is ${best}.`}`
+                : 'One minute. Each position has exactly one enemy piece you can take for free. Find it and capture it. A wrong move costs three seconds.'
+            }</div>
            <div class="focus-actions"><span class="small">Best ${best} · ${plural(app.state.vision.runs, 'sprint')}</span><button type="button" class="primary" id="sprint-start">${v.phase === 'done' ? 'Go again' : 'Start sprint'}</button></div>`
     }`;
   board = new BoardView($('#board', body), { onMove: visionMove, askPromotion: async () => 'q', label: 'Vision sprint board' });
@@ -625,10 +637,39 @@ function drawVision(body) {
   else board.set({ game: new Chess(), interactive: false });
 }
 
+/** "0:47" for a number of milliseconds. */
+function clockText(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** Three, two, one, then the sprint begins. */
 function startSprint() {
+  stopVisionTimer();
+  vision = { phase: 'countdown', count: 3, score: 0, misses: 0, timer: null };
+  draw();
+  vision.timer = setInterval(() => {
+    const v = vision;
+    if (!v || v.phase !== 'countdown') return stopVisionTimer();
+    v.count--;
+    if (v.count > 0) {
+      const chip = $('#sprint-count');
+      if (chip) chip.textContent = String(v.count);
+      const fb = $('#feedback');
+      if (fb) fb.textContent = `Starting in ${v.count}… Each position has one enemy piece free to take.`;
+      cue('move');
+      return;
+    }
+    stopVisionTimer();
+    beginSprint();
+  }, 1000);
+}
+
+function beginSprint() {
   vision = { phase: 'running', score: 0, misses: 0, endsAt: Date.now() + SPRINT_MS, drill: null, timer: null, locked: false };
   vision.drill = makeVisionDrill(visionSeeds());
   draw();
+  cue('success');
   vision.timer = setInterval(tickSprint, 200);
   tickSprint();
 }
@@ -642,8 +683,14 @@ function showDrill(marks = {}) {
 
 function tickSprint() {
   const left = Math.max(0, vision.endsAt - Date.now());
-  const t = $('#sprint-time');
-  if (t) t.textContent = Math.ceil(left / 1000);
+  const text = clockText(left);
+  for (const id of ['#sprint-time', '#sprint-left']) {
+    const el = $(id);
+    if (el && el.textContent !== text) el.textContent = text;
+  }
+  const fill = $('#sprint-fill');
+  if (fill) fill.style.width = `${(left / SPRINT_MS) * 100}%`;
+  $('#sprint-time')?.classList.toggle('urgent', left <= 10000);
   if (left <= 0) endSprint();
 }
 

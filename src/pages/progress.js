@@ -23,11 +23,7 @@ export function render(main) {
   const realPoints = s.ratings.filter(r => r.platform === platform).map(r => ({ date: r.date, value: r.rating }));
 
   main.innerHTML =
-    pageHead(
-      'THE WORK ADDS UP',
-      'Your progress, honestly measured.',
-      'Puzzle rating tracks training. Your rated games measure playing strength.',
-    ) +
+    pageHead('', 'Progress') +
     `<div class="stat-row four">
       <div class="stat"><small>Puzzle rating</small><strong>${s.puzzle.rating}</strong>${weekDelta !== null ? `<span class="delta ${weekDelta >= 0 ? 'up' : 'down'}">${weekDelta >= 0 ? '▲' : '▼'} ${Math.abs(weekDelta)} in 7 days</span>` : `<span class="small">${plural(s.puzzle.count, 'rated puzzle')}</span>`}</div>
       <div class="stat"><small>Current streak</small><strong>${plural(streak.current, 'day')}</strong><span class="small">Best ${plural(streak.best, 'day')}</span></div>

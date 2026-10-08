@@ -23,11 +23,7 @@ export function render(main) {
     .slice(0, 4);
 
   main.innerHTML =
-    pageHead(
-      'YOUR COACH',
-      'What to work on, and why.',
-      'Built from your own games and training. The more you review, the sharper it gets.',
-    ) +
+    pageHead('', 'Coach') +
     `<div class="two-col">
       <section class="panel" aria-labelledby="plan-title">
         <div class="eyebrow">WEEK OF ${esc(formatDate(s.plan.week).toUpperCase())}</div>
