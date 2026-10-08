@@ -77,11 +77,15 @@ test('a second sync does not queue the same game again', async ({ page }) => {
   await seed(page);
   await open(page, 'train');
   await page.click('#settings');
+  // Two manual checks on top of the automatic one at startup: the game is counted once.
   await page.click('#sync-now');
-  await expect(page.locator('#toast')).toContainText('1 new game queued', { timeout: 20000 });
+  await expect(page.locator('#toast')).toContainText(/queued|No new games|reviewed/, { timeout: 20000 });
   await page.waitForTimeout(600);
   await page.click('#sync-now');
-  await expect(page.locator('#toast')).toContainText('No new games', { timeout: 20000 });
+  await expect(page.locator('#toast')).toContainText(/No new games|reviewed/, { timeout: 20000 });
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')));
+  expect(saved.sync.today.n).toBe(1);
+  expect(saved.sync.seen).toEqual(['lichess.org/sync0001']);
 });
 
 test('the training page always shows the next step, and the session complete screen leads to it', async ({ page }) => {
