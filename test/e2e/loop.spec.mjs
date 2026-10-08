@@ -55,7 +55,9 @@ test('a linked account is synced, the game is reviewed in the background, and th
 });
 
 test('the review-ready notification opens the game, even from behind the Settings dialog', async ({ page }) => {
-  await page.route('https://lichess.org/api/games/user/**', route => route.fulfill({ status: 200, contentType: 'application/x-chess-pgn', body: LICHESS_PGN }));
+  await page.route('https://lichess.org/api/games/user/**', route =>
+    route.fulfill({ status: 200, contentType: 'application/x-chess-pgn', body: LICHESS_PGN }),
+  );
   await seed(page);
   await open(page, 'train');
   await page.click('#settings');
