@@ -50,6 +50,22 @@ test('a username is all it takes: rating, goal, level and today’s plan', async
   await expect(page.locator('#main')).toContainText('Endgames');
 });
 
+test('choosing blitz at setup makes the goal follow blitz, and it can be changed later', async ({ page }) => {
+  await mockLichess(page);
+  await page.goto('./');
+  await page.fill('#setup-name', 'me');
+  await page.click('[data-perf="blitz"]');
+  await expect(page.locator('#setup-name')).toHaveValue('me');
+  await page.click('#setup-form button[type="submit"]');
+  await expect(page.locator('.goal-card')).toContainText('Lichess blitz');
+  await expect(page.locator('.goal-card')).toContainText('1050');
+  expect((await saved(page)).settings.perf).toBe('blitz');
+  // Switch to rapid from Today.
+  await page.selectOption('#follow-perf', 'rapid');
+  await expect(page.locator('.goal-card')).toContainText('Lichess rapid');
+  await expect(page.locator('.goal-card')).toContainText('1180');
+});
+
 test('an unknown username explains itself, and the no-account path picks a level', async ({ page }) => {
   await mockLichess(page, { status: 404 });
   await page.goto('./#today');

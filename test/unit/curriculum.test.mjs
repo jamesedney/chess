@@ -78,6 +78,15 @@ test('goal: next target, deadline from pace, and trend slope', () => {
   );
 });
 
+test('goal: a new goal is on track on day one, whatever the rating and time', () => {
+  for (let rating = 400; rating <= 2400; rating += 37)
+    for (const minutes of [10, 20, 30, 45, 60]) {
+      const goal = makeGoal({ perf: 'X', rating, minutes, now: NOW });
+      const p = projection(goal, [{ date: day(0), rating }], NOW);
+      assert.equal(p.status, 'on-track', `${rating} at ${minutes} min: projected ${p.projected} for ${goal.target}`);
+    }
+});
+
 test('goal: the projection ignores history from before the plan started', () => {
   const goal = makeGoal({ perf: 'X', rating: 1180, now: NOW });
   // Rating fell before the plan; that must not count against it.
@@ -100,9 +109,15 @@ test('goal: the projection ignores history from before the plan started', () => 
 });
 
 test('ratings: main time control, merging and platform readers', async () => {
-  assert.equal(mainPerf({ rapid: 12, blitz: 300 }), 'rapid');
-  assert.equal(mainPerf({ rapid: 3, blitz: 30 }), 'blitz');
+  // Auto follows what you play most; rapid wins a tie.
+  assert.equal(mainPerf({ rapid: 12, blitz: 300 }), 'blitz');
+  assert.equal(mainPerf({ rapid: 30, blitz: 30 }), 'rapid');
+  assert.equal(mainPerf({ bullet: 900, blitz: 5 }), 'blitz', 'bullet only when chosen');
   assert.equal(mainPerf({}), null);
+  // A chosen time control wins when there are games in it.
+  assert.equal(mainPerf({ rapid: 300, blitz: 12 }, 'blitz'), 'blitz');
+  assert.equal(mainPerf({ rapid: 300, bullet: 40 }, 'bullet'), 'bullet');
+  assert.equal(mainPerf({ rapid: 300 }, 'blitz'), 'rapid', 'falls back when none');
 
   const log = [];
   assert.equal(mergeRatings(log, { perf: 'Lichess rapid', rating: 1200, history: [{ date: day(-5), rating: 1190 }] }, day(0)), 2);
@@ -128,6 +143,9 @@ test('ratings: main time control, merging and platform readers', async () => {
       : json({ perfs: { rapid: { rating: 1180, games: 140 }, blitz: { rating: 1050, games: 30 } } });
   const r = await lichessRatings('me', lichess, NOW.getTime());
   assert.equal(r.perf, 'Lichess rapid');
+  const b = await lichessRatings('me', lichess, NOW.getTime(), 'blitz');
+  assert.equal(b.perf, 'Lichess blitz');
+  assert.equal(b.rating, 1050);
   assert.equal(r.rating, 1180);
   assert.deepEqual(r.history, [{ date: '2026-09-01', rating: 1160 }]);
   await assert.rejects(
@@ -313,6 +331,26 @@ test('goal model: created from the puzzle rating, switches to a real one, and mo
   assert.equal(s.milestones.length, 1);
   assert.equal(s.target.target, 1600);
   assert.equal(s.target.start.rating, 1402);
+});
+
+test('goal model: choosing another time control moves the goal to it', () => {
+  const s = fresh();
+  s.ratings.push({ platform: 'Lichess rapid', rating: 1180, date: day(0) });
+  s.sync.followed = ['Lichess rapid'];
+  updateGoal(s, NOW);
+  assert.equal(s.target.perf, 'Lichess rapid');
+  // The next sync fetched blitz because blitz was chosen.
+  s.ratings.push({ platform: 'Lichess blitz', rating: 1050, date: day(0) });
+  s.sync.followed = ['Lichess blitz'];
+  updateGoal(s, NOW);
+  assert.equal(s.target.perf, 'Lichess blitz');
+  assert.equal(s.target.start.rating, 1050);
+  assert.equal(s.target.target, 1200);
+  assert.equal(goalStatus(s, NOW).current, 1050);
+  // Back to rapid.
+  s.sync.followed = ['Lichess rapid'];
+  updateGoal(s, NOW);
+  assert.equal(s.target.perf, 'Lichess rapid');
 });
 
 test('state v6: new fields default, migrate and validate', () => {

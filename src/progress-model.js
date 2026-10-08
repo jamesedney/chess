@@ -26,15 +26,20 @@ export function goalStatus(state, now = new Date()) {
  * milestone object when one was just reached, else null.
  */
 export function updateGoal(state, now = new Date()) {
-  const latestReal = state.ratings.at(-1);
+  // Follow the ratings the last sync fetched (your chosen time control), or any
+  // real rating when none was fetched yet.
+  const followed = state.sync?.followed || [];
+  const matches = r => !followed.length || followed.includes(r.platform);
+  const latestReal = state.ratings.filter(matches).at(-1) || null;
   if (!state.target) {
     const perf = latestReal ? latestReal.platform : PUZZLE_PERF;
     const rating = latestReal ? latestReal.rating : state.puzzle.rating;
     state.target = makeGoal({ perf, rating, minutes: state.minutes || 20, now });
     return null;
   }
-  // A real rating arrived after a puzzle-rating goal was set: switch to the real one.
-  if (state.target.perf === PUZZLE_PERF && latestReal) {
+  // A real rating arrived after a puzzle-rating goal was set, or you chose a
+  // different time control: switch the goal to that rating.
+  if (latestReal && (state.target.perf === PUZZLE_PERF || !matches({ platform: state.target.perf }))) {
     state.target = makeGoal({ perf: latestReal.platform, rating: latestReal.rating, minutes: state.target.minutes, now });
     return null;
   }

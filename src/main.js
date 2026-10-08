@@ -17,12 +17,13 @@ import { activeBlock, continueSession, pauseSession, checkSession, todaysSession
 import { blockDone } from './program.js';
 import { refreshMastery } from './curriculum.js';
 import { syncRatings } from './rating-sync.js';
+import { RATING_PERFS } from './ratings.js';
 import { goalStatus, PUZZLE_PERF } from './progress-model.js';
 import { scheduleDeepAnalysis } from './deep.js';
 import { startAutoSync, syncNow } from './queue.js';
 import { CONTROLS } from './sync.js';
 
-export const VERSION = '3.0.0';
+export const VERSION = '3.0.1';
 const PAGES = { today, train, coach, path, play, review, progress, drills };
 // Pages without their own tab light up the tab they belong to.
 const NAV_AS = { train: 'today', drills: 'today', coach: 'progress' };
@@ -215,6 +216,7 @@ function openSettings() {
     <fieldset class="field"><legend>Your online games</legend>
       <label for="lichess-name">Lichess username</label><input id="lichess-name" maxlength="40" spellcheck="false" autocomplete="off" value="${esc(s.profiles.lichess)}">
       <label for="chesscom-name">Chess.com username</label><input id="chesscom-name" maxlength="40" spellcheck="false" autocomplete="off" value="${esc(s.profiles.chesscom)}">
+      <label for="settings-perf">Rating your goal follows</label><select id="settings-perf">${['auto', ...RATING_PERFS].map(p => `<option value="${p}" ${s.settings.perf === p ? 'selected' : ''}>${p === 'auto' ? 'Auto: the one you play most' : p[0].toUpperCase() + p.slice(1)}</option>`).join('')}</select>
       <div class="checks">
         <label><input type="checkbox" id="sync-auto" ${s.sync.auto ? 'checked' : ''}> Import and review my new games automatically</label>
         <label><input type="checkbox" id="sync-rated" ${s.sync.ratedOnly ? 'checked' : ''}> Rated games only</label>
@@ -305,6 +307,7 @@ function openSettings() {
     s.sync.dailyCap = Number(e.target.value);
     app.save();
   };
+  $('#settings-perf').onchange = e => today.followPerf(e.target.value);
   $('#auto-level').onchange = e => {
     s.settings.autoLevel = e.target.checked;
     app.save();

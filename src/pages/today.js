@@ -6,12 +6,35 @@ import { todaysSession, startBlock, sessionProgress, checkSession } from '../ses
 import { goalStatus, updateGoal, PUZZLE_PERF } from '../progress-model.js';
 import { pathSummary, place, unitById, unitStatus } from '../curriculum.js';
 import { syncRatings } from '../rating-sync.js';
+import { RATING_PERFS } from '../ratings.js';
 import { syncNow } from '../queue.js';
 import { dateKey, streaks } from '../state.js';
 import { STAGES } from '../themes.js';
 
 let root = null;
-let setup = { step: 'account', site: 'lichess', busy: false, error: '' };
+let setup = { step: 'account', site: 'lichess', name: '', busy: false, error: '' };
+
+const PERF_LABEL = p => (p === 'auto' ? 'Auto' : p[0].toUpperCase() + p.slice(1));
+const perfOptions = current =>
+  ['auto', ...RATING_PERFS].map(p => `<option value="${p}" ${current === p ? 'selected' : ''}>${PERF_LABEL(p)}</option>`).join('');
+
+/**
+ * Follow a different time control: refetch ratings and move the goal to it.
+ * Says so when the account has no games in it.
+ */
+export async function followPerf(perf) {
+  const s = app.state;
+  s.settings.perf = perf;
+  app.save();
+  if (!s.profiles.lichess && !s.profiles.chesscom) return;
+  await syncRatings({ force: true });
+  const followed = s.sync.followed || [];
+  if (perf !== 'auto' && followed.length && !followed.some(p => p.endsWith(` ${perf}`)))
+    toast(`No ${perf} games on your account yet, so the goal follows ${followed[0]}.`);
+  else if (s.target) toast(`Your goal now follows ${s.target.perf}.`);
+  s.session = null;
+  refresh();
+}
 
 const LEVELS = [
   { label: 'Just learning', detail: 'I know how the pieces move', rating: 600 },
@@ -53,7 +76,15 @@ function drawSetup() {
               <button type="button" data-site="lichess" class="${setup.site === 'lichess' ? 'active' : ''}" aria-pressed="${setup.site === 'lichess'}">Lichess</button>
               <button type="button" data-site="chesscom" class="${setup.site === 'chesscom' ? 'active' : ''}" aria-pressed="${setup.site === 'chesscom'}">Chess.com</button>
             </div>
-            <div class="field"><label for="setup-name">Username</label><input id="setup-name" autocomplete="username" spellcheck="false" maxlength="40" placeholder="Your username"></div>
+            <div class="field"><label for="setup-name">Username</label><input id="setup-name" autocomplete="username" spellcheck="false" maxlength="40" placeholder="Your username" value="${esc(setup.name)}"></div>
+            <div class="field"><span class="field-label" id="perf-label">Time control</span>
+              <div class="segmented" role="group" aria-labelledby="perf-label">${['auto', ...RATING_PERFS]
+                .map(
+                  p =>
+                    `<button type="button" data-perf="${p}" class="${app.state.settings.perf === p ? 'active' : ''}" aria-pressed="${app.state.settings.perf === p}">${PERF_LABEL(p)}</button>`,
+                )
+                .join('')}</div>
+            </div>
             ${setup.error ? `<p class="status error">${esc(setup.error)}</p>` : ''}
             <button type="submit" class="primary big" ${setup.busy ? 'disabled' : ''}>${setup.busy ? 'Reading your games…' : 'Start'}</button>
             <p class="small">Only your public profile is read. Nothing leaves your device.</p>
@@ -67,10 +98,19 @@ function drawSetup() {
           <p class="center"><button type="button" class="link" id="back-account">Link an account instead</button></p>`
     }
   </div>`;
+  $('#setup-name', root)?.addEventListener('input', e => (setup.name = e.target.value));
   root.querySelectorAll('[data-site]').forEach(
     b =>
       (b.onclick = () => {
         setup.site = b.dataset.site;
+        drawSetup();
+      }),
+  );
+  root.querySelectorAll('[data-perf]').forEach(
+    b =>
+      (b.onclick = () => {
+        app.state.settings.perf = b.dataset.perf;
+        app.save();
         drawSetup();
       }),
   );
@@ -183,6 +223,7 @@ function draw() {
     <div class="today-foot small">
       <label for="minutes">Daily time</label>
       <select id="minutes">${[10, 20, 30, 45, 60].map(m => `<option value="${m}" ${s.minutes === m ? 'selected' : ''}>${m} min</option>`).join('')}</select>
+      ${s.profiles.lichess || s.profiles.chesscom ? `<span>·</span><label for="follow-perf">Rating</label><select id="follow-perf">${perfOptions(s.settings.perf)}</select>` : ''}
       <span>·</span><a href="#path">Your path</a><span>·</span><a href="#coach">Coach</a>
     </div>
   </div>`;
@@ -194,6 +235,7 @@ function draw() {
     toast('Here is another session.');
     draw();
   });
+  $('#follow-perf', root)?.addEventListener('change', e => followPerf(e.target.value));
   $('#minutes', root).onchange = e => {
     s.minutes = Number(e.target.value);
     if (s.target) s.target.minutes = s.minutes;

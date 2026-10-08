@@ -2956,3 +2956,19 @@ button.big {
   margin-left: 6px;
   letter-spacing: 0;
 }
+
+.field-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.field .segmented {
+  justify-self: start;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.field .segmented button {
+  padding: 7px 12px;
+  font-size: 14px;
+}

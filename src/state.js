@@ -8,6 +8,7 @@ import { LEVELS, DEFAULT_LEVEL } from './strength.js';
 import { KIND_IDS, kindFromExplanation } from './mistake-kinds.js';
 import { BOARD_THEMES, PIECE_SETS, DEFAULT_APPEARANCE } from './appearance.js';
 import { DEFAULT_SYNC, CONTROLS } from './sync.js';
+import { RATING_PERFS } from './ratings.js';
 import { SKILLS } from '../data/curriculum.js';
 
 export const STORAGE_KEY = 'rankup-v1'; // Kept for continuity; the version lives inside.
@@ -40,7 +41,7 @@ export function defaults() {
     plan: null, // this week's plan; see plan.js
     endgames: {}, // drill id -> { tries, wins, best }
     calc: { visual: emptyDrillStats(), checks: emptyDrillStats(), assess: emptyDrillStats() },
-    settings: { ...DEFAULT_APPEARANCE, sound: true, haptics: true, autoLevel: true, candidates: false },
+    settings: { ...DEFAULT_APPEARANCE, sound: true, haptics: true, autoLevel: true, candidates: false, perf: 'auto' },
     // Added in version 4.
     sync: DEFAULT_SYNC(), // automatic import of your online games
     games: [], // finished practice games: { d: date, level, r: 1 win | 0.5 draw | 0 loss }
@@ -250,6 +251,7 @@ export function validate(s) {
   if (!st || !BOARD_THEMES[st.board] || !PIECE_SETS[st.pieces] || typeof st.sound !== 'boolean' || typeof st.haptics !== 'boolean')
     return 'settings';
   if (typeof st.autoLevel !== 'boolean' || typeof st.candidates !== 'boolean') return 'settings';
+  if (!['auto', ...RATING_PERFS].includes(st.perf)) return 'settings';
   if (!s.candidates || !finite(s.candidates.asked, 0) || !finite(s.candidates.hit, 0) || !Array.isArray(s.candidates.last))
     return 'candidates';
   if (typeof s.onboarded !== 'boolean' || ![10, 20, 30, 45, 60].includes(s.minutes)) return 'onboarding';

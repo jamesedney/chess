@@ -26,7 +26,8 @@ export function nextTarget(rating) {
 export function makeGoal({ perf, rating, minutes = 20, now = new Date() }) {
   const target = nextTarget(rating);
   const months = (target - rating) / paceFor(rating, minutes);
-  const by = new Date(now.getTime() + Math.round((months * 30.4) / 7) * 7 * DAY);
+  // Whole weeks, rounded up, so the expected pace reaches the target in time.
+  const by = new Date(now.getTime() + Math.max(1, Math.ceil((months * 30.4) / 7)) * 7 * DAY);
   return { perf, start: { rating, date: dateKey(now) }, target, by: dateKey(by), minutes };
 }
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.0.1
+
+- Choose which rating your goal follows: Auto, Bullet, Blitz, Rapid or Classical. Pick it at setup, from Rating on Today, or in Settings; the goal moves to that rating straight away. Auto now follows the time control you play most (it used to prefer rapid whenever you had ten rapid games).
+- Fixed: a brand-new goal could say it was a week behind, because its deadline was rounded down to whole weeks.
+- The setup screen keeps your username when you switch between Lichess and Chess.com.
+
+
 ## 3.0.0
 
 Rankup now plans everything. Enter a username and it sets your goal, places you on a curriculum and builds each day's session.

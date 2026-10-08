@@ -1,29 +1,34 @@
 // Read your real ratings from Lichess and Chess.com, so the goal tracks itself.
 // Public endpoints only; nothing needs a login.
 
-const PERFS = ['rapid', 'blitz', 'classical'];
+/** Time controls a goal can follow. */
+export const RATING_PERFS = ['bullet', 'blitz', 'rapid', 'classical'];
+const AUTO = ['rapid', 'blitz', 'classical'];
 const CAP = s => s[0].toUpperCase() + s.slice(1);
 
-/** The time control you play most among rapid, blitz and classical, preferring rapid. */
-export function mainPerf(counts) {
-  const ranked = PERFS.filter(p => counts[p] > 0).sort((a, b) => counts[b] - counts[a]);
-  if (!ranked.length) return null;
-  if (counts.rapid >= 10) return 'rapid';
-  return ranked[0];
+/**
+ * The time control to follow. `prefer` (bullet, blitz, rapid, classical) wins
+ * when the account has games in it; otherwise the one you play most among
+ * rapid, blitz and classical, rapid winning ties.
+ */
+export function mainPerf(counts, prefer = 'auto') {
+  if (prefer !== 'auto' && counts[prefer] > 0) return prefer;
+  const ranked = AUTO.filter(p => counts[p] > 0).sort((a, b) => counts[b] - counts[a] || (a === 'rapid' ? -1 : b === 'rapid' ? 1 : 0));
+  return ranked[0] || null;
 }
 
 /**
  * Lichess: current ratings and up to 180 days of history for the main time
  * control. Returns { perf: 'Lichess rapid', rating, history: [{ date, rating }] }.
  */
-export async function lichessRatings(username, fetchImpl = fetch, now = Date.now()) {
+export async function lichessRatings(username, fetchImpl = fetch, now = Date.now(), prefer = 'auto') {
   const res = await fetchImpl(`https://lichess.org/api/user/${encodeURIComponent(username)}`, { headers: { Accept: 'application/json' } });
   if (res.status === 404) throw new Error(`No Lichess account called ${username}.`);
   if (!res.ok) throw new Error(`Lichess returned an error (${res.status}).`);
   const user = await res.json();
   const perfs = user.perfs || {};
-  const counts = Object.fromEntries(PERFS.map(p => [p, perfs[p]?.games || 0]));
-  const perf = mainPerf(counts);
+  const counts = Object.fromEntries(RATING_PERFS.map(p => [p, perfs[p]?.games || 0]));
+  const perf = mainPerf(counts, prefer);
   if (!perf) return null;
   const out = { perf: `Lichess ${perf}`, rating: perfs[perf].rating, history: [] };
   try {
@@ -47,7 +52,7 @@ export async function lichessRatings(username, fetchImpl = fetch, now = Date.now
 }
 
 /** Chess.com: current rating for the main time control (no history in the public API). */
-export async function chessComRatings(username, fetchImpl = fetch) {
+export async function chessComRatings(username, fetchImpl = fetch, prefer = 'auto') {
   const res = await fetchImpl(`https://api.chess.com/pub/player/${encodeURIComponent(username.toLowerCase())}/stats`);
   if (res.status === 404) throw new Error(`No Chess.com account called ${username}.`);
   if (!res.ok) throw new Error(`Chess.com returned an error (${res.status}).`);
@@ -57,8 +62,8 @@ export async function chessComRatings(username, fetchImpl = fetch) {
     const r = stats[key(p)]?.record;
     return r ? (r.win || 0) + (r.loss || 0) + (r.draw || 0) : 0;
   };
-  const counts = Object.fromEntries(['rapid', 'blitz'].map(p => [p, games(p)]));
-  const perf = mainPerf(counts);
+  const counts = Object.fromEntries(['bullet', 'blitz', 'rapid', 'classical'].map(p => [p, games(p)]));
+  const perf = mainPerf(counts, prefer);
   if (!perf) return null;
   return { perf: `Chess.com ${perf}`, rating: stats[key(perf)].last.rating, history: [] };
 }

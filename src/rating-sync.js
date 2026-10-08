@@ -19,9 +19,14 @@ export async function syncRatings({ force = false, fetchImpl = fetch, now = Date
   let changed = 0;
   const errors = [];
   const results = [];
-  if (names.lichess) results.push(lichessRatings(names.lichess, fetchImpl, now).catch(e => errors.push(e.message)));
-  if (names.chesscom) results.push(chessComRatings(names.chesscom, fetchImpl).catch(e => errors.push(e.message)));
-  for (const r of await Promise.all(results)) if (r && typeof r === 'object') changed += mergeRatings(s.ratings, r, dateKey(new Date(now)));
+  const prefer = s.settings.perf || 'auto';
+  if (names.lichess) results.push(lichessRatings(names.lichess, fetchImpl, now, prefer).catch(e => errors.push(e.message)));
+  if (names.chesscom) results.push(chessComRatings(names.chesscom, fetchImpl, prefer).catch(e => errors.push(e.message)));
+  const fetched = /** @type {{ perf: string, rating: number, history: { date: string, rating: number }[] }[]} */ (
+    (await Promise.all(results)).filter(r => r && typeof r === 'object')
+  );
+  for (const r of fetched) changed += mergeRatings(s.ratings, r, dateKey(new Date(now)));
+  if (fetched.length) s.sync.followed = fetched.map(r => r.perf);
   s.sync.ratingsAt = now;
   const milestone = updateGoal(s, new Date(now));
   app.save();
