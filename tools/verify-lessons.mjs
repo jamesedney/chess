@@ -13,7 +13,9 @@ const engine = await new UciEngine().init({ hash: 64 });
 const problems = [];
 const san = (fen, uci) => playUci(new Chess(fen), uci).san;
 
+const only = process.argv.includes('--lesson') ? process.argv[process.argv.indexOf('--lesson') + 1] : null;
 for (const lesson of lessons) {
+  if (only && lesson.id !== only) continue;
   for (const [i, step] of lesson.steps.entries()) {
     const where = `${lesson.id} step ${i + 1}`;
     if (step.kind === 'move' && step.mate) {

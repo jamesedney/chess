@@ -9,7 +9,7 @@ import { LEVELS, levelById, pickNoisyMove, adaptLevel } from '../strength.js';
 import { humanMove } from '../maia.js';
 import { isTrainableMistake, winPercentLoss } from '../evaluation.js';
 import { createMistake, deleteMistake } from '../mistakes.js';
-import { dateKey, logGame } from '../state.js';
+import { dateKey, logGame, logCandidates } from '../state.js';
 
 const SAVE_KEY = 'rankup-practice';
 let root = null;
@@ -26,6 +26,8 @@ const play = {
   lastMove: [],
   recorded: false,
   level: null,
+  candidates: [], // squares named before the move, when the habit is on
+  marking: false,
 };
 
 (function restore() {
@@ -110,8 +112,13 @@ function draw() {
     <div id="history" class="history small">${esc(moveRecord())}</div>
     <div id="play-status" class="status" role="status" aria-live="polite">${esc((play.note ? play.note + ' ' : '') + gameStatus())}</div>
     <div class="focus-actions">
-      <button type="button" id="new-game" class="primary">New game</button>
-      <button type="button" id="undo-game" ${g.history().length && !play.thinking ? '' : 'disabled'}>Take back</button>
+      ${
+        play.marking
+          ? '<button type="button" id="candidates-done" class="primary">Done</button>'
+          : `<button type="button" id="new-game" class="primary">New game</button>
+             ${app.state.settings.candidates ? `<button type="button" id="candidates" ${g.turn() === play.color && !g.isGameOver() && !play.thinking ? '' : 'disabled'}>Candidates</button>` : ''}
+             <button type="button" id="undo-game" ${g.history().length && !play.thinking ? '' : 'disabled'}>Take back</button>`
+      }
       <button type="button" id="board-flip" class="secondary" aria-label="Flip board">⇅</button>
     </div>
   </div>`;
@@ -119,8 +126,32 @@ function draw() {
   refreshBoard();
   $('#board-flip', root).onclick = () => board.set({ orientation: opposite(board.orientation) });
   $('#play-menu', root).onclick = openMenu;
-  $('#new-game', root).onclick = () => startNewGame(play.color);
-  $('#undo-game', root).onclick = takeBack;
+  $('#new-game', root)?.addEventListener('click', () => startNewGame(play.color));
+  $('#undo-game', root)?.addEventListener('click', takeBack);
+  $('#candidates', root)?.addEventListener('click', () => setMarking(true));
+  $('#candidates-done', root)?.addEventListener('click', () => setMarking(false));
+}
+
+/** Candidate moves: name up to three squares you are considering before you move. */
+function setMarking(on) {
+  play.marking = on;
+  draw();
+  status(
+    on
+      ? `Tap up to three squares you are thinking of moving to, then Done.${play.candidates.length ? ' Chosen: ' + play.candidates.join(', ') + '.' : ''}`
+      : play.candidates.length
+        ? `Candidates: ${play.candidates.join(', ')}. Now play your move.`
+        : gameStatus(),
+  );
+}
+
+function toggleCandidate(sq) {
+  if (!play.marking) return;
+  if (play.candidates.includes(sq)) play.candidates = play.candidates.filter(s => s !== sq);
+  else if (play.candidates.length < 3) play.candidates.push(sq);
+  else return status('Three candidates is enough. Tap one to remove it, or Done.');
+  refreshBoard();
+  status(`Candidates: ${play.candidates.join(', ') || 'none yet'}. Tap Done when ready.`);
 }
 
 async function startNewGame(colour) {
@@ -153,7 +184,10 @@ function openMenu() {
         .join('')}</optgroup>
     </select><small>${app.state.settings.autoLevel ? 'Adjusts to your results after five games at a level. Turn that off in Settings to pin one.' : 'Maia plays like people of that rating; Stockfish levels play engine moves with a strength limit.'}</small></div>
     <div class="field"><label for="play-colour">Your colour</label><select id="play-colour"><option value="w">White</option><option value="b">Black</option><option value="r">Random</option></select></div>
-    <div class="checks"><label><input type="checkbox" id="coach" ${app.state.coach ? 'checked' : ''}> Coach: save my missed opportunities as exercises</label></div>
+    <div class="checks">
+      <label><input type="checkbox" id="coach" ${app.state.coach ? 'checked' : ''}> Coach: save my missed opportunities as exercises</label>
+      <label><input type="checkbox" id="candidates-on" ${app.state.settings.candidates ? 'checked' : ''}> Candidate moves: name the squares I am considering before I move</label>
+    </div>
     <div class="actions">
       <button type="button" id="menu-new" class="primary">New game</button>
       <button type="button" id="export-game" ${g.history().length ? '' : 'disabled'}>Export PGN</button>
@@ -169,6 +203,13 @@ function openMenu() {
   $('#coach').onchange = e => {
     app.state.coach = e.target.checked;
     app.save();
+  };
+  $('#candidates-on').onchange = e => {
+    app.state.settings.candidates = e.target.checked;
+    play.candidates = [];
+    play.marking = false;
+    app.save();
+    draw();
   };
   $('#menu-new').onclick = () => {
     const c = $('#play-colour').value;
@@ -202,6 +243,8 @@ function newGame({ fen = null, color = 'w', from = null }) {
   play.note = '';
   play.lastMove = [];
   play.recorded = false;
+  play.candidates = [];
+  play.marking = false;
   play.level = fen ? null : app.state.strength; // games from a puzzle position do not count towards the ladder
   engine.newGame();
   persist();
@@ -240,12 +283,14 @@ function recordResult() {
 function refreshBoard() {
   if (!board || app.page !== 'play') return;
   const g = play.game;
+  board.onSquare = play.marking ? toggleCandidate : null;
   board.set({
     game: g,
     orientation: board.game ? board.orientation : play.color,
-    interactive: !play.thinking && g.turn() === play.color && !g.isGameOver(),
+    interactive: !play.marking && !play.thinking && g.turn() === play.color && !g.isGameOver(),
     movable: play.color,
     lastMove: play.lastMove,
+    marks: Object.fromEntries(play.candidates.map(sq => [sq, 'hint'])),
   });
   const chip = $('#board-chip');
   if (chip) chip.textContent = turnLabel(g);
@@ -288,13 +333,24 @@ async function onMove(move) {
   refreshBoard();
   try {
     let before = null;
-    if (app.state.coach) {
+    const named = play.candidates.slice();
+    if (app.state.coach || named.length) {
       status('Coach is checking the position…');
       before = await (play.prepared?.fen === fen ? play.prepared.promise : engine.analyse(fen, { nodes: BUDGET.coach }));
     }
     if (token !== play.token) return;
     const m = g.move(move);
     play.lastMove = [m.from, m.to];
+    play.candidates = [];
+    if (named.length && before?.best) {
+      const bestSan = playUci(new Chess(fen), before.best).san;
+      const hit = named.includes(before.best.slice(2, 4));
+      logCandidates(app.state, hit);
+      app.save();
+      play.note = hit
+        ? `The engine's best, ${bestSan}, was among your candidates.`
+        : `The engine preferred ${bestSan}, which was not among your candidates.`;
+    }
     persist();
     refreshBoard();
     board.announce(`You played ${m.san}.`);

@@ -11,7 +11,7 @@ import { DEFAULT_SYNC, CONTROLS } from './sync.js';
 
 export const STORAGE_KEY = 'rankup-v1'; // Kept for continuity; the version lives inside.
 export const RECOVERY_PREFIX = 'rankup-recovery-';
-export const CURRENT_VERSION = 4;
+export const CURRENT_VERSION = 5;
 export const MAX_GAMES = 50;
 export const MAX_REVIEWS = 20;
 export const MAX_LOG = 4000;
@@ -38,11 +38,13 @@ export function defaults() {
     log: [], // one row per finished exercise: { d: date, k: kind, t: theme or drill, c: 1 clean | 0 }
     plan: null, // this week's plan; see plan.js
     endgames: {}, // drill id -> { tries, wins, best }
-    calc: { visual: emptyDrillStats(), checks: emptyDrillStats() },
-    settings: { ...DEFAULT_APPEARANCE, sound: true, haptics: true, autoLevel: true },
+    calc: { visual: emptyDrillStats(), checks: emptyDrillStats(), assess: emptyDrillStats() },
+    settings: { ...DEFAULT_APPEARANCE, sound: true, haptics: true, autoLevel: true, candidates: false },
     // Added in version 4.
     sync: DEFAULT_SYNC(), // automatic import of your online games
     games: [], // finished practice games: { d: date, level, r: 1 win | 0.5 draw | 0 loss }
+    // Added in version 5.
+    candidates: { asked: 0, hit: 0, last: [] }, // candidate-move checks in practice games: { d, h: 1 | 0 }
   };
 }
 
@@ -101,6 +103,17 @@ export const MIGRATIONS = [
     from: 3,
     run(s) {
       return { ...s, settings: { ...s.settings, autoLevel: true }, sync: DEFAULT_SYNC(), games: [] };
+    },
+  },
+  {
+    from: 4,
+    run(s) {
+      return {
+        ...s,
+        settings: { ...s.settings, candidates: false },
+        calc: { ...s.calc, assess: emptyDrillStats() },
+        candidates: { asked: 0, hit: 0, last: [] },
+      };
     },
   },
 ];
@@ -182,11 +195,14 @@ export function validate(s) {
   if (s.plan !== null && (typeof s.plan !== 'object' || !isDate(s.plan.week) || !Array.isArray(s.plan.items))) return 'plan';
   if (!s.endgames || typeof s.endgames !== 'object') return 'endgames';
   for (const e of Object.values(s.endgames)) if (!finite(e?.tries, 0) || !finite(e?.wins, 0)) return 'endgame progress';
-  for (const k of ['visual', 'checks']) if (!s.calc?.[k] || !finite(s.calc[k].best, 0) || !finite(s.calc[k].runs, 0)) return 'calc';
+  for (const k of ['visual', 'checks', 'assess'])
+    if (!s.calc?.[k] || !finite(s.calc[k].best, 0) || !finite(s.calc[k].runs, 0)) return 'calc';
   const st = s.settings;
   if (!st || !BOARD_THEMES[st.board] || !PIECE_SETS[st.pieces] || typeof st.sound !== 'boolean' || typeof st.haptics !== 'boolean')
     return 'settings';
-  if (typeof st.autoLevel !== 'boolean') return 'settings';
+  if (typeof st.autoLevel !== 'boolean' || typeof st.candidates !== 'boolean') return 'settings';
+  if (!s.candidates || !finite(s.candidates.asked, 0) || !finite(s.candidates.hit, 0) || !Array.isArray(s.candidates.last))
+    return 'candidates';
   const sy = s.sync;
   if (!sy || typeof sy.auto !== 'boolean' || typeof sy.ratedOnly !== 'boolean' || !Array.isArray(sy.controls)) return 'sync';
   if (!sy.controls.every(c => CONTROLS.includes(c)) || !finite(sy.minMoves, 0, 60) || !finite(sy.dailyCap, 1, 50)) return 'sync';
@@ -233,6 +249,14 @@ export function logAttempt(state, { kind, theme, clean, date = dateKey() }) {
 }
 
 /** Record a finished practice game. */
+/** Record whether the engine's best move was among the candidates named before a move. */
+export function logCandidates(state, hit, date = dateKey()) {
+  state.candidates.asked++;
+  if (hit) state.candidates.hit++;
+  state.candidates.last.push({ d: date, h: hit ? 1 : 0 });
+  if (state.candidates.last.length > 100) state.candidates.last.splice(0, state.candidates.last.length - 100);
+}
+
 export function logGame(state, { level, result, date = dateKey() }) {
   state.games.push({ d: date, level, r: result });
   if (state.games.length > MAX_GAMES) state.games.splice(0, state.games.length - MAX_GAMES);

@@ -40,7 +40,7 @@ export const TAG_LESSON = {
   backRankMate: 'mating-net',
   promotion: 'promotion',
   'allowed-mate': 'out-of-check',
-  positional: 'calculate-reply',
+  positional: 'worst-piece',
   opening: 'opening-habits',
 };
 

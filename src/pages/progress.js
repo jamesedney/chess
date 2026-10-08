@@ -5,6 +5,7 @@ import { THEMES, PERSONAL } from '../themes.js';
 import { themeStats } from '../srs.js';
 import { dateKey, streaks } from '../state.js';
 import { lineChart, hydrateLineChart, activityGrid, barList } from '../charts.js';
+import { calibration } from '../assess.js';
 
 let platformFilter = null;
 
@@ -86,6 +87,15 @@ export function render(main) {
         <p class="footer-note">No training app can promise 1500. Combine these drills with thoughtful rated games and review.</p>
       </section>
     </div>
+    <section class="panel"><h2>Judgement</h2>
+      <p>${esc(calibration(s.calc.assess?.last || []).text)}</p>
+      <p class="small">${
+        s.candidates?.asked
+          ? `Candidate moves: the engine's best was among your candidates ${Math.round((s.candidates.hit / s.candidates.asked) * 100)}% of the time, over ${plural(s.candidates.asked, 'check')}.`
+          : 'Turn on candidate moves in a practice game’s options to measure how often the engine’s best move is among the moves you consider.'
+      }</p>
+      <div class="actions"><button type="button" id="go-assess">Assess the position</button></div>
+    </section>
     <section class="panel"><h2>Recent days</h2>${
       Object.keys(s.days).length
         ? Object.entries(s.days)
@@ -109,6 +119,7 @@ export function render(main) {
     platformFilter = e.target.value;
     render(main);
   });
+  $('#go-assess', main).onclick = () => app.navigate('drills', { drill: 'assess' });
   $('#train-weak', main).onclick = () => {
     const tried = THEMES.filter(t => s.themes[t]?.count >= 3);
     const weakest = tried.sort((a, b) => s.themes[a].rating - s.themes[b].rating)[0];

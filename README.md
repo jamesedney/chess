@@ -22,9 +22,11 @@ It is built for improving players, roughly 600 to 1600, who want a daily routine
 - **Adaptive sessions and spaced recall.** Sessions mix due reviews, your own mistakes, your weakest theme and new puzzles near your rating. Clean solves return after 1, 3, 7, 14 and 30 days.
 - **Fair answer checking.** A different move from the stored solution is checked by Stockfish and accepted when it is equally strong.
 - **Endgame drills against Stockfish.** Queen, rook and two-rook mates, king and pawn wins and draws, Lucena and Philidor. Each has a goal and a move limit, and every position is verified with Stockfish.
+- **Strategy puzzles.** A theme of quiet moves, defensive moves and zugzwang from the Lichess set, where the answer is not a capture or a check.
 - **Calculation drills.** Visualisation: follow a line of moves in your head and tap where a piece ends up, with lines that grow as you get them right. Find every check: play every checking move in a position.
 - **Vision sprint.** One-minute drills: each position has exactly one free piece to win.
-- **Interactive lessons.** Fifteen lessons played step by step on the board.
+- **Interactive lessons.** Twenty-three lessons played step by step on the board, including eight on strategy: pawn structure, outposts, files, bishops, pawn breaks, the worst piece, trading when ahead and king plans. Structure claims are verified by code, moves by Stockfish.
+- **Judgement training.** Assess the position: positions from your own games, you say who is better, the engine answers, and over time you learn whether you overrate or underrate yourself. Candidate moves: name the squares you are considering before each practice move and see how often the engine's best was among them.
 
 ### Playing and review
 - **Human-like opponents.** Maia networks at about 1100, 1500 and 1900, trained on millions of human games, run on your device and make the mistakes people make. Stockfish levels are there too, up to full strength.

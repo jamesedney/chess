@@ -34,7 +34,7 @@ export const KINDS = {
   positional: {
     label: 'Drifted into a worse position',
     plural: 'quieter slips',
-    theme: 'Calculation',
+    theme: 'Strategy',
     habit: 'In quiet positions, compare two candidate moves before choosing.',
   },
 };

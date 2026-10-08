@@ -94,7 +94,7 @@ test('vision sprint scores a correct capture', async ({ page }) => {
 
 test('a lesson walks through reading, tapping, moving and deciding, and saves progress', async ({ page }) => {
   await open(page, 'path');
-  await expect(page.locator('.lesson')).toHaveCount(15);
+  await expect(page.locator('.lesson')).toHaveCount(23);
   await page.locator('[data-lesson="mating-net"]').click();
   await expect(page).toHaveURL(/#path\?lesson=mating-net/);
   await expect(page.locator('.focus-progress')).toContainText('1 of 6');

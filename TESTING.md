@@ -12,6 +12,7 @@
 - **Review data.** Clock parsing and time per move, rushed and time-trouble thresholds, opening identification and per-opening scores, and deep re-checks that confirm, correct or clear a mark without touching positions already practised.
 - **Drills.** Endgame judging for mate, promotion and defence goals, stalemate and move limits; visualisation questions that track a piece through the line; check finding.
 - **The loop.** Lichess export URLs and filters, time-control classes, game acceptance rules, deduplication and the daily cap, Chess.com archive mapping, Lichess evaluation parsing, the opponent ladder, focus tags, lesson recommendations, next-step ordering, and focus tags steering puzzle choice.
+- **Strategy.** Pawn-structure facts (isolated, doubled, passed, backward pawns, outposts, open and half-open files, bad bishops, loose king squares), assessment buckets, scoring, bias and calibration, position picking from reviews, the candidate-move counter, and the Strategy theme.
 - **Human-like opponents.** Maia input encoding, the network forward pass against a reference implementation, and move sampling.
 - **Imports.** Multi-game PGN splitting, colour detection, Lichess and Chess.com fetching with fake responses, and the Lichess CSV importer with plain and zstd files.
 - **Offline shell.** Versions agree, every precached file exists, and every module the app imports is in the offline cache.
@@ -31,6 +32,7 @@
 - The Coach page with seeded mistakes: diagnosis, plan, trends, and a personal lesson including an engine-approved alternative move.
 - Endgame drills played against Stockfish, a lost drill being recorded, visualisation and find every check.
 - A review with clock data and an opening, and the per-opening table.
+- The assessment drill from a seeded review, its empty state, candidate moves before a practice move, and a strategy lesson's verified tap step.
 - The viewer opening at the first mistake with the answer hidden, Show answer, and solving a mistake in place, which records the attempt and clears the drill step.
 - A linked account synced against a mocked Lichess response: the game is queued, reviewed in the background from its Lichess evaluations, and becomes the next step; a second sync queues nothing; the next-step strip; the opponent ladder moving up after five wins.
 

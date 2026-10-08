@@ -224,6 +224,7 @@ function openMenu() {
       <button type="button" data-drill="endgames">Endgames vs Stockfish</button>
       <button type="button" data-drill="visualise">Visualisation</button>
       <button type="button" data-drill="checks">Find every check</button>
+      <button type="button" data-drill="assess">Assess the position</button>
     </div>
     ${session.theme ? `<p class="small">Theme filter: ${esc(session.theme)}. Choosing a mode clears it.</p>` : ''}
     <div class="actions"><button type="button" id="menu-flip">⇅ Flip board</button><button type="button" id="menu-progress">See progress</button></div>`);

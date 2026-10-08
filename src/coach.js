@@ -5,6 +5,7 @@ import { KINDS, KIND_IDS, phaseOf } from './mistake-kinds.js';
 import { timeSummary } from './clocks.js';
 import { dateKey } from './state.js';
 import { THEMES } from './themes.js';
+import { calibration } from './assess.js';
 
 const DAY = 86400000;
 export const WINDOW_DAYS = 90;
@@ -54,6 +55,16 @@ export function diagnose(state, now = Date.now()) {
     time.known >= 3 && time.rushed / time.known >= 0.4 ? 'rushed' : time.known >= 3 && time.trouble / time.known >= 0.4 ? 'trouble' : null;
   const weakPhase = total >= 5 ? Object.entries(phases).sort((a, b) => b[1] - a[1])[0] : null;
   const findings = [];
+  // Judgement: candidate-move discipline and position assessment, from the drills.
+  const cand = state.candidates || { asked: 0, hit: 0 };
+  const candRate = cand.asked >= 10 ? cand.hit / cand.asked : null;
+  const cal = calibration(state.calc?.assess?.last || []);
+  const judgement = (candRate !== null && candRate < 0.5) || cal.verdict === 'optimistic' || cal.verdict === 'pessimistic';
+  if (candRate !== null)
+    findings.push(
+      `The engine's best move was among your candidate moves ${Math.round(candRate * 100)}% of the time (${cand.asked} checks).`,
+    );
+  if (cal.verdict === 'optimistic' || cal.verdict === 'pessimistic') findings.push(cal.text);
   if (confidence !== 'none') {
     if (kinds[0])
       findings.push(`Your most common error is: ${kinds[0].label.toLowerCase()} (${kinds[0].count} of ${total} saved mistakes).`);
@@ -80,6 +91,9 @@ export function diagnose(state, now = Date.now()) {
     timeIssue,
     focus,
     weakPhase: weakPhase && weakPhase[1] / total >= 0.4 ? weakPhase[0] : null,
+    judgement,
+    candidateRate: candRate,
+    calibration: cal,
     findings,
   };
 }
@@ -150,37 +164,45 @@ export function buildPlan(state, diagnosis, week, level = 1) {
   });
   /** @type {PlanItem} */
   const drill =
-    diagnosis.weakPhase === 'endgame'
+    diagnosis.focus === 'positional' || diagnosis.judgement
       ? {
           id: 'drill',
-          label: `Win ${scaled(2, level)} endgame drills`,
-          metric: 'endgames',
+          label: `Do ${scaled(2, level)} assess-the-position runs`,
+          metric: 'assess',
           target: scaled(2, level),
-          action: { page: 'drills', params: { drill: 'endgames' } },
+          action: { page: 'drills', params: { drill: 'assess' } },
         }
-      : diagnosis.focus === 'hung-piece'
+      : diagnosis.weakPhase === 'endgame'
         ? {
             id: 'drill',
-            label: `Run ${scaled(3, level)} vision sprints`,
-            metric: 'vision',
-            target: scaled(3, level),
-            action: { page: 'train', params: { mode: 'vision' } },
+            label: `Win ${scaled(2, level)} endgame drills`,
+            metric: 'endgames',
+            target: scaled(2, level),
+            action: { page: 'drills', params: { drill: 'endgames' } },
           }
-        : diagnosis.focus === 'allowed-mate' || diagnosis.focus === 'missed-mate'
+        : diagnosis.focus === 'hung-piece'
           ? {
               id: 'drill',
-              label: `Do ${scaled(2, level)} find-every-check runs`,
-              metric: 'checks',
-              target: scaled(2, level),
-              action: { page: 'drills', params: { drill: 'checks' } },
+              label: `Run ${scaled(3, level)} vision sprints`,
+              metric: 'vision',
+              target: scaled(3, level),
+              action: { page: 'train', params: { mode: 'vision' } },
             }
-          : {
-              id: 'drill',
-              label: `Do ${scaled(2, level)} visualisation runs`,
-              metric: 'visual',
-              target: scaled(2, level),
-              action: { page: 'drills', params: { drill: 'visualise' } },
-            };
+          : diagnosis.focus === 'allowed-mate' || diagnosis.focus === 'missed-mate'
+            ? {
+                id: 'drill',
+                label: `Do ${scaled(2, level)} find-every-check runs`,
+                metric: 'checks',
+                target: scaled(2, level),
+                action: { page: 'drills', params: { drill: 'checks' } },
+              }
+            : {
+                id: 'drill',
+                label: `Do ${scaled(2, level)} visualisation runs`,
+                metric: 'visual',
+                target: scaled(2, level),
+                action: { page: 'drills', params: { drill: 'visualise' } },
+              };
   items.push(drill);
   return { week, level, focus: diagnosis.focus, items };
 }
@@ -215,6 +237,8 @@ export function planProgress(state, plan) {
         return count(e => e.k === 'c' && e.t === 'checks');
       case 'visual':
         return count(e => e.k === 'c' && e.t === 'visual');
+      case 'assess':
+        return count(e => e.k === 'c' && e.t === 'assess');
       default:
         return 0;
     }

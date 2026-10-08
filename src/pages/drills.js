@@ -18,6 +18,8 @@ import {
   CHECK_ROUNDS,
 } from '../calc.js';
 import { logAttempt, dateKey } from '../state.js';
+import { pickPositions, BUCKETS, ROUNDS as ASSESS_ROUNDS, scoreGuess, evalText, playerBias, calibration } from '../assess.js';
+import { describeStructure } from '../structure.js';
 import { cue } from '../sound.js';
 
 const ENDGAME_NODES = 400000;
@@ -36,6 +38,7 @@ export function render(main, params = {}) {
   if (kind === 'endgames' && params.id && drillById(params.id)) startEndgame(drillById(params.id));
   else if (kind === 'visualise') view = { kind: 'visualise', phase: 'intro' };
   else if (kind === 'checks') view = { kind: 'checks', phase: 'intro' };
+  else if (kind === 'assess') view = { kind: 'assess', phase: 'intro' };
   else view = { kind: 'endgames', phase: 'list' };
   draw();
 }
@@ -70,6 +73,7 @@ function draw() {
   if (!root || app.page !== 'drills' || !view) return;
   if (view.kind === 'endgames') view.phase === 'list' ? drawEndgameList() : drawEndgame();
   else if (view.kind === 'visualise') drawVisualise();
+  else if (view.kind === 'assess') drawAssess();
   else drawChecks();
   $('#drill-exit', root)?.addEventListener('click', () =>
     view?.kind === 'endgames' && view.phase !== 'list' ? app.navigate('drills', { drill: 'endgames' }) : app.navigate('train'),
@@ -508,5 +512,105 @@ function finishChecks() {
   logAttempt(app.state, { kind: 'c', theme: 'checks', clean: v.total > 0 && v.score === v.total && !v.wrong });
   app.save();
   v.phase = 'done';
+  draw();
+}
+
+// ---------- Assess the position ----------
+
+function drawAssess() {
+  const v = view;
+  const stats = app.state.calc.assess;
+  if (v.phase === 'intro' || v.phase === 'done') {
+    const cal = calibration(stats.last);
+    const available = pickPositions(app.state.reviews, { count: 1, Chess }).length > 0;
+    root.innerHTML = `<div class="focus">${top('Assess the position')}
+      <div class="panel">
+        <h2>${v.phase === 'done' ? `${v.score} of ${v.total * 2} points` : 'Who is better, and by how much?'}</h2>
+        <p>${
+          v.phase === 'done'
+            ? `${v.exact} of ${v.total} exactly right. ${v.bias >= 0.4 ? 'In this run you rated your own side too highly.' : v.bias <= -0.4 ? 'In this run you rated your own side too low.' : 'Your judgement in this run was balanced.'} ${v.score >= stats.best && v.score > 0 ? 'A new best.' : `Your best is ${stats.best}.`}`
+            : `Positions from your own games, at your move. Say who stands better; the engine’s verdict is the answer. Two points for the right call, one for the next bucket. ${ASSESS_ROUNDS} positions.`
+        }</p>
+        <p class="small">${esc(cal.text)}</p>
+        ${
+          available
+            ? `<div class="actions"><button type="button" class="primary" id="assess-start">${v.phase === 'done' ? 'Go again' : 'Start'}</button></div>`
+            : '<p class="status">This drill uses your reviewed games, and there are none yet. Review a game or link an account in Settings.</p><div class="actions"><button type="button" class="primary" id="assess-review">Review a game</button></div>'
+        }
+        <p class="small muted">Best ${stats.best} · ${plural(stats.runs, 'run')}</p>
+      </div></div>`;
+    $('#assess-start', root)?.addEventListener('click', () => {
+      const positions = pickPositions(app.state.reviews, { Chess });
+      view = { kind: 'assess', phase: 'play', positions, round: 0, score: 0, exact: 0, biases: [], q: null, answered: null };
+      nextAssess();
+    });
+    $('#assess-review', root)?.addEventListener('click', () => app.navigate('review'));
+    return;
+  }
+  const q = v.q;
+  const game = new Chess(q.fen);
+  const truth = v.answered !== null ? evalText(q.evalWhite) : '';
+  root.innerHTML = `<div class="focus">${top(`Position ${v.round} of ${v.positions.length} · ${v.score} points`)}
+    <div class="focus-prompt"><strong id="board-title">${v.answered === null ? 'Who is better?' : 'Engine: ' + esc(truth)}</strong><span class="chip" id="board-chip">${esc(turnLabel(game))}</span></div>
+    <div class="focus-board"><div id="board"></div></div>
+    <div class="focus-meta small">${esc(q.label)} · you were ${q.colour === 'w' ? 'White' : 'Black'}</div>
+    ${
+      v.answered === null
+        ? `<div class="choices assess-choices" role="group" aria-label="Your assessment">${BUCKETS.map((b, i) => `<button type="button" class="choice" data-bucket="${i}">${esc(b.label)}</button>`).join('')}</div>`
+        : `<div id="feedback" class="status ${v.tone}" role="status" aria-live="polite">${esc(v.message)}</div>
+           <div class="focus-actions"><button type="button" class="primary" id="assess-next">Next</button></div>`
+    }
+  </div>`;
+  board = new BoardView($('#board', root), { label: 'Assessment board' });
+  board.set({ game, orientation: q.colour, interactive: false });
+  root.querySelectorAll('[data-bucket]').forEach(b => (b.onclick = () => answerAssess(Number(b.dataset.bucket))));
+  $('#assess-next', root)?.addEventListener('click', nextAssess);
+  $('#assess-next', root)?.focus({ preventScroll: true });
+}
+
+function nextAssess() {
+  const v = view;
+  if (v.round >= v.positions.length) return finishAssess();
+  v.q = v.positions[v.round];
+  v.round++;
+  v.answered = null;
+  v.message = '';
+  v.tone = '';
+  draw();
+}
+
+function answerAssess(i) {
+  const v = view;
+  if (!v || v.answered !== null) return;
+  v.answered = i;
+  const pts = scoreGuess(i, v.q.evalWhite);
+  v.score += pts;
+  if (pts === 2) v.exact++;
+  v.biases.push(playerBias(i, v.q.evalWhite, v.q.colour));
+  const facts = describeStructure(new Chess(v.q.fen));
+  const verdict = BUCKETS[bucketIndex(v.q.evalWhite)].label.toLowerCase();
+  v.message = `${pts === 2 ? 'Right' : pts === 1 ? 'Close' : 'No'}: ${verdict} (${evalText(v.q.evalWhite)}). ${facts.slice(0, 3).join(' ')}`;
+  v.tone = pts === 2 ? 'success' : pts === 1 ? 'warning' : 'error';
+  cue(pts ? 'success' : 'error');
+  draw();
+}
+
+function bucketIndex(evalWhite) {
+  return BUCKETS.findIndex(b => evalWhite >= b.min);
+}
+
+function finishAssess() {
+  const v = view;
+  const total = v.positions.length;
+  const bias = v.biases.length ? v.biases.reduce((a, b) => a + b, 0) / v.biases.length : 0;
+  const s = app.state.calc.assess;
+  app.state.calc.assess = {
+    best: Math.max(s.best, v.score),
+    runs: s.runs + 1,
+    last: [...s.last, { date: dateKey(), score: v.score, total, bias: Math.round(bias * 100) / 100 }].slice(-60),
+  };
+  logAttempt(app.state, { kind: 'c', theme: 'assess', clean: total > 0 && v.score >= total * 1.2 });
+  app.save();
+  Object.assign(v, { phase: 'done', total, bias });
   draw();
 }

@@ -1,6 +1,6 @@
 // Training themes, puzzle tags and the text attached to them.
 
-export const THEMES = ['Board vision', 'King safety', 'Tactics', 'Opening habits', 'Calculation', 'Endgames'];
+export const THEMES = ['Board vision', 'King safety', 'Tactics', 'Opening habits', 'Calculation', 'Strategy', 'Endgames'];
 export const PERSONAL = 'Personal mistakes';
 export const ALL_THEMES = [...THEMES, PERSONAL];
 
@@ -66,13 +66,16 @@ export const TAG_LABELS = {
 
 const MATE_TAGS = /^(mate|mateIn\d|backRankMate|smotheredMate|anastasiaMate|arabianMate|bodenMate|doubleBishopMate|dovetailMate|hookMate)$/;
 const ENDGAME_TAGS = /Endgame$|^endgame$/;
-const CALCULATION_TAGS = new Set(['long', 'veryLong', 'quietMove', 'defensiveMove', 'zugzwang', 'intermezzo']);
+const STRATEGY_TAGS = new Set(['quietMove', 'defensiveMove', 'zugzwang']);
+const CALCULATION_TAGS = new Set(['long', 'veryLong', 'intermezzo']);
 
 /** Pick the one training theme a puzzle belongs to, from its tags. */
 export function primaryTheme(tags) {
   if (tags.some(t => MATE_TAGS.test(t))) return 'King safety';
   if (tags.includes('hangingPiece')) return 'Board vision';
   if (tags.includes('opening')) return 'Opening habits';
+  // Quiet moves, defence and zugzwang train judgement, whatever the phase.
+  if (tags.some(t => STRATEGY_TAGS.has(t))) return 'Strategy';
   if (tags.some(t => ENDGAME_TAGS.test(t))) return 'Endgames';
   if (tags.some(t => CALCULATION_TAGS.has(t))) return 'Calculation';
   return 'Tactics';

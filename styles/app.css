@@ -2440,3 +2440,8 @@ button.link {
     animation: none;
   }
 }
+
+.assess-choices {
+  display: grid;
+  gap: 8px;
+}

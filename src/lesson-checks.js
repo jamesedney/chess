@@ -2,6 +2,7 @@
 // lesson makes about defenders, attackers, escapes and pins is verified.
 import { Chess } from '../vendor/chess.js';
 import { hangingPieces, opposite } from './chess-utils.js';
+import { isolatedPawns, doubledPawns, passedPawns, backwardPawns, outposts, openFiles, badBishops, looseKingSquares } from './structure.js';
 
 const SQUARES = [];
 for (const f of 'abcdefgh') for (let r = 1; r <= 8; r++) SQUARES.push(f + r);
@@ -52,6 +53,24 @@ export function expectedTargets(step) {
       const owner = game.get(square)?.color;
       return game.attackers(square, owner).filter(sq => !exclude.includes(game.get(sq).type));
     }
+    // Structure rules take the colour as the argument, e.g. isolated:w.
+    case 'isolated':
+      return isolatedPawns(game, arg);
+    case 'doubled':
+      return doubledPawns(game, arg);
+    case 'passed':
+      return passedPawns(game, arg);
+    case 'backward':
+      return backwardPawns(game, arg);
+    case 'outpost':
+      return outposts(game, arg);
+    case 'open-file':
+      // Any square on an open file.
+      return SQUARES.filter(sq => openFiles(game).includes(sq[0]));
+    case 'bad-bishop':
+      return badBishops(game, arg);
+    case 'loose-king':
+      return looseKingSquares(game, arg);
     default:
       throw new Error('Unknown verify rule ' + rule);
   }

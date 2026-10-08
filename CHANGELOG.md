@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.4.0
+
+### Strategy
+- Eight strategy lessons: pawn structure, outposts, open files and the seventh rank, good and bad bishops, pawn breaks and space, the worst piece, trading when ahead, and planning around the king. Tap steps are verified by pawn-structure rules in code; move steps by Stockfish.
+- Assess the position: a drill built from your reviewed games. You say who is better and by how much; the engine's evaluation is the answer, with the structural facts shown. Over several runs the Progress and Coach pages say whether you overrate or underrate your own positions.
+- Candidate moves: an option in practice games. Before you move, name up to three squares you are considering; the coach reports whether the engine's best was among them and keeps the hit rate.
+- A Strategy puzzle theme: about 280 Lichess puzzles whose answer is a quiet move, a defensive move or zugzwang.
+- Positional mistakes now point to Strategy puzzles and the assessment drill in the weekly plan, and to the worst-piece lesson.
+
 ## 2.3.0
 
 - Practice game rebuilt in the board-first layout: the board, a one-line move record, a status line and three buttons. Opponent, colour, coach, export and review live behind one Options button.

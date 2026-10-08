@@ -8,7 +8,9 @@
 //   cta     a button that leads elsewhere in the app
 // Positions are checked by tests (legality, mates) and by tools/verify-lessons.mjs (Stockfish).
 
-export const SECTIONS = ['Foundations', 'Build your patterns', 'Think ahead', 'Finish the job', 'The 1500 habit'];
+import { STRATEGY_LESSONS, STRATEGY_SECTION } from './strategy-lessons.js';
+
+export const SECTIONS = ['Foundations', 'Build your patterns', 'Think ahead', STRATEGY_SECTION, 'Finish the job', 'The 1500 habit'];
 
 export const lessons = [
   {
@@ -898,4 +900,5 @@ export const lessons = [
       { kind: 'cta', text: 'Start today’s session.', label: 'Go to training', page: 'train' },
     ],
   },
+  ...STRATEGY_LESSONS,
 ];
