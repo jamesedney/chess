@@ -49,8 +49,13 @@ function show(name, params = {}) {
   });
   const main = $('#main');
   PAGES[name].render(main, params);
-  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    main.animate(
+  // Animate the freshly rendered page, never <main> itself: an animation on the
+  // long-lived container that is interrupted by a re-render (Today refreshing
+  // as a reviewed game joins the plan) can leave Chromium hit-testing stale
+  // geometry, so taps on the page stop working.
+  const page = main.firstElementChild;
+  if (page && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    page.animate(
       [
         { opacity: 0, transform: 'translateY(6px)' },
         { opacity: 1, transform: 'none' },

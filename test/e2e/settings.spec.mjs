@@ -48,7 +48,7 @@ test('unreadable saved data is kept for recovery', async ({ page }) => {
     }
   });
   await open(page);
-  await expect(page.locator('#toast')).toContainText('could not be read');
+  await expect(page.locator('.toast.show')).toContainText('could not be read');
   await page.click('#settings');
   await expect(page.locator('#recovery-download')).toBeVisible();
 });
@@ -75,7 +75,7 @@ test('backup export and import round-trip, and dark mode applies', async ({ page
   await page.click('#settings');
   await page.setInputFiles('#restore-file', file);
   await page.click('#confirm [data-answer="yes"]');
-  await expect(page.locator('#toast')).toContainText('Progress restored');
+  await expect(page.locator('.toast.show')).toContainText('Progress restored');
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.click('nav a[data-page="progress"]');

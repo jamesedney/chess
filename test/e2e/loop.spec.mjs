@@ -44,11 +44,11 @@ test('a linked account is synced, the game is reviewed in the background, and th
   await page.click('#settings');
   await page.click('#sync-now');
   // The automatic sync at startup may already have fetched the game, so either message is right.
-  await expect(page.locator('#toast')).toContainText(/1 new game queued|No new games|reviewed/, { timeout: 20000 });
+  await expect(page.locator('.toast.show')).toContainText(/1 new game queued|No new games|reviewed/, { timeout: 20000 });
   expect(calls).toBeGreaterThanOrEqual(1);
   await page.click('#close-modal');
   // The review finishes in the background and offers itself; the saved mistakes become the next step.
-  await expect(page.locator('#toast')).toContainText('me – rival reviewed', { timeout: 120000 });
+  await expect(page.locator('.toast.show')).toContainText('me – rival reviewed', { timeout: 120000 });
   // Today's session now starts with that game's mistakes.
   await page.goto('./#today');
   await expect(page.locator('.agenda')).toContainText('Your game against rival');
@@ -70,9 +70,9 @@ test('the review-ready notification opens the game, even from behind the Setting
   await open(page, 'train');
   await page.click('#settings');
   await page.click('#sync-now');
-  await expect(page.locator('#toast')).toContainText('me – rival reviewed', { timeout: 120000 });
+  await expect(page.locator('.toast.show')).toContainText('me – rival reviewed', { timeout: 120000 });
   // Tap the text of the notification, not its button, while the dialog is still open.
-  await page.locator('#toast span').click();
+  await page.locator('.toast.show span').click();
   await expect(page).toHaveURL(/#review$/);
   await expect(page.locator('.focus-progress')).toContainText('me – rival');
   await expect(page.locator('#modal')).not.toHaveAttribute('open');
@@ -103,13 +103,13 @@ test('several games reviewed in the background give one dismissable message and 
   await page.click('#settings');
   await page.click('#sync-now');
   await page.click('#close-modal');
-  await expect(page.locator('#toast')).toContainText('2 games reviewed', { timeout: 150000 });
-  await expect(page.locator('#toast')).not.toContainText('me – rival reviewed');
+  await expect(page.locator('.toast.show')).toContainText('2 games reviewed', { timeout: 150000 });
+  await expect(page.locator('.toast.show')).not.toContainText('me – rival reviewed');
   // The plan picked the newest game up without a reload.
   await expect(page.locator('.agenda')).toContainText('Your game against');
   // Close dismisses without navigating.
-  await page.click('#toast .toast-close');
-  await expect(page.locator('#toast')).toBeHidden();
+  await page.click('.toast.show .toast-close');
+  await expect(page.locator('.toast.show')).toBeHidden();
   await expect(page).toHaveURL(/#today/);
 });
 
@@ -231,10 +231,10 @@ test('a second sync does not queue the same game again', async ({ page }) => {
   await page.click('#settings');
   // Two manual checks on top of the automatic one at startup: the game is counted once.
   await page.click('#sync-now');
-  await expect(page.locator('#toast')).toContainText(/queued|No new games|reviewed/, { timeout: 20000 });
+  await expect(page.locator('.toast.show')).toContainText(/queued|No new games|reviewed/, { timeout: 20000 });
   await page.waitForTimeout(600);
   await page.click('#sync-now');
-  await expect(page.locator('#toast')).toContainText(/No new games|reviewed/, { timeout: 20000 });
+  await expect(page.locator('.toast.show')).toContainText(/No new games|reviewed/, { timeout: 20000 });
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')));
   expect(saved.sync.today.n).toBe(1);
   expect(saved.sync.seen).toEqual(['lichess.org/sync0001']);

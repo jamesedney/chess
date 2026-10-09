@@ -19,21 +19,30 @@ function hideToast(el) {
 
 /**
  * While a modal dialog is open everything outside it is inert, so a toast
- * shown then would be unreadable and untappable. Toasts therefore live inside
- * the open dialog and move back to the page when it closes.
+ * shown then would be unreadable and untappable. Each open dialog therefore
+ * gets its own toast element, created once and never moved: moving a node in
+ * or out of a closing modal dialog can leave Chromium treating the page as
+ * inert, so taps stop working until another dialog opens.
  */
 function toastElement() {
-  const el = $('#toast');
-  const host = document.querySelector('dialog[open]') || document.body;
-  if (el.parentElement !== host) host.append(el);
+  const dialog = document.querySelector('dialog[open]');
+  if (!dialog) return $('#toast');
+  let el = dialog.querySelector(':scope > .toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'toast';
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    dialog.append(el);
+  }
   return el;
 }
 if (typeof document !== 'undefined')
   document.addEventListener(
     'close',
     e => {
-      const el = $('#toast');
-      if (el && /** @type {Element} */ (e.target).contains?.(el)) document.body.append(el);
+      const el = /** @type {Element} */ (e.target).querySelector?.(':scope > .toast');
+      if (el) hideToast(el);
     },
     true,
   );
@@ -58,13 +67,13 @@ export function toast(text, { action = null, duration = 4500 } = {}) {
   };
   el.classList.add('show');
   clearTimeout(toastTimer);
+  for (const other of $$('.toast.show')) if (other !== el) hideToast(other);
   toastTimer = setTimeout(() => hideToast(el), action ? Math.max(duration * 2, 10000) : duration);
 }
 
 /** Dismiss whatever toast is showing. */
 export function dismissToast() {
-  const el = $('#toast');
-  if (el) hideToast(el);
+  $$('.toast.show').forEach(hideToast);
 }
 
 /** Open the shared modal dialog. Returns the content element. */

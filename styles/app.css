@@ -542,7 +542,7 @@ p {
 .status p {
   margin: 0 0 8px;
 }
-#toast {
+.toast {
   position: fixed;
   bottom: calc(24px + env(safe-area-inset-bottom));
   left: 50%;
@@ -559,13 +559,13 @@ p {
   align-items: center;
   gap: 14px;
 }
-#toast.show {
+.toast.show {
   display: flex;
 }
-#toast.actionable {
+.toast.actionable {
   cursor: pointer;
 }
-#toast button {
+.toast button {
   flex-shrink: 0;
   padding: 7px 12px;
 }
@@ -2022,7 +2022,7 @@ dialog[open]::backdrop {
     transform: translateY(8px) scale(0.98);
   }
 }
-#toast.show {
+.toast.show {
   animation: toast-in 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 @keyframes toast-in {
@@ -2985,7 +2985,7 @@ button.big {
   font-size: 14px;
 }
 
-#toast .toast-close {
+.toast .toast-close {
   border: 0;
   background: transparent;
   color: inherit;
@@ -2994,7 +2994,7 @@ button.big {
   margin-right: -6px;
 }
 
-#toast .toast-close .icon {
+.toast .toast-close .icon {
   width: 18px;
   height: 18px;
 }

@@ -4,6 +4,8 @@
 
 - Fixed: on phones, a puzzle block over several tags (for example a Strategy block) showed every tag in one unbreakable line above the board, which made the page wider than the screen and shrank everything. The line now shows the unit name, or two tag names and a count, and is hidden during a session block because the bar at the top already names it. Raw tag ids such as "advancedPawn" now show as readable names.
 - The phone layout test now fails if anything sticks out past the screen edge, and covers a many-tag puzzle block.
+- Fixed: taps could stop working on a page after switching tabs. The page-enter animation ran on the page container, and when the page re-rendered mid-animation (for example Today updating as a reviewed game joined the plan) Chromium kept hit-testing stale geometry, so buttons did nothing until a dialog was opened. The animation now runs on the freshly rendered page instead.
+- Messages shown while a dialog is open use the dialog's own message area instead of moving one element in and out of the dialog.
 
 
 ## 3.0.2
