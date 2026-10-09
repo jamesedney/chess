@@ -10,8 +10,10 @@ export const test = base.extend({
     page.on('pageerror', e => {
       if (!knownVendorTrap(e.message)) errors.push(e.message);
     });
+    // WebKit reports the same trap as a console error ("Unhandled Promise
+    // Rejection: RuntimeError: ...") when it happens inside the engine worker.
     page.on('console', m => {
-      if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text());
+      if (m.type() === 'error' && !/Failed to load resource/.test(m.text()) && !knownVendorTrap(m.text())) errors.push(m.text());
     });
     await use(page);
     expect(errors, 'browser errors').toEqual([]);
