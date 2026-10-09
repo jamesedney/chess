@@ -340,6 +340,8 @@ small {
   color: var(--muted);
 }
 .shell {
+  /* Safety net: nothing inside may widen the page past the screen. */
+  overflow-x: clip;
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
   max-width: 1600px;
@@ -1716,6 +1718,16 @@ dialog p {
   font-size: 14px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.focus-top .chip {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.focus-menu {
+  flex: none;
 }
 .focus-menu {
   margin-left: auto;

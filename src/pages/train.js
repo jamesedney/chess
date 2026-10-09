@@ -8,7 +8,7 @@ import { schedule, choosePuzzle, dueCount, isMistake } from '../srs.js';
 import { updateRating, pushHistory, weakestTheme } from '../rating.js';
 import { judgeAlternative, rejectionMessage } from '../verify.js';
 import { moveToUci, playUci, uciLineToSan, opposite, NAMES } from '../chess-utils.js';
-import { hintForTags, displayTags } from '../themes.js';
+import { hintForTags, displayTags, TAG_LABELS } from '../themes.js';
 import { dateKey, streaks, logAttempt } from '../state.js';
 import { makeVisionDrill, isVisionAnswer } from '../vision.js';
 import { archiveMistake } from '../mistakes.js';
@@ -237,14 +237,24 @@ function topLine() {
     ? `<span class="chip">${esc(session.theme)} <button type="button" class="chip-close" id="clear-theme" aria-label="Clear theme filter">×</button></span>`
     : session.mode === 'mistakes'
       ? `<span class="chip">${session.review ? 'This game’s mistakes' : 'My mistakes'}</span>`
-      : session.tags?.length
-        ? `<span class="chip">${esc(session.tags.map(t => displayTags([t])[0] || t).join(' · '))}</span>`
-        : '';
+      : activeBlock()
+        ? '' // the session bar above already names the block
+        : session.unit && unitById(session.unit)
+          ? `<span class="chip">${esc(unitById(session.unit).title)}</span>`
+          : session.tags?.length
+            ? `<span class="chip">${esc(tagSummary(session.tags))}</span>`
+            : '';
   return `<div class="focus-top">
     <span id="focus-progress" class="focus-progress">${esc(progress)}</span>
     ${chip}
     <button type="button" id="train-menu" class="secondary focus-menu" aria-haspopup="dialog" aria-label="Training menu: modes and today’s numbers">Mode</button>
   </div>`;
+}
+
+/** Two readable tag names and how many more, e.g. "Quiet move · Advanced pawn +3". */
+function tagSummary(tags) {
+  const names = tags.map(t => TAG_LABELS[t] || t);
+  return names.slice(0, 2).join(' · ') + (names.length > 2 ? ` +${names.length - 2}` : '');
 }
 
 /** Stats and modes, shown on request rather than above the board. */

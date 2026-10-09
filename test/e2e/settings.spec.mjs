@@ -95,12 +95,39 @@ test('a logged rating appears in the trend and can be deleted', async ({ page })
   await expect(page.locator('.rating-list')).not.toContainText('1234');
 });
 
-for (const name of ['today', 'train', 'coach', 'path', 'play', 'review', 'progress', 'drills?drill=endgames', 'drills?drill=visualise']) {
+const PHONE_PAGES = [
+  'today',
+  'train',
+  // A session block over many puzzle tags: the label must not widen the page.
+  'train?mode=daily&tags=quietMove,advancedPawn,rookEndgame,bishopEndgame,defensiveMove&strict=1&limit=4',
+  'coach',
+  'path',
+  'play',
+  'review',
+  'progress',
+  'drills?drill=endgames',
+  'drills?drill=visualise',
+];
+for (const name of PHONE_PAGES) {
   test(`no horizontal overflow on a phone: ${name} @mobile`, async ({ page }) => {
     await open(page, name);
     await page.waitForTimeout(300);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
+    // Nothing may stick out past the screen edge either, even if it is clipped,
+    // except inside containers that scroll sideways on purpose.
+    const sticking = await page.evaluate(() => {
+      const width = document.documentElement.clientWidth;
+      const scrolls = el => {
+        for (let p = el.parentElement; p; p = p.parentElement) if (/auto|scroll/.test(getComputedStyle(p).overflowX)) return true;
+        return false;
+      };
+      return [...document.querySelectorAll('header *, .sidebar *, #session-bar *, #main *')]
+        .filter(el => el.getClientRects().length && el.getBoundingClientRect().right > width + 1 && !scrolls(el))
+        .map(el => `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}.${[...el.classList].join('.')}`)
+        .slice(0, 5);
+    });
+    expect(sticking).toEqual([]);
   });
 }
 
