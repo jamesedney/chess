@@ -5,8 +5,16 @@ import { updateGoal } from './progress-model.js';
 import { dateKey } from './state.js';
 import { toast } from './ui.js';
 
-const GAP_MS = 6 * 3600000;
+// Ratings move after every game, so check often but not on every focus.
+const GAP_MS = 30 * 60000;
 let running = false;
+const listeners = new Set();
+
+/** Be told when a sync changed the ratings (Today redraws its goal). */
+export function onRatingsChange(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
 
 /** Fetch ratings for the linked accounts. Never throws; returns { changed, errors }. */
 export async function syncRatings({ force = false, fetchImpl = fetch, now = Date.now() } = {}) {
@@ -21,7 +29,7 @@ export async function syncRatings({ force = false, fetchImpl = fetch, now = Date
   const results = [];
   const prefer = s.settings.perf || 'auto';
   if (names.lichess) results.push(lichessRatings(names.lichess, fetchImpl, now, prefer).catch(e => errors.push(e.message)));
-  if (names.chesscom) results.push(chessComRatings(names.chesscom, fetchImpl, prefer).catch(e => errors.push(e.message)));
+  if (names.chesscom) results.push(chessComRatings(names.chesscom, fetchImpl, prefer, now).catch(e => errors.push(e.message)));
   const fetched = /** @type {{ perf: string, rating: number, history: { date: string, rating: number }[] }[]} */ (
     (await Promise.all(results)).filter(r => r && typeof r === 'object')
   );
@@ -31,6 +39,21 @@ export async function syncRatings({ force = false, fetchImpl = fetch, now = Date
   const milestone = updateGoal(s, new Date(now));
   app.save();
   running = false;
+  if (changed || milestone) for (const fn of listeners) fn();
   if (milestone) toast(`Target reached: ${milestone.target}! Your next target is ${s.target.target}.`, { duration: 9000 });
   return { changed, errors };
+}
+
+/**
+ * Keep ratings current without any effort: shortly after the app opens, and
+ * whenever it comes back to the foreground or back online (an installed app is
+ * usually resumed, not restarted). Each check respects the gap above.
+ */
+export function startRatingSync() {
+  const go = () => syncRatings().catch(() => {});
+  setTimeout(go, 3000);
+  window.addEventListener('online', go);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) go();
+  });
 }

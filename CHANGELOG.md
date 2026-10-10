@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.0.5
+
+- Your rating now keeps itself current. It is checked when the app opens and whenever it comes back to the foreground or back online (at most every 30 minutes), straight after new games are imported, after "Check for new games now", and when you change a username in Settings. Before, it was read only when the app started from scratch and at most every six hours, so an installed app that was only ever resumed could go days without an update.
+- Chess.com: the current rating is taken from your most recent rated game when it is newer than Chess.com's stats page, and up to two months of rating history is read from your games, so the projection has real data from day one.
+- The goal card says when the rating was last updated.
+
+
 ## 3.0.4
 
 - Fixed: the human-like Maia opponents never loaded on the published site. Their networks are cached on first use rather than at install, and the deploy only copied the install-time file list, so GitHub Pages answered "not found" and every move quietly fell back to Stockfish. The networks are now deployed, and the licences page linked from Settings, which had the same problem, is too.

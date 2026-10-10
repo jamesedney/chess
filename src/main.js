@@ -16,14 +16,14 @@ import * as today from './pages/today.js';
 import { activeBlock, continueSession, pauseSession, checkSession, todaysSession, sessionProgress, onSessionChange } from './session.js';
 import { blockDone } from './program.js';
 import { refreshMastery } from './curriculum.js';
-import { syncRatings } from './rating-sync.js';
+import { syncRatings, startRatingSync, onRatingsChange } from './rating-sync.js';
 import { RATING_PERFS } from './ratings.js';
 import { goalStatus, PUZZLE_PERF } from './progress-model.js';
 import { scheduleDeepAnalysis } from './deep.js';
 import { startAutoSync, syncNow } from './queue.js';
 import { CONTROLS } from './sync.js';
 
-export const VERSION = '3.0.4';
+export const VERSION = '3.0.5';
 const PAGES = { today, train, coach, path, play, review, progress, drills };
 // Pages without their own tab light up the tab they belong to.
 const NAV_AS = { train: 'today', drills: 'today', coach: 'progress' };
@@ -296,7 +296,10 @@ function openSettings() {
   const saveName = (key, el) =>
     (el.onchange = () => {
       s.profiles[key] = el.value.trim();
+      // A different account: forget which ratings were followed and read the new ones now.
+      s.sync.followed = [];
       app.save();
+      syncRatings({ force: true }).then(({ errors }) => errors.length && toast(errors.join(' ')));
     });
   saveName('lichess', $('#lichess-name'));
   saveName('chesscom', $('#chesscom-name'));
@@ -335,7 +338,7 @@ function openSettings() {
       e.target.disabled = false;
       return toast('Enter a Lichess or Chess.com username first.');
     }
-    const { added, errors } = await syncNow({ force: true });
+    const [{ added, errors }] = await Promise.all([syncNow({ force: true }), syncRatings({ force: true })]);
     e.target.disabled = false;
     toast(
       errors.length
@@ -477,7 +480,8 @@ function boot() {
   scheduleDeepAnalysis(15000);
   startAutoSync();
   // Ratings follow the linked accounts, so the goal tracks itself.
-  setTimeout(() => syncRatings().then(r => r.changed && today.refresh()), 3000);
+  onRatingsChange(() => today.refresh());
+  startRatingSync();
   // A game reviewed in the background can add to today's plan while it is on screen.
   onSessionChange(() => app.page === 'today' && today.refresh());
   if (app.recovered) toast('Saved progress could not be read, so a copy was kept. See Settings to download it.', { duration: 9000 });

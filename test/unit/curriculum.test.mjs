@@ -152,12 +152,61 @@ test('ratings: main time control, merging and platform readers', async () => {
     lichessRatings('nobody', async () => json({}, 404)),
     /No Lichess account/,
   );
+});
 
-  const cc = await chessComRatings('Me', async url => {
-    assert.match(url, /player\/me\/stats$/);
-    return json({ chess_blitz: { last: { rating: 980 }, record: { win: 20, loss: 20, draw: 2 } } });
+test('ratings: Chess.com reads the newest rating from stats or games, with history from the games', async () => {
+  const at = (d, h = 12) => Date.parse(`${day(d)}T${String(h).padStart(2, '0')}:00:00Z`) / 1000;
+  const game = (d, h, colour, rating, extra = {}) => ({
+    rules: 'chess',
+    rated: true,
+    time_class: 'blitz',
+    end_time: at(d, h),
+    white: colour === 'w' ? { username: 'Me', rating } : { username: 'rival', rating: 1000 },
+    black: colour === 'b' ? { username: 'Me', rating } : { username: 'rival', rating: 1000 },
+    ...extra,
   });
-  assert.deepEqual(cc, { perf: 'Chess.com blitz', rating: 980, history: [] });
+  const months = {
+    'https://api.chess.com/m/09': [game(-20, 10, 'w', 940), game(-20, 18, 'b', 950)],
+    'https://api.chess.com/m/10': [
+      game(-1, 12, 'w', 990),
+      game(0, 9, 'b', 1005),
+      game(0, 10, 'w', 1200, { time_class: 'rapid' }), // another time control
+      game(0, 11, 'w', 1300, { rated: false }), // unrated
+    ],
+  };
+  const server = statsLast => async url => {
+    if (url.endsWith('/stats'))
+      return json({
+        chess_blitz: { last: statsLast, record: { win: 20, loss: 20, draw: 2 } },
+        chess_rapid: { last: { rating: 1200, date: at(0) }, record: { win: 1 } },
+      });
+    if (url.endsWith('/games/archives')) return json({ archives: Object.keys(months) });
+    return json({ games: months[url] });
+  };
+  // Stats last updated three days ago: the games played since are newer.
+  const fromGames = await chessComRatings('Me', server({ rating: 980, date: at(-3) }), 'auto', NOW.getTime());
+  assert.equal(fromGames.perf, 'Chess.com blitz');
+  assert.equal(fromGames.rating, 1005);
+  assert.deepEqual(fromGames.history, [
+    { date: day(-20), rating: 950 },
+    { date: day(-1), rating: 990 },
+    { date: day(0), rating: 1005 },
+  ]);
+  // Stats newer than every game win.
+  const fromStats = await chessComRatings('Me', server({ rating: 1010, date: at(0, 23) }), 'auto', NOW.getTime());
+  assert.equal(fromStats.rating, 1010);
+  // The games list failing still gives the stats rating.
+  const noGames = await chessComRatings(
+    'Me',
+    async url => (url.endsWith('/stats') ? server({ rating: 980, date: at(-3) })(url) : json({}, 500)),
+    'auto',
+    NOW.getTime(),
+  );
+  assert.deepEqual(noGames, { perf: 'Chess.com blitz', rating: 980, history: [] });
+  await assert.rejects(
+    chessComRatings('ghost', async () => json({}, 404)),
+    /No Chess.com account/,
+  );
 });
 
 test('skills: tags map to skills and puzzles move the right ratings', () => {

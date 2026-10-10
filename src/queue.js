@@ -9,6 +9,7 @@ import { describeGame } from './pgn.js';
 import { toast } from './ui.js';
 import { scheduleDeepAnalysis } from './deep.js';
 import { mergeNewGames } from './session.js';
+import { syncRatings } from './rating-sync.js';
 
 const KEY = 'rankup-queue';
 const MAX_QUEUE = 12;
@@ -177,6 +178,8 @@ export async function syncNow({ force = false, fetchImpl = fetch, now = Date.now
   }
   app.save();
   const added = enqueue(items);
+  // A new game means a new rating: read it now rather than at the next check.
+  if (items.length) syncRatings({ force: true, fetchImpl, now }).catch(() => {});
   syncing = false;
   notify();
   return { added, errors };

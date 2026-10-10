@@ -66,6 +66,33 @@ test('choosing blitz at setup makes the goal follow blitz, and it can be changed
   await expect(page.locator('.goal-card')).toContainText('1180');
 });
 
+test('a Chess.com rating is read again when the app comes back to the foreground', async ({ page }) => {
+  await page.clock.install();
+  let rating = 1000;
+  await page.route('https://api.chess.com/pub/player/**', route => {
+    const url = route.request().url();
+    const body = url.endsWith('/stats')
+      ? { chess_blitz: { last: { rating, date: Math.floor(Date.now() / 1000) }, record: { win: 30, loss: 25, draw: 5 } } }
+      : url.endsWith('/archives')
+        ? { archives: [] }
+        : { games: [] };
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  });
+  await page.goto('./');
+  await page.click('[data-site="chesscom"]');
+  await page.fill('#setup-name', 'me');
+  await page.click('#setup-form button[type="submit"]');
+  await expect(page.locator('.goal-card')).toContainText('Chess.com blitz');
+  await expect(page.locator('.goal-numbers')).toContainText('1000');
+  await expect(page.locator('.goal-top')).toContainText('updated just now');
+  // You play a few games elsewhere; the app was in the background meanwhile.
+  rating = 1032;
+  await page.clock.fastForward('31:00');
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect(page.locator('.goal-numbers')).toContainText('1032');
+  expect((await saved(page)).ratings.at(-1)).toMatchObject({ platform: 'Chess.com blitz', rating: 1032 });
+});
+
 test('an unknown username explains itself, and the no-account path picks a level', async ({ page }) => {
   await mockLichess(page, { status: 404 });
   await page.goto('./#today');

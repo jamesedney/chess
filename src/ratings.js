@@ -51,9 +51,15 @@ export async function lichessRatings(username, fetchImpl = fetch, now = Date.now
   return out;
 }
 
-/** Chess.com: current rating for the main time control (no history in the public API). */
-export async function chessComRatings(username, fetchImpl = fetch, prefer = 'auto') {
-  const res = await fetchImpl(`https://api.chess.com/pub/player/${encodeURIComponent(username.toLowerCase())}/stats`);
+/**
+ * Chess.com: the rating for the main time control and up to two months of
+ * history, read from the stats endpoint and from your recent games. Whichever
+ * is newer gives the current rating, so a lagging stats page cannot hold it
+ * back. Returns { perf: 'Chess.com blitz', rating, history: [{ date, rating }] }.
+ */
+export async function chessComRatings(username, fetchImpl = fetch, prefer = 'auto', now = Date.now()) {
+  const user = encodeURIComponent(username.toLowerCase());
+  const res = await fetchImpl(`https://api.chess.com/pub/player/${user}/stats`);
   if (res.status === 404) throw new Error(`No Chess.com account called ${username}.`);
   if (!res.ok) throw new Error(`Chess.com returned an error (${res.status}).`);
   const stats = await res.json();
@@ -65,7 +71,39 @@ export async function chessComRatings(username, fetchImpl = fetch, prefer = 'aut
   const counts = Object.fromEntries(['bullet', 'blitz', 'rapid', 'classical'].map(p => [p, games(p)]));
   const perf = mainPerf(counts, prefer);
   if (!perf) return null;
-  return { perf: `Chess.com ${perf}`, rating: stats[key(perf)].last.rating, history: [] };
+  const last = stats[key(perf)].last;
+  let current = { rating: last.rating, time: (last.date || 0) * 1000 };
+  const history = [];
+  try {
+    const list = await fetchImpl(`https://api.chess.com/pub/player/${user}/games/archives`);
+    if (list.ok) {
+      const timeClass = perf === 'classical' ? 'daily' : perf;
+      const byDay = new Map();
+      const since = now - 180 * 86400000;
+      for (const url of ((await list.json()).archives || []).slice(-2)) {
+        const r = await fetchImpl(url);
+        if (!r.ok) continue;
+        for (const g of (await r.json()).games || []) {
+          if (!g.rated || g.rules !== 'chess' || g.time_class !== timeClass || !g.end_time) continue;
+          const side =
+            g.white?.username?.toLowerCase() === username.toLowerCase()
+              ? g.white
+              : g.black?.username?.toLowerCase() === username.toLowerCase()
+                ? g.black
+                : null;
+          if (!side?.rating) continue;
+          const time = g.end_time * 1000;
+          if (time < since) continue;
+          const date = new Date(time).toISOString().slice(0, 10);
+          const prev = byDay.get(date);
+          if (!prev || prev.time <= time) byDay.set(date, { rating: side.rating, time });
+          if (time > current.time) current = { rating: side.rating, time };
+        }
+      }
+      for (const [date, v] of [...byDay].sort((a, b) => a[0].localeCompare(b[0]))) history.push({ date, rating: v.rating });
+    }
+  } catch {}
+  return { perf: `Chess.com ${perf}`, rating: current.rating, history };
 }
 
 /**

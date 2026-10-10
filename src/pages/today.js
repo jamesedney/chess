@@ -166,6 +166,15 @@ function finishSetup(rating) {
 
 // ---------- Today ----------
 
+/** "just now", "12 min ago", "3 h ago" or a date. */
+function ago(time, now = Date.now()) {
+  const min = Math.round((now - time) / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  if (min < 24 * 60) return `${Math.round(min / 60)} h ago`;
+  return formatDate(new Date(time).toISOString().slice(0, 10));
+}
+
 function goalHTML() {
   const s = app.state;
   const g = goalStatus(s);
@@ -183,7 +192,7 @@ function goalHTML() {
           ? `About ${plural(g.weeksBehind, 'week')} behind: today’s plan pushes harder`
           : 'Behind: today’s plan pushes harder';
   return `<section class="goal-card" aria-label="Your goal">
-    <div class="goal-top"><span class="small">${esc(label)}</span><span class="small">by ${esc(formatDate(t.by))}</span></div>
+    <div class="goal-top"><span class="small">${esc(label)}${t.perf !== PUZZLE_PERF && s.sync.ratingsAt ? ` · updated ${esc(ago(s.sync.ratingsAt))}` : ''}</span><span class="small">by ${esc(formatDate(t.by))}</span></div>
     <div class="goal-numbers"><strong>${g.current}</strong><span aria-hidden="true">→</span><strong>${t.target}</strong></div>
     <div class="goal-track" role="progressbar" aria-valuemin="${t.start.rating}" aria-valuemax="${t.target}" aria-valuenow="${g.current}" aria-label="Progress to ${t.target}"><span style="width:${pct}%"></span></div>
     <p class="small goal-status ${g.status}">${esc(status)}</p>
