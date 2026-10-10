@@ -16,9 +16,9 @@
 - **Strategy.** Pawn-structure facts (isolated, doubled, passed, backward pawns, outposts, open and half-open files, bad bishops, loose king squares), assessment buckets, scoring, bias and calibration, position picking from reviews, the candidate-move counter, and the Strategy theme.
 - **Human-like opponents.** Maia input encoding, the network forward pass against a reference implementation, and move sampling.
 - **Imports.** Multi-game PGN splitting, colour detection, Lichess and Chess.com fetching with fake responses, and the Lichess CSV importer with plain and zstd files.
-- **Offline shell.** Versions agree, every precached file exists, and every module the app imports is in the offline cache.
+- **Offline shell and deploy.** Versions agree, every precached file exists, every module the app imports is in the offline cache, and staging the site includes every precached and lazily cached file (the Maia networks) and every local page the app links to.
 
-`npm run test:e2e` runs Playwright in Chromium against the app served from a sub-path, as on GitHub Pages. It covers:
+`npm run test:e2e` runs Playwright in Chromium against the staged site (`tools/stage-site.mjs`, the exact files GitHub Pages publishes) served from a sub-path, as on GitHub Pages, so a file missing from the deploy fails the tests. It covers:
 
 - Every page loads with no browser errors, and back-button navigation works.
 - Solving a puzzle, a wrong move being rejected, and an alternative move being accepted by Stockfish.

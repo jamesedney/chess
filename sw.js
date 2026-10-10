@@ -1,6 +1,6 @@
 // Rankup service worker: precache the app for offline use.
 // Bump VERSION (and package.json) for every release; tests check they match.
-const VERSION = '3.0.3';
+const VERSION = '3.0.4';
 const CACHE = 'rankup-v' + VERSION;
 const FILES = [
   './',
@@ -80,6 +80,9 @@ const FILES = [
     ['w', 'b'].flatMap(c => [...'KQRBNP'].map(p => `./pieces/${set}/${c}${p}.svg`)),
   ),
 ];
+// Large optional files: deployed with the site but cached only on first use
+// (see the fetch handler). tools/stage-site.mjs publishes these as well.
+const LAZY_FILES = ['./maia/maia-1100.bin', './maia/maia-1500.bin', './maia/maia-1900.bin'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES.map(url => new Request(url, { cache: 'reload' })))));

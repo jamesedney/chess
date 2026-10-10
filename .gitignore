@@ -6,3 +6,5 @@ playwright-report/
 .smoke.mjs
 .shots.mjs
 tmp/
+.e2e-site/
+.stage-test-*/

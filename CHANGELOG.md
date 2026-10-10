@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.0.4
+
+- Fixed: the human-like Maia opponents never loaded on the published site. Their networks are cached on first use rather than at install, and the deploy only copied the install-time file list, so GitHub Pages answered "not found" and every move quietly fell back to Stockfish. The networks are now deployed, and the licences page linked from Settings, which had the same problem, is too.
+- The status line names the opponent you are playing: "Maia is thinking…" for the human-like levels.
+- The browser tests now run against the staged site (the exact files GitHub Pages publishes), and a new test checks that Maia downloads its network and plays the reply.
+
+
 ## 3.0.3
 
 - Fixed: on phones, a puzzle block over several tags (for example a Strategy block) showed every tag in one unbreakable line above the board, which made the page wider than the screen and shrank everything. The line now shows the unit name, or two tag names and a count, and is hidden during a session block because the bar at the top already names it. Raw tag ids such as "advancedPawn" now show as readable names.

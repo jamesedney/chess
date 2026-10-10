@@ -81,8 +81,13 @@ function gameStatus() {
   if (g.isThreefoldRepetition()) return 'Draw by repetition.';
   if (g.isInsufficientMaterial()) return 'Draw: not enough material to mate.';
   if (g.isDraw()) return 'The game is drawn.';
-  if (play.thinking) return 'Stockfish is thinking…';
-  return g.turn() === play.color ? 'Your move. Check the threat before choosing.' : 'Stockfish to move.';
+  if (play.thinking) return `${opponentName()} is thinking…`;
+  return g.turn() === play.color ? 'Your move. Check the threat before choosing.' : `${opponentName()} to move.`;
+}
+
+/** Who the practice opponent is: Maia for the human-like levels, otherwise Stockfish. */
+function opponentName() {
+  return levelById(app.state.strength).mode === 'maia' ? 'Maia' : 'Stockfish';
 }
 
 function moveRecord() {
@@ -383,7 +388,7 @@ async function onMove(move) {
         play.note = 'Coach: a stronger move was available. Saved to My mistakes for later.';
       }
     }
-    status((play.note ? play.note + ' ' : '') + 'Stockfish is thinking…');
+    status((play.note ? play.note + ' ' : '') + `${opponentName()} is thinking…`);
     await engineMove(token, after, level);
   } catch (e) {
     if (token === play.token) status(e.message, 'error');
@@ -423,7 +428,7 @@ async function engineMove(token, after, level) {
   const m = playUci(g, uci);
   play.lastMove = [m.from, m.to];
   persist();
-  if (board) board.announce(`Stockfish played ${m.san}.`);
+  if (board) board.announce(`${opponentName()} played ${m.san}.`);
   if (g.isGameOver()) recordResult();
 }
 
@@ -431,7 +436,7 @@ async function engineTurn() {
   const token = play.token;
   play.thinking = true;
   refreshBoard();
-  status('Stockfish is thinking…');
+  status(`${opponentName()} is thinking…`);
   try {
     await engineMove(token, null, levelById(app.state.strength));
   } catch (e) {

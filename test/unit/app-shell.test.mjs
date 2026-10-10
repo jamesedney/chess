@@ -9,7 +9,7 @@ const read = f => fs.readFileSync(path.join(root, f), 'utf8');
 
 function serviceWorker() {
   const ctx = { self: { addEventListener() {}, location: {} } };
-  vm.runInNewContext(read('sw.js') + '\n;globalThis.__out = { FILES, VERSION };', ctx);
+  vm.runInNewContext(read('sw.js') + '\n;globalThis.__out = { FILES, LAZY_FILES, VERSION };', ctx);
   return ctx.__out;
 }
 
@@ -42,6 +42,28 @@ test('every precached file exists', () => {
   for (const f of serviceWorker().FILES) {
     if (f === './') continue;
     assert.ok(fs.existsSync(path.join(root, f)), 'missing ' + f);
+  }
+});
+
+test('every Maia level has its network deployed, and the staged site contains every file', async () => {
+  const { FILES, LAZY_FILES } = serviceWorker();
+  const { LEVELS } = await import('../../src/strength.js');
+  for (const l of LEVELS.filter(l => l.mode === 'maia'))
+    assert.ok(LAZY_FILES.includes(`./maia/maia-${l.maia}.bin`), `maia ${l.maia} not deployed`);
+  for (const f of LAZY_FILES) assert.ok(fs.existsSync(path.join(root, f)), 'missing ' + f);
+  // Stage the site exactly as the Pages workflow does and check nothing the app fetches is left out.
+  const { execFileSync } = await import('node:child_process');
+  const out = fs.mkdtempSync(path.join(root, '.stage-test-'));
+  try {
+    execFileSync(process.execPath, ['tools/stage-site.mjs', path.relative(root, out)], { cwd: root, stdio: 'pipe' });
+    for (const f of [...FILES, ...LAZY_FILES])
+      if (f !== './') assert.ok(fs.existsSync(path.join(out, f)), `${f} missing from the deployed site`);
+    // Local links in the app (such as the licences page) must be deployed too.
+    for (const file of fs.readdirSync(path.join(root, 'src'), { recursive: true }).filter(f => String(f).endsWith('.js')))
+      for (const m of read(path.join('src', String(file))).matchAll(/href="\.\/([^"#?]+)"/g))
+        assert.ok(fs.existsSync(path.join(out, m[1])), `${m[1]} linked from src/${file} is not deployed`);
+  } finally {
+    fs.rmSync(out, { recursive: true, force: true });
   }
 });
 

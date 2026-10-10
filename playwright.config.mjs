@@ -15,7 +15,9 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: `node tools/serve.mjs --port ${PORT} --base /rankup-chess/`,
+    // Serve the staged site, the exact files GitHub Pages publishes, so a file
+    // missing from the deploy fails the tests instead of only the live app.
+    command: `node tools/stage-site.mjs .e2e-site && node tools/serve.mjs --port ${PORT} --base /rankup-chess/ --root .e2e-site`,
     url: `http://localhost:${PORT}/rankup-chess/`,
     reuseExistingServer: !process.env.CI,
   },

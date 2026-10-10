@@ -251,6 +251,20 @@ test('the training page always shows the next step, and the session complete scr
   await expect(page.locator('#board .square')).toHaveCount(64);
 });
 
+test('the human-like opponent loads its Maia network and replies', async ({ page }) => {
+  const maia = [];
+  page.on('response', r => r.url().includes('/maia/') && maia.push(`${r.status()} ${r.url().split('/maia/')[1]}`));
+  await seed(page, { strength: 'maia1100' });
+  await open(page, 'play');
+  await expect(page.locator('#play-status')).toContainText('Your move');
+  await move(page, 'e2', 'e4');
+  // Maia, not the Stockfish fallback, plays the reply.
+  await expect(page.locator('#play-status')).toContainText('Your move', { timeout: 30000 });
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-practice')).pgn)).toMatch(/1\. e4 [a-hKQRBNO]/);
+  await expect(page.locator('.toast.show')).toHaveCount(0);
+  expect(maia).toEqual(expect.arrayContaining(['200 tables.json', '200 maia-1100.bin']));
+});
+
 test('the practice opponent climbs the ladder after five wins', async ({ page }) => {
   const d = new Date().toISOString().slice(0, 10);
   await seed(page, { games: Array.from({ length: 4 }, () => ({ d, level: 'maia1100', r: 1 })), strength: 'maia1100' });
