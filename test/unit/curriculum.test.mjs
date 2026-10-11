@@ -417,7 +417,7 @@ test('goal model: choosing another time control moves the goal to it', () => {
 });
 
 test('state v6: new fields default, migrate and validate', () => {
-  assert.equal(CURRENT_VERSION, 7);
+  assert.equal(CURRENT_VERSION, 8);
   const d = fresh();
   assert.equal(d.onboarded, false);
   assert.deepEqual(d.curriculum, { units: {}, current: null, placed: false });
@@ -428,7 +428,7 @@ test('state v6: new fields default, migrate and validate', () => {
   delete old.target;
   delete old.milestones;
   const m = migrate(old);
-  assert.equal(m.version, 7);
+  assert.equal(m.version, CURRENT_VERSION);
   assert.ok(m.skills.safety);
   assert.ok(Array.isArray(m.milestones));
   assert.doesNotThrow(() => validate(m));

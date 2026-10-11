@@ -1,5 +1,16 @@
 # Changelog
 
+## 4.1.0
+
+A new look: black and white, square corners, large numbers.
+
+- **Today** opens with your rating in large type, the change over the last two weeks, a 60-day trend line (with your goal when it is near) and three "Is it working?" numbers: last two weeks against the six before, the better ones in green. The day's blocks are numbered 01, 02 …, and the next one is highlighted.
+- **Puzzles** show the count large (04/12), still read out as "4 of 12".
+- **Debriefs** list the reasons likeliest first, each with how often your past debriefs gave it.
+- Archivo typeface, bundled so it works offline (SIL Open Font License). Sections sit under rules instead of in boxes; one signal colour marks improvement.
+- New black icon. A grey board is the default; if you had the old default (Walnut) you now get grey, and Walnut is still in Settings.
+- State version 8.
+
 ## 4.0.0
 
 Your games are the curriculum.

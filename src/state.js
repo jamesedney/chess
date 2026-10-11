@@ -13,7 +13,7 @@ import { SKILLS } from '../data/curriculum.js';
 
 export const STORAGE_KEY = 'rankup-v1'; // Kept for continuity; the version lives inside.
 export const RECOVERY_PREFIX = 'rankup-recovery-';
-export const CURRENT_VERSION = 7;
+export const CURRENT_VERSION = 8;
 export const MAX_GAMES = 50;
 export const MAX_REVIEWS = 20;
 export const MAX_LOG = 4000;
@@ -162,6 +162,14 @@ export const MIGRATIONS = [
       // Games reviewed before debriefs existed are not asked about again.
       const reviews = (s.reviews || []).map(r => ({ ...r, debriefed: true }));
       return { ...s, reviews, replays: {}, rep: {} };
+    },
+  },
+  {
+    from: 7,
+    run(s) {
+      // 4.1 redesign: the default board became grey. Walnut stays in Settings.
+      if (s.settings?.board !== 'walnut') return s;
+      return { ...s, settings: { ...s.settings, board: 'grey' } };
     },
   },
   {

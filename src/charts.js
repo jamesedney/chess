@@ -230,3 +230,34 @@ export function barList(items) {
     )
     .join('')}</div>`;
 }
+
+/**
+ * A small trend line for Today: the rating over the last `days`, with the
+ * target as a dashed line along the top when it is close above the data.
+ * @param {{ date: string, rating: number }[]} series
+ * @param {{ target?: number, days?: number, today?: Date }} [options]
+ */
+export function sparkline(series, { target = 0, days = 60, today = new Date() } = {}) {
+  const from = new Date(today.getTime() - days * 86400000).toISOString().slice(0, 10);
+  const before = series.filter(p => p.date < from).at(-1);
+  const points = [...(before ? [before] : []), ...series.filter(p => p.date >= from)];
+  if (points.length < 2) return '';
+  const W = 360;
+  const H = 54;
+  const values = points.map(p => p.rating);
+  const top = Math.max(...values);
+  // Show the target only when it is near enough not to flatten the line.
+  if (target && (target <= top || target - top > 1.5 * Math.max(20, top - Math.min(...values)))) target = 0;
+  const lo = Math.min(...values) - 10;
+  const hi = target || top + 10;
+  const x = i => (i / (points.length - 1)) * W;
+  const y = v => H - 2 - ((v - lo) / (hi - lo || 1)) * (H - 6);
+  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.rating).toFixed(1)}`).join('');
+  const last = points.at(-1);
+  const goal =
+    target > Math.max(...values) ? `<line class="target" x1="0" x2="${W}" y1="${y(target).toFixed(1)}" y2="${y(target).toFixed(1)}"/>` : '';
+  const end = `${x(points.length - 1).toFixed(1)},${y(last.rating).toFixed(1)}`;
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Rating since ${esc(formatDate(points[0].date))}: ${points[0].rating} to ${last.rating}${goal ? `, goal ${target}` : ''}">
+    ${goal}<path class="line" d="${line}"/><path class="line end" d="M${end}L${end}" style="stroke-width:7;stroke-linecap:round;stroke:var(--good)"/>
+  </svg>`;
+}

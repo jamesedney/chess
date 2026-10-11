@@ -3,11 +3,12 @@
 import { app } from '../app-context.js';
 import { $, esc, plural, formatDate, toast } from '../ui.js';
 import { todaysSession, startBlock, sessionProgress, checkSession } from '../session.js';
-import { goalStatus, updateGoal, PUZZLE_PERF } from '../progress-model.js';
+import { goalStatus, goalSeries, updateGoal, PUZZLE_PERF } from '../progress-model.js';
 import { pathSummary, place, unitById, unitStatus } from '../curriculum.js';
 import { syncRatings } from '../rating-sync.js';
 import { RATING_PERFS } from '../ratings.js';
-import { evidence, headlineText } from '../evidence.js';
+import { evidence } from '../evidence.js';
+import { sparkline } from '../charts.js';
 import { syncNow } from '../queue.js';
 import { dateKey, streaks } from '../state.js';
 import { STAGES } from '../themes.js';
@@ -176,14 +177,23 @@ function ago(time, now = Date.now()) {
   return formatDate(new Date(time).toISOString().slice(0, 10));
 }
 
+/** The change over the last two weeks: { delta, since } or null with too little history. */
+function recentChange(series, current, now = new Date()) {
+  if (series.length < 2) return null;
+  const cutoff = dateKey(new Date(now.getTime() - 14 * 86400000));
+  const base = series.filter(p => p.date <= cutoff).at(-1) || series[0];
+  if (base === series.at(-1)) return null;
+  return { delta: current - base.rating, since: base.date <= cutoff ? '14 days' : `since ${formatDate(base.date)}` };
+}
+
 function goalHTML() {
   const s = app.state;
   const g = goalStatus(s);
   if (!g) return '';
   const t = s.target;
-  const span = Math.max(1, t.target - t.start.rating);
-  const pct = Math.max(2, Math.min(100, ((g.current - t.start.rating) / span) * 100));
+  const series = goalSeries(s);
   const label = t.perf === PUZZLE_PERF ? 'Rankup rating' : t.perf;
+  const change = recentChange(series, g.current);
   const status =
     g.status === 'reached'
       ? 'Target reached'
@@ -193,10 +203,42 @@ function goalHTML() {
           ? `About ${plural(g.weeksBehind, 'week')} behind: today’s plan pushes harder`
           : 'Behind: today’s plan pushes harder';
   return `<section class="goal-card" aria-label="Your goal">
-    <div class="goal-top"><span class="small">${esc(label)}${t.perf !== PUZZLE_PERF && s.sync.ratingsAt ? ` · updated ${esc(ago(s.sync.ratingsAt))}` : ''}</span><span class="small">by ${esc(formatDate(t.by))}</span></div>
-    <div class="goal-numbers"><strong>${g.current}</strong><span aria-hidden="true">→</span><strong>${t.target}</strong></div>
-    <div class="goal-track" role="progressbar" aria-valuemin="${t.start.rating}" aria-valuemax="${t.target}" aria-valuenow="${g.current}" aria-label="Progress to ${t.target}"><span style="width:${pct}%"></span></div>
+    <div class="goal-top"><span class="small">${esc(label)}${t.perf !== PUZZLE_PERF && s.sync.ratingsAt ? ` · updated ${esc(ago(s.sync.ratingsAt))}` : ''}</span></div>
+    <div class="hero">
+      <div class="goal-numbers"><strong>${g.current}</strong></div>
+      <div class="hero-side">
+        ${change ? `<span class="hero-delta ${change.delta > 0 ? 'up' : ''}">${change.delta > 0 ? '+' : change.delta < 0 ? '−' : '±'}${Math.abs(change.delta)}</span><span>${esc(change.since)}</span>` : ''}
+        <span>Goal ${t.target} · ${esc(formatDate(t.by))}</span>
+      </div>
+    </div>
+    ${sparkline(series, { target: t.target })}
     <p class="small goal-status ${g.status}">${esc(status)}</p>
+  </section>`;
+}
+
+const METRIC = {
+  blunders: 'Blunders a game',
+  threats: 'Missed threats',
+  rushed: 'Rushed moves',
+  convert: 'Wins converted',
+  score: 'Score',
+};
+const metricValue = (row, v) => (v === null ? '–' : row.id === 'convert' || row.id === 'score' ? `${Math.round(v * 100)}%` : v.toFixed(1));
+
+/** Is it working: three numbers, last two weeks against the six before. Empty until comparisons exist. */
+function evidenceHTML() {
+  const ev = evidence(app.state);
+  const known = ev.rows.filter(r => r.verdict !== 'unknown');
+  if (!known.length) return '';
+  const rows = [...known, ...ev.rows.filter(r => r.verdict === 'unknown' && r.now !== null)].slice(0, 3);
+  return `<section aria-labelledby="working-head">
+    <div class="section-rule"><span id="working-head">Is it working?</span><span>Last 2 weeks vs 6 before · <a href="#progress">All</a></span></div>
+    <div class="metrics">${rows
+      .map(
+        r =>
+          `<div class="metric ${r.verdict}"><strong>${metricValue(r, r.now)}</strong><span>${esc(METRIC[r.id])}</span><small class="muted">was ${metricValue(r, r.before)}</small></div>`,
+      )
+      .join('')}</div>
   </section>`;
 }
 
@@ -217,22 +259,22 @@ function draw() {
       : `Start today’s session · ${session.minutes} min`;
   root.innerHTML = `<div class="focus today">
     ${goalHTML()}
+    ${evidenceHTML()}
+    <section aria-labelledby="today-head">
+      <div class="section-rule"><span id="today-head">Today</span><span>${prog.complete ? 'All done' : `${prog.done} of ${session.blocks.length} done · ${prog.minutesLeft ?? session.minutes} min`}</span></div>
+      <ol class="agenda">${session.blocks
+        .map(
+          (b, i) =>
+            `<li class="agenda-item ${b.status}${i === firstTodo && !prog.complete ? ' current' : ''}"><button type="button" data-block="${i}" ${b.status === 'done' ? 'aria-label="' + esc(b.title) + ', done"' : ''}>
+              <span class="agenda-mark" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span>
+              <span class="agenda-text"><strong>${esc(b.title)}</strong><span class="small">${esc(b.detail)}</span></span>
+              <span class="small agenda-time">${Math.max(1, Math.round(b.est))}′</span>
+            </button></li>`,
+        )
+        .join('')}</ol>
+    </section>
+    <button type="button" id="start-session" class="primary big" ${prog.complete ? 'disabled' : ''}><span>${esc(label)}</span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></button>
     <p class="level-line"><strong>${esc(path.band.label)}</strong> · ${path.bandDone} of ${path.bandTotal} units${unit ? ` · now: ${esc(unit.title)} (${unitPct}%)` : ''}</p>
-    ${(() => {
-      const line = headlineText(evidence(s));
-      return line ? `<p class="evidence-line small">${esc(line)} <a href="#progress">See all</a></p>` : '';
-    })()}
-    <button type="button" id="start-session" class="primary big" ${prog.complete ? 'disabled' : ''}>${esc(label)}</button>
-    <ol class="agenda">${session.blocks
-      .map(
-        (b, i) =>
-          `<li class="agenda-item ${b.status}"><button type="button" data-block="${i}" ${b.status === 'done' ? 'aria-label="' + esc(b.title) + ', done"' : ''}>
-            <span class="agenda-mark" aria-hidden="true">${b.status === 'done' ? '✓' : b.status === 'skipped' ? '–' : i + 1}</span>
-            <span class="agenda-text"><strong>${esc(b.title)}</strong><span class="small">${esc(b.detail)}</span></span>
-            <span class="small agenda-time">${Math.max(1, Math.round(b.est))} min</span>
-          </button></li>`,
-      )
-      .join('')}</ol>
     ${prog.complete ? `<p class="status success">Session complete. ${streak.current > 1 ? `${streak.current}-day streak. ` : ''}Tomorrow’s plan builds on today.</p><div class="actions center"><button type="button" id="more">Train more</button></div>` : ''}
     <div class="today-foot small">
       <label for="minutes">Daily time</label>

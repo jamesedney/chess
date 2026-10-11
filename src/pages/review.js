@@ -664,11 +664,7 @@ function drawViewer(review) {
     ${
       asking
         ? `<div class="reason-pick" role="group" aria-labelledby="reason-title">
-            <p id="reason-title"><strong>What went wrong?</strong></p>
-            <div class="reason-grid">${REASONS.map(
-              r =>
-                `<button type="button" data-reason="${r.id}" class="${r.id === suggested ? 'suggested' : ''}">${esc(r.label)}${r.id === suggested ? '<span class="small">Likely</span>' : ''}</button>`,
-            ).join('')}</div>
+            ${reasonListHTML(suggested)}
           </div>`
         : `<div class="focus-actions">
       ${solving ? '<button type="button" id="show-answer">Show answer</button>' : ''}
@@ -768,6 +764,25 @@ function drawViewer(review) {
 }
 
 /** The end of a debrief: what this game's moments were, your habit so far, and what next. */
+/** The reasons, likeliest first, each with how often your past debriefs gave it. */
+function reasonListHTML(suggested) {
+  const h = habits(app.state);
+  const count = id => h.list.find(x => x.id === id)?.count || 0;
+  const max = Math.max(1, ...REASONS.map(r => count(r.id)));
+  const order = [...REASONS].sort((a, b) => Number(b.id === suggested) - Number(a.id === suggested) || count(b.id) - count(a.id));
+  return `<div class="section-rule"><span id="reason-title">What went wrong?</span><span>${h.total ? `Your last ${plural(h.total, 'note')}` : 'One tap'}</span></div>
+    <div class="reason-grid reason-list">${order
+      .map(
+        r =>
+          `<button type="button" data-reason="${r.id}" class="${r.id === suggested ? 'suggested' : ''}"><span>${esc(r.label)}${r.id === suggested ? ' <span class="small">· likely</span>' : ''}</span>${
+            h.total
+              ? `<span class="reason-bar" aria-hidden="true"><span style="width:${Math.round((count(r.id) / max) * 100)}%"></span></span><span class="reason-count" aria-label="${plural(count(r.id), 'time')} before">${count(r.id)}</span>`
+              : ''
+          }</button>`,
+      )
+      .join('')}</div>`;
+}
+
 function drawDebriefSummary(review) {
   const moments = pickMoments(review);
   const h = habits(app.state);

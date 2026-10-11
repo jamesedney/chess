@@ -23,7 +23,7 @@ import { scheduleDeepAnalysis } from './deep.js';
 import { startAutoSync, syncNow } from './queue.js';
 import { CONTROLS } from './sync.js';
 
-export const VERSION = '4.0.0';
+export const VERSION = '4.1.0';
 const PAGES = { today, train, coach, path, play, review, progress, drills };
 // Pages without their own tab light up the tab they belong to.
 const NAV_AS = { train: 'today', drills: 'today', coach: 'progress' };
@@ -196,7 +196,7 @@ function applyTheme(choice) {
   if (choice === 'light' || choice === 'dark') document.documentElement.dataset.theme = choice;
   else delete document.documentElement.dataset.theme;
   const dark = choice === 'dark' || (choice !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
-  $('meta[name="theme-color"]')?.setAttribute('content', dark ? '#1a1512' : '#a6521f');
+  $('meta[name="theme-color"]')?.setAttribute('content', dark ? '#0a0a0a' : '#ffffff');
   applyBoardTheme(app.state.settings.board, dark);
 }
 

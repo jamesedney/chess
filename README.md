@@ -46,7 +46,7 @@ Enter your Lichess or Chess.com username and Rankup does the rest: it reads your
 - **Richer review.** Each game is matched to its named opening, and a table shows your results and mistakes per opening. Clock data shows how long you spent on each move and flags critical moves played too fast. While the engine is idle, marked moves are re-checked with a much deeper search: wrong suggestions are corrected, and false alarms are cleared.
 
 ### Everything else
-- **Themes and sound.** Seven board colours, five piece sets, synthesised move sounds and vibration on supported phones, all in Settings.
+- **Themes and sound.** Eight board colours (grey by default), five piece sets, synthesised move sounds and vibration on supported phones, all in Settings.
 - **You.** Your goal with its chart, path progress, milestones and the skill map, plus the puzzle rating, per-theme strength, a practice calendar and streak.
 - **Works offline and installs as an app.** After the first visit, about 10 MB, everything including Stockfish works offline. Each Maia level downloads about 1.7 MB the first time you play it.
 

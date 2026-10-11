@@ -221,12 +221,11 @@ test('evidence: recent games against the weeks before, and the focus it sets', (
 });
 
 test('state v7: replays and repertoire records, and old games are not debriefed again', () => {
-  assert.equal(CURRENT_VERSION, 7);
   const v6 = { ...defaults(), version: 6, reviews: [review()] };
   delete v6.replays;
   delete v6.rep;
   const m = migrate(v6);
-  assert.equal(m.version, 7);
+  assert.equal(m.version, CURRENT_VERSION);
   assert.deepEqual(m.replays, {});
   assert.deepEqual(m.rep, {});
   assert.equal(m.reviews[0].debriefed, true);
@@ -273,4 +272,17 @@ test('planner: a clock drill for a clock habit, a game to play again, and repert
   const repStarted = { ...rep, base: baseline(state) };
   for (let i = 0; i < rep.count; i++) state.log.push({ d: '2026-10-11', k: 'o', t: 'w', c: 1 });
   assert.equal(blockDone(state, repStarted), true);
+});
+
+test('state v8: the default walnut board becomes grey, other choices stay', () => {
+  assert.equal(CURRENT_VERSION, 8);
+  const v7 = s => ({ ...defaults(), version: 7, settings: { ...defaults().settings, board: s } });
+  assert.equal(migrate(v7('walnut')).settings.board, 'grey');
+  assert.equal(migrate(v7('ocean')).settings.board, 'ocean');
+  assert.equal(defaults().settings.board, 'grey');
+  assert.equal(validate(migrate(v7('walnut'))), null);
+  // A backup without settings is left for the defaults to fill.
+  const bare = { ...defaults(), version: 7 };
+  delete bare.settings;
+  assert.equal(migrate(bare).settings?.board ?? 'grey', 'grey');
 });

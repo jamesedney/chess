@@ -17,6 +17,7 @@ const extra = [
   'vendor/STOCKFISH-LICENSE.txt',
   'vendor/chess.LICENSE',
   'vendor/DEJAVU-LICENSE.txt',
+  'fonts/ARCHIVO-OFL.txt',
 ];
 const files = [...ctx.__files.filter(f => f !== './').map(f => f.replace(/^\.\//, '')), ...extra];
 

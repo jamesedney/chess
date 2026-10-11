@@ -2,6 +2,7 @@
 
 /** Square colours: light, dark, and the coordinate colours that sit on them. */
 export const BOARD_THEMES = {
+  grey: { label: 'Grey', light: '#ededed', dark: '#a8a8a8' },
   walnut: { label: 'Walnut', light: '#f0d9b5', dark: '#b58863' },
   slate: { label: 'Slate', light: '#dee3e6', dark: '#8ca2ad' },
   ink: { label: 'Ink', light: '#e8e4dc', dark: '#6f7380' },
@@ -19,7 +20,7 @@ export const PIECE_SETS = {
   mpchess: { label: 'MPChess' },
 };
 
-export const DEFAULT_APPEARANCE = { board: 'walnut', pieces: 'cburnett' };
+export const DEFAULT_APPEARANCE = { board: 'grey', pieces: 'cburnett' };
 
 let pieceSet = DEFAULT_APPEARANCE.pieces;
 
@@ -35,13 +36,13 @@ export function setPieceSet(id) {
 const PROPS = ['--sq-light', '--sq-dark', '--sq-light-hover', '--sq-dark-hover', '--coord-light', '--coord-dark'];
 
 /**
- * Apply a board colour scheme through CSS custom properties. Walnut is the
+ * Apply a board colour scheme through CSS custom properties. Grey is the
  * stylesheet's own palette; other schemes are dimmed the same way in dark mode.
  */
 export function applyBoardTheme(id, dark = false, root = document.documentElement) {
-  const key = BOARD_THEMES[id] ? id : 'walnut';
+  const key = BOARD_THEMES[id] ? id : 'grey';
   root.dataset.board = key;
-  if (key === 'walnut') {
+  if (key === 'grey') {
     for (const p of PROPS) root.style.removeProperty(p);
     return;
   }

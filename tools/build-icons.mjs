@@ -5,8 +5,8 @@ import path from 'node:path';
 import { chromium } from '@playwright/test';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
-const BG = '#a6521f'; // --accent
-const KNIGHT = '#f6f1e8'; // --paper
+const BG = '#0a0a0a'; // --ink
+const KNIGHT = '#ffffff'; // --paper
 
 // The cburnett black knight: body in paper, eye, nostril and mane line in the background colour.
 const knight = `<g fill="none" fill-rule="evenodd" stroke="${KNIGHT}" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">

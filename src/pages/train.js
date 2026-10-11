@@ -285,10 +285,10 @@ function topLine() {
   const s = app.state;
   const goal = sessionGoal();
   let progress;
-  if (session.mode === 'vision') progress = `Vision sprint · best ${s.vision.best}`;
+  if (session.mode === 'vision') progress = esc(`Vision sprint · best ${s.vision.best}`);
   else {
     const n = Math.min(session.done + (current && !current.complete ? 1 : 0), goal) || Math.min(session.done, goal);
-    progress = `${Math.max(1, n)} of ${goal} · rating ${s.puzzle.rating}`;
+    progress = progressHTML(Math.max(1, n), goal, s.puzzle.rating);
   }
   const chip =
     session.clock && !activeBlock()
@@ -305,10 +305,16 @@ function topLine() {
                 ? `<span class="chip">${esc(tagSummary(session.tags))}</span>`
                 : '';
   return `<div class="focus-top">
-    <span id="focus-progress" class="focus-progress">${esc(progress)}</span>
+    <span id="focus-progress" class="focus-progress">${progress}</span>
     ${chip}
     <button type="button" id="train-menu" class="secondary focus-menu" aria-haspopup="dialog" aria-label="Training menu: modes and today’s numbers">Mode</button>
   </div>`;
+}
+
+/** "04/12" in large type, read out as "4 of 12", then the puzzle rating. */
+function progressHTML(n, goal, rating) {
+  const pad = v => String(v).padStart(2, '0');
+  return `<span class="count" aria-hidden="true">${pad(n)}</span><span class="of" aria-hidden="true">/${pad(goal)}</span><span class="visually-hidden">${n} of ${goal}</span><span class="small"> · rating ${rating}</span>`;
 }
 
 /** Two readable tag names and how many more, e.g. "Quiet move · Advanced pawn +3". */
@@ -523,7 +529,11 @@ function refreshBoard() {
   if (chip) chip.textContent = turnLabel(c.game);
   const prog = $('#focus-progress');
   if (prog)
-    prog.textContent = `${Math.max(1, Math.min(session.done + (c.complete ? 0 : 1), sessionGoal()))} of ${sessionGoal()} · rating ${app.state.puzzle.rating}`;
+    prog.innerHTML = progressHTML(
+      Math.max(1, Math.min(session.done + (c.complete ? 0 : 1), sessionGoal())),
+      sessionGoal(),
+      app.state.puzzle.rating,
+    );
 }
 
 function feedback(message, tone = '') {

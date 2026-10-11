@@ -2,6 +2,11 @@
 
 Rankup is free software under the GNU GPL v3 or later; see `LICENSE`. All application source in this repository is unminified.
 
+## Archivo typeface
+
+Copyright 2020 The Archivo Project Authors (https://github.com/Omnibus-Type/Archivo). SIL Open Font License 1.1, full text in `fonts/ARCHIVO-OFL.txt`.
+`fonts/archivo.woff2` is the Latin subset of the variable font (weight 100–900, width 62–125%) from npm `@fontsource-variable/archivo@5.3.0`, unmodified.
+
 ## Stockfish.js 17.1.0
 
 Copyright Stockfish contributors, Chess.com, LLC and Nathan Rugg. GNU GPL v3.
