@@ -134,7 +134,9 @@ test('the pace drill times each position and the pause drill locks the board fir
   await open(page, 'train?mode=daily&clock=pace&limit=2');
   await expect(page.locator('.focus-top .chip')).toHaveText('Pace drill');
   await expect(page.locator('#drill-clock')).toHaveText(/^1[45]s$/);
-  await page.clock.fastForward('00:17');
+  // Wait until the clock is running (after the opponent's setup move), then let it run out.
+  await expect(page.locator('#drill-clock')).toHaveText(/^1[0-4]s$/);
+  await page.clock.fastForward('00:16');
   await expect(page.locator('#feedback')).toContainText('Out of time', { timeout: 20000 });
   await page.goto('./#train?mode=daily&clock=pause&limit=2');
   await page.reload();

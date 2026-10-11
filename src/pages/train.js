@@ -202,6 +202,7 @@ function tickClock(c) {
     if (left <= 0 && !c.busy && !c.setupPending) {
       stopClock();
       c.timedOut = true;
+      feedback('Out of time.', 'error');
       showSolution();
     }
   } else {
@@ -737,7 +738,7 @@ async function showSolution() {
     sans.push(m.san);
     c.lastMove = [m.from, m.to];
     refreshBoard();
-    feedback('Solution: ' + sans.join(' '));
+    feedback((c.timedOut ? 'Out of time. Solution: ' : 'Solution: ') + sans.join(' '));
   }
   finish(c, true);
 }
