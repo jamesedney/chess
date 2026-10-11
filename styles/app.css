@@ -3592,3 +3592,75 @@ button.big {
     margin: 0;
   }
 }
+
+/* Today fits one phone screen: one line per block, the detail only for the
+   next one, and a smaller hero. */
+.today {
+  gap: 10px;
+}
+.today .goal-numbers strong {
+  font-size: clamp(64px, 19vw, 92px);
+}
+.today .hero-side {
+  font-size: 12px;
+  gap: 0;
+}
+.today .hero-delta {
+  font-size: 22px;
+}
+.today .spark {
+  height: 34px;
+  margin-top: 8px;
+}
+.today .goal-status {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  gap: 6px;
+}
+.today .goal-status::before {
+  width: 7px;
+  height: 7px;
+}
+.today .section-rule {
+  padding: 6px 0 2px;
+}
+.today .metric {
+  padding-top: 2px;
+  padding-bottom: 4px;
+}
+.today .metric strong {
+  font-size: 24px;
+}
+.today .agenda-item button {
+  padding: 7px 0;
+  align-items: center;
+}
+.today .agenda-item.current button {
+  padding: 8px 14px;
+}
+@media (min-width: 851px) {
+  .today .agenda-item.current button {
+    padding: 10px 12px;
+  }
+}
+.today .agenda-mark {
+  width: 28px;
+  font-size: 18px;
+  place-items: center start;
+}
+.today .agenda-text strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.today .agenda-item:not(.current) .agenda-text .small {
+  display: none;
+}
+.today .agenda-item.current .agenda-text .small {
+  -webkit-line-clamp: 1;
+}
+.today button.big {
+  min-height: 50px;
+}

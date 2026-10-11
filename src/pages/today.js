@@ -198,21 +198,21 @@ function goalHTML() {
     g.status === 'reached'
       ? 'Target reached'
       : g.status === 'on-track'
-        ? `On track: projected ${g.projected}`
+        ? `On track · ${g.projected}`
         : g.weeksBehind
-          ? `About ${plural(g.weeksBehind, 'week')} behind: today’s plan pushes harder`
-          : 'Behind: today’s plan pushes harder';
+          ? `${plural(g.weeksBehind, 'week')} behind`
+          : 'Behind';
   return `<section class="goal-card" aria-label="Your goal">
     <div class="goal-top"><span class="small">${esc(label)}${t.perf !== PUZZLE_PERF && s.sync.ratingsAt ? ` · updated ${esc(ago(s.sync.ratingsAt))}` : ''}</span></div>
     <div class="hero">
       <div class="goal-numbers"><strong>${g.current}</strong></div>
       <div class="hero-side">
-        ${change ? `<span class="hero-delta ${change.delta > 0 ? 'up' : ''}">${change.delta > 0 ? '+' : change.delta < 0 ? '−' : '±'}${Math.abs(change.delta)}</span><span>${esc(change.since)}</span>` : ''}
+        ${change ? `<span><span class="hero-delta ${change.delta > 0 ? 'up' : ''}">${change.delta > 0 ? '+' : change.delta < 0 ? '−' : '±'}${Math.abs(change.delta)}</span> ${esc(change.since)}</span>` : ''}
         <span>Goal ${t.target} · ${esc(formatDate(t.by))}</span>
+        <span class="goal-status ${g.status}">${esc(status)}</span>
       </div>
     </div>
     ${sparkline(series, { target: t.target })}
-    <p class="small goal-status ${g.status}">${esc(status)}</p>
   </section>`;
 }
 

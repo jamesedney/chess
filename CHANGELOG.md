@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.1.1
+
+- Today fits on one phone screen: a smaller rating number, a shorter trend line, the goal and "on track" beside the number, and one line per block, with the description only for the next one.
+
 ## 4.1.0
 
 A new look: black and white, square corners, large numbers.
