@@ -1,5 +1,11 @@
 # Changelog
 
+## 4.1.2
+
+- Fixed: the app could reset itself. 4.0 recorded debriefs, "Play it again" attempts and repertoire drills in your history, but the check that runs when the app opens did not know those entries, so the next launch treated your saved progress as unreadable, set it aside and started fresh. Those entries are now accepted, and progress that was set aside this way is brought back automatically on the next launch (the state it replaces is kept as a recovery copy).
+- Unreadable saved data is copied aside once, not again on every launch.
+- Tests: every end-to-end test now reloads the app at the end and fails if saved data was set aside.
+
 ## 4.1.1
 
 - Today fits on one phone screen: a smaller rating number, a shorter trend line, the goal and "on track" beside the number, and one line per block, with the description only for the next one.

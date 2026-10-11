@@ -79,7 +79,8 @@ const THEME_SKILL = {
 export const emptyDrillStats = () => ({ best: 0, runs: 0, last: [] });
 
 /** Exercise kinds in the log. */
-export const LOG_KINDS = ['p', 'm', 'e', 'c', 'v']; // puzzle, my mistake, endgame, calculation, vision
+// puzzle, my mistake, endgame, calculation, vision, debrief, replay, repertoire
+export const LOG_KINDS = ['p', 'm', 'e', 'c', 'v', 'b', 'r', 'o'];
 
 const V1_SKILL_TO_LEVEL = { 0: 'beginner', 3: 'novice', 8: 'elo1600', 20: 'full' };
 
@@ -314,26 +315,70 @@ export function parseState(text) {
   return state;
 }
 
+/** How much history a state holds, to choose between it and a recovered copy. */
+function weight(s) {
+  const attempts = Object.values(s.days).reduce((a, d) => a + (d.attempts || 0), 0);
+  return s.reviews.length + s.mistakes.length + s.ratings.length + s.log.length + attempts;
+}
+
+/**
+ * A copy set aside because an older version could not read it may load now.
+ * Bring back the readable copy with the most history when it holds more than
+ * the state just loaded, and keep the state it replaces as a recovery copy.
+ */
+function restoreRecovered(storage, current, now) {
+  let best = null;
+  try {
+    for (const key of recoveryKeys(storage)) {
+      try {
+        const saved = parseState(storage.getItem(key));
+        if (!best || weight(saved) > weight(best.saved)) best = { key, saved };
+      } catch {}
+    }
+  } catch {
+    return null;
+  }
+  if (!best || weight(best.saved) <= weight(current)) return null;
+  try {
+    if (weight(current) > 0) storage.setItem(RECOVERY_PREFIX + now, JSON.stringify(current));
+    storage.setItem(STORAGE_KEY, JSON.stringify(best.saved));
+    storage.removeItem(best.key);
+  } catch {
+    return null;
+  }
+  return best.saved;
+}
+
 /**
  * Load from storage. When saved data cannot be read, keep a copy under a
- * recovery key instead of letting the next save overwrite it.
+ * recovery key instead of letting the next save overwrite it; when a kept
+ * copy can be read again, bring it back.
  */
 export function loadState(storage, now = Date.now()) {
   let raw;
   try {
     raw = storage.getItem(STORAGE_KEY);
   } catch {
-    return { state: defaults(), storageOK: false, recovered: false };
+    return { state: defaults(), storageOK: false, recovered: false, restored: false };
   }
-  if (!raw) return { state: defaults(), storageOK: true, recovered: false };
-  try {
-    return { state: parseState(raw), storageOK: true, recovered: false };
-  } catch {
+  let state = defaults();
+  let recovered = false;
+  if (raw) {
     try {
-      storage.setItem(RECOVERY_PREFIX + now, raw);
-    } catch {}
-    return { state: defaults(), storageOK: true, recovered: true };
+      state = parseState(raw);
+    } catch {
+      // Keep one copy: once it is stored, clear the original so the next
+      // load does not copy the same data again.
+      try {
+        storage.setItem(RECOVERY_PREFIX + now, raw);
+        storage.removeItem(STORAGE_KEY);
+      } catch {}
+      recovered = true;
+    }
   }
+  const back = restoreRecovered(storage, state, now + 1);
+  if (back) return { state: back, storageOK: true, recovered: false, restored: true };
+  return { state, storageOK: true, recovered, restored: false };
 }
 
 /** Append a finished exercise to the log, keeping it bounded. */

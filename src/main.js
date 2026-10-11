@@ -23,7 +23,7 @@ import { scheduleDeepAnalysis } from './deep.js';
 import { startAutoSync, syncNow } from './queue.js';
 import { CONTROLS } from './sync.js';
 
-export const VERSION = '4.1.1';
+export const VERSION = '4.1.2';
 const PAGES = { today, train, coach, path, play, review, progress, drills };
 // Pages without their own tab light up the tab they belong to.
 const NAV_AS = { train: 'today', drills: 'today', coach: 'progress' };
@@ -511,7 +511,8 @@ function boot() {
   startRatingSync();
   // A game reviewed in the background can add to today's plan while it is on screen.
   onSessionChange(() => app.page === 'today' && today.refresh());
-  if (app.recovered) toast('Saved progress could not be read, so a copy was kept. See Settings to download it.', { duration: 9000 });
+  if (app.restored) toast('Your progress is back. An update had set it aside by mistake.', { duration: 9000 });
+  else if (app.recovered) toast('Saved progress could not be read, so a copy was kept. See Settings to download it.', { duration: 9000 });
   else if (!app.storageOK) toast('This browser is not saving progress (private mode?). Export a backup in Settings.');
 }
 

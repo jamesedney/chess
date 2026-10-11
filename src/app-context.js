@@ -27,6 +27,7 @@ export const app = {
   state: loaded.state,
   storageOK: !!storage && loaded.storageOK,
   recovered: loaded.recovered,
+  restored: loaded.restored,
   builtIn: puzzles,
   page: null,
   /** @type {(name: string, params?: Record<string, any>) => void} */

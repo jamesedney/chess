@@ -17,6 +17,21 @@ export const test = base.extend({
     });
     await use(page);
     expect(errors, 'browser errors').toEqual([]);
+    // Whatever the test saved must load again: a reload that sets saved data
+    // aside means the app wrote something its own loader rejects.
+    if (page.url().startsWith('http')) {
+      const kept = () => page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('rankup-recovery-')).length);
+      const before = await kept().catch(() => null);
+      if (
+        before !== null &&
+        (await page
+          .reload()
+          .then(() => true)
+          .catch(() => false))
+      ) {
+        expect(await kept(), 'saved data set aside on reload').toBe(before);
+      }
+    }
   },
 });
 export { expect };

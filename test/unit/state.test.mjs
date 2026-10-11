@@ -176,3 +176,54 @@ test('streaks count consecutive active days, including vision sprints', () => {
   const yesterdayOnly = { [day(1)]: { attempts: 1, clean: 1 } };
   assert.equal(streaks(yesterdayOnly, today).current, 1, 'a streak survives until the day ends');
 });
+
+test('debrief, replay and repertoire log entries are valid saved data', () => {
+  const s = defaults();
+  for (const k of ['b', 'r', 'o']) s.log.push({ d: '2026-10-11', k, t: 'x', c: 1 });
+  assert.equal(validate(s), null);
+});
+
+/** A state with some history: reviews and log entries from the v4 features. */
+function withHistory(n) {
+  const s = defaults();
+  s.onboarded = true;
+  for (let i = 0; i < n; i++) s.log.push({ d: '2026-10-11', k: ['b', 'r', 'o', 'p'][i % 4], t: 'chance', c: 1 });
+  return s;
+}
+
+test('a copy set aside by the 4.0 log bug is brought back when it holds more history', () => {
+  const lost = withHistory(40);
+  const fresh = withHistory(2);
+  const storage = fakeStorage({ [STORAGE_KEY]: JSON.stringify(fresh), [RECOVERY_PREFIX + 1]: JSON.stringify(lost) });
+  const out = loadState(storage, 100);
+  assert.equal(out.restored, true);
+  assert.equal(out.recovered, false);
+  assert.equal(out.state.log.length, 40);
+  assert.equal(JSON.parse(storage.data[STORAGE_KEY]).log.length, 40);
+  // The state it replaced is kept, and the restored copy is no longer a recovery copy.
+  assert.equal(storage.data[RECOVERY_PREFIX + 1], undefined);
+  assert.equal(JSON.parse(storage.data[RECOVERY_PREFIX + 101]).log.length, 2);
+  // Loading again changes nothing.
+  assert.equal(loadState(storage, 200).restored, false);
+});
+
+test('a recovery copy is not restored over more history, and broken copies are skipped', () => {
+  const storage = fakeStorage({
+    [STORAGE_KEY]: JSON.stringify(withHistory(10)),
+    [RECOVERY_PREFIX + 1]: JSON.stringify(withHistory(5)),
+    [RECOVERY_PREFIX + 2]: '{broken',
+  });
+  const out = loadState(storage, 100);
+  assert.equal(out.restored, false);
+  assert.equal(out.state.log.length, 10);
+});
+
+test('the heaviest readable recovery copy wins', () => {
+  const storage = fakeStorage({
+    [RECOVERY_PREFIX + 1]: JSON.stringify(withHistory(30)),
+    [RECOVERY_PREFIX + 2]: JSON.stringify(withHistory(3)),
+  });
+  const out = loadState(storage, 100);
+  assert.equal(out.restored, true);
+  assert.equal(out.state.log.length, 30);
+});

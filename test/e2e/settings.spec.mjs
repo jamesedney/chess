@@ -53,6 +53,21 @@ test('unreadable saved data is kept for recovery', async ({ page }) => {
   await expect(page.locator('#recovery-download')).toBeVisible();
 });
 
+test('progress set aside by the 4.0 log bug comes back on the next load', async ({ page }) => {
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('seeded')) return;
+    sessionStorage.setItem('seeded', '1');
+    const log = Array.from({ length: 30 }, (_, i) => ({ d: '2026-10-11', k: ['b', 'r', 'o'][i % 3], t: 'chance', c: 1 }));
+    // What 4.0 kept aside: an onboarded state whose debrief entries it then rejected.
+    localStorage.setItem('rankup-recovery-1', JSON.stringify({ version: 8, onboarded: true, minutes: 45, log }));
+  });
+  await open(page, 'today');
+  await expect(page.locator('.toast.show')).toContainText('Your progress is back');
+  await expect(page.locator('#start-session')).toContainText('45 min');
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')));
+  expect(saved.log).toHaveLength(30);
+});
+
 test('backup export and import round-trip, and dark mode applies', async ({ page }, info) => {
   await open(page, 'train?puzzle=p001');
   await page.locator('#board [data-square="e1"]').click();
