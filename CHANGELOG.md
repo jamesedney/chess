@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.0.6
+
+- Assess the position explains itself better. The answer now starts with the material ("Black is up a piece for a pawn"), says when material does not explain the engine's verdict (look for threats, a weak king or better pieces), says who controls an open file, and only calls a bishop hemmed in when it really has little room: a bishop on the same colour as its pawns can still be active, as one on d7 attacking g4 was in a reported position.
+- Lists read as lists ("passed pawns on d3, e2 and f3"), and open files are grouped into one sentence.
+
+
 ## 3.0.5
 
 - Your rating now keeps itself current. It is checked when the app opens and whenever it comes back to the foreground or back online (at most every 30 minutes), straight after new games are imported, after "Check for new games now", and when you change a username in Settings. Before, it was read only when the app started from scratch and at most every six hours, so an installed app that was only ever resumed could go days without an update.

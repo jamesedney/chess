@@ -19,7 +19,7 @@ import {
 } from '../calc.js';
 import { logAttempt, dateKey } from '../state.js';
 import { pickPositions, BUCKETS, ROUNDS as ASSESS_ROUNDS, scoreGuess, evalText, playerBias, calibration } from '../assess.js';
-import { describeStructure } from '../structure.js';
+import { explainPosition } from '../structure.js';
 import { cue } from '../sound.js';
 
 const ENDGAME_NODES = 400000;
@@ -585,7 +585,7 @@ function answerAssess(i) {
   v.score += pts;
   if (pts === 2) v.exact++;
   v.biases.push(playerBias(i, v.q.evalWhite, v.q.colour));
-  const facts = describeStructure(new Chess(v.q.fen));
+  const facts = explainPosition(new Chess(v.q.fen), v.q.evalWhite);
   const verdict = BUCKETS[bucketIndex(v.q.evalWhite)].label.toLowerCase();
   v.message = `${pts === 2 ? 'Right' : pts === 1 ? 'Close' : 'No'}: ${verdict} (${evalText(v.q.evalWhite)}). ${facts.slice(0, 3).join(' ')}`;
   v.tone = pts === 2 ? 'success' : pts === 1 ? 'warning' : 'error';

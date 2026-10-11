@@ -143,6 +143,118 @@ export function looseKingSquares(game, color) {
   return out;
 }
 
+/** Squares a piece on `sq` attacks or can move to: its room to manoeuvre. */
+export function mobility(game, sq) {
+  const p = game.get(sq);
+  if (!p) return 0;
+  const steps = {
+    b: [
+      [1, 1],
+      [1, -1],
+      [-1, 1],
+      [-1, -1],
+    ],
+    r: [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ],
+  };
+  const dirs = p.type === 'q' ? [...steps.b, ...steps.r] : steps[p.type];
+  if (!dirs) return 0;
+  let n = 0;
+  for (const [df, dr] of dirs)
+    for (let k = 1; ; k++) {
+      const to = sqAt(file(sq) + df * k, rank(sq) + dr * k);
+      if (!to) break;
+      const q = game.get(to);
+      if (q?.color === p.color) break;
+      n++;
+      if (q) break;
+    }
+  return n;
+}
+
+const VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+
+/** "a", "a and b", "a, b and c". */
+const list = items => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
+
+/** Piece counts per side: { w: { q, r, m, p }, b: ... } where m counts bishops and knights. */
+export function material(game) {
+  const out = { w: { q: 0, r: 0, m: 0, p: 0, points: 0 }, b: { q: 0, r: 0, m: 0, p: 0, points: 0 } };
+  for (const sq of SQUARES) {
+    const pc = game.get(sq);
+    if (!pc || pc.type === 'k') continue;
+    out[pc.color][pc.type === 'b' || pc.type === 'n' ? 'm' : pc.type]++;
+    out[pc.color].points += VALUE[pc.type];
+  }
+  return out;
+}
+
+const count = (n, word) =>
+  n === 1 ? `${/^[aeiou]/.test(word) ? 'an' : 'a'} ${word}` : `${['', '', 'two', 'three', 'four'][n] || n} ${word}s`;
+
+/**
+ * The material balance in words, e.g. "Black is up a piece for a pawn".
+ * Returns { leader: 'w' | 'b' | null, points, text }.
+ */
+export function describeMaterial(game) {
+  const m = material(game);
+  const diff = m.w.points - m.b.points;
+  if (!diff && ['q', 'r', 'm', 'p'].every(k => m.w[k] === m.b[k])) return { leader: null, points: 0, text: 'Material is level.' };
+  const lead = diff >= 0 ? 'w' : 'b';
+  const other = lead === 'w' ? 'b' : 'w';
+  const d = Object.fromEntries(['q', 'r', 'm', 'p'].map(k => [k, m[lead][k] - m[other][k]]));
+  const gained = [];
+  const given = [];
+  // A rook for a minor piece is "the exchange".
+  if (d.r > 0 && d.m < 0) {
+    const ex = Math.min(d.r, -d.m);
+    gained.push(ex === 1 ? 'the exchange' : `${['', '', 'two', 'three'][ex]} exchanges`);
+    d.r -= ex;
+    d.m += ex;
+  }
+  const names = { q: 'queen', r: 'rook', m: 'piece', p: 'pawn' };
+  for (const k of ['q', 'r', 'm', 'p']) {
+    if (d[k] > 0) gained.push(count(d[k], names[k]));
+    if (d[k] < 0) given.push(count(-d[k], names[k]));
+  }
+  const side = lead === 'w' ? 'White' : 'Black';
+  if (!diff)
+    return {
+      leader: null,
+      points: 0,
+      text: `Material is level in points: ${side} has ${gained.join(' and ')} for ${given.join(' and ')}.`,
+    };
+  return {
+    leader: lead,
+    points: Math.abs(diff),
+    text: `${side} is up ${gained.join(' and ')}${given.length ? ` for ${given.join(' and ')}` : ''}.`,
+  };
+}
+
+/**
+ * Why a position stands as it does, for the assessment drill: the material
+ * first, a pointer to dynamics when material does not explain the engine's
+ * verdict, then the most relevant structural facts.
+ */
+export function explainPosition(game, evalWhite) {
+  const mat = describeMaterial(game);
+  const facts = [mat.text];
+  const favoured = evalWhite >= 100 ? 'w' : evalWhite <= -100 ? 'b' : null;
+  if (favoured && mat.leader !== favoured) {
+    const side = favoured === 'w' ? 'White' : 'Black';
+    facts.push(
+      mat.leader
+        ? `Even so the engine prefers ${side}: look for threats, a weak king or pieces about to be won.`
+        : `So ${side}'s edge comes from activity: threats, a weak king or better pieces.`,
+    );
+  }
+  return [...facts, ...describeStructure(game)];
+}
+
 /** A plain-language summary of the structural facts of a position, for the assessment drill. */
 export function describeStructure(game) {
   const facts = [];
@@ -151,15 +263,23 @@ export function describeStructure(game) {
     const passed = passedPawns(game, color);
     const isolated = isolatedPawns(game, color);
     const doubled = doubledPawns(game, color);
-    if (passed.length) facts.push(`${side} has a passed pawn on ${passed.join(' and ')}.`);
-    if (isolated.length) facts.push(`${side}'s ${isolated.join(' and ')} pawn${isolated.length > 1 ? 's are' : ' is'} isolated.`);
+    if (passed.length) facts.push(`${side} has ${passed.length > 1 ? 'passed pawns' : 'a passed pawn'} on ${list(passed)}.`);
+    if (isolated.length) facts.push(`${side}'s ${list(isolated)} pawn${isolated.length > 1 ? 's are' : ' is'} isolated.`);
     if (doubled.length) facts.push(`${side} has doubled pawns on the ${FILES[file(doubled[0])]}-file.`);
-    const bad = badBishops(game, color);
+    // Only when it really lacks room: same-coloured pawns alone do not make a bishop passive.
+    const bad = badBishops(game, color).filter(sq => mobility(game, sq) <= 3);
     if (bad.length) facts.push(`${side}'s bishop on ${bad[0]} is hemmed in by its own pawns.`);
     const op = outposts(game, color).filter(sq => game.get(sq)?.type === 'n');
     if (op.length) facts.push(`${side}'s knight on ${op[0]} sits on an outpost no pawn can challenge.`);
   }
-  const open = openFiles(game);
-  if (open.length) facts.push(`The ${open.join('- and ')}-file${open.length > 1 ? 's are' : ' is'} open.`);
+  // Open files: who holds each with a rook or queen, then the rest together.
+  const free = [];
+  for (const f of openFiles(game)) {
+    const heavy = SQUARES.filter(sq => sq[0] === f && ['r', 'q'].includes(game.get(sq)?.type)).map(sq => game.get(sq).color);
+    const owner = heavy.includes('w') && !heavy.includes('b') ? 'White' : heavy.includes('b') && !heavy.includes('w') ? 'Black' : null;
+    if (owner) facts.push(`${owner} controls the open ${f}-file.`);
+    else free.push(f);
+  }
+  if (free.length) facts.push(`The ${list(free.map(f => `${f}-`))}file${free.length > 1 ? 's are' : ' is'} open.`);
   return facts;
 }

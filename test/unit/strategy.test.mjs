@@ -13,6 +13,9 @@ import {
   looseKingSquares,
   squareColor,
   describeStructure,
+  describeMaterial,
+  explainPosition,
+  mobility,
 } from '../../src/structure.js';
 import { bucketOf, scoreGuess, pickPositions, playerBias, calibration, evalText, BUCKETS } from '../../src/assess.js';
 import { defaults, migrate, validate, logCandidates, CURRENT_VERSION } from '../../src/state.js';
@@ -44,6 +47,39 @@ test('outposts, files and bishops', () => {
   assert.deepEqual(looseKingSquares(new Chess('r4rk1/pp3p2/2n3p1/8/2B5/2N5/PP3PPP/R3R1K1 w - - 0 1'), 'b').sort(), ['g7', 'h7', 'h8']);
   const facts = describeStructure(new Chess('r2q1rk1/1b2bppp/p1n1pn2/1p1pN3/3P4/P1NBP3/1P3PPP/R2Q1RK1 w - - 0 1'));
   assert.ok(facts.some(f => /c-file is open/.test(f)));
+});
+
+test('assessment explanations lead with material and only call a bishop hemmed in when it is', () => {
+  // A reported position: Black has two bishops against a knight, White an extra pawn.
+  const reported = new Chess('4r1k1/ppqb2p1/2p2r2/3p2bP/6P1/2NQ4/PPP2P2/1K1R2R1 w - - 0 1');
+  assert.deepEqual(explainPosition(reported, -270).slice(0, 3), [
+    'Black is up a piece for a pawn.',
+    "Black's g7 pawn is isolated.",
+    'Black controls the open e-file.',
+  ]);
+  // The d7 bishop shares a colour with its c6 and d5 pawns but still has four squares, g4 among them.
+  assert.equal(mobility(reported, 'd7'), 4);
+  assert.ok(!describeStructure(reported).some(f => /hemmed/.test(f)));
+  // Boxed in for real: no squares at all.
+  assert.ok(
+    describeStructure(new Chess('6k1/8/8/8/8/3P1P2/4P1P1/5BK1 w - - 0 1')).includes("White's bishop on f1 is hemmed in by its own pawns."),
+  );
+  // Material wording.
+  const words = fen => describeMaterial(new Chess(fen)).text;
+  assert.equal(words('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'), 'Material is level.');
+  assert.equal(words('r3k3/8/8/8/8/8/8/2B1K3 w - - 0 1'), 'Black is up the exchange.');
+  assert.equal(words('r6k/8/8/8/8/8/8/1NB1K3 w - - 0 1'), 'White is up two pieces for a rook.');
+  assert.equal(words('r6k/p7/8/8/8/8/8/1NB1K3 w - - 0 1'), 'Material is level in points: White has two pieces for a rook and a pawn.');
+  // Level material but a big edge points to activity; the trailing side preferred points to threats.
+  assert.match(
+    explainPosition(new Chess('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'), 250)[1],
+    /White's edge comes from activity/,
+  );
+  assert.match(explainPosition(reported, 300)[1], /Even so the engine prefers White/);
+  // Lists read as lists.
+  assert.ok(
+    describeStructure(new Chess('6k1/8/8/8/8/3P1P2/4P1P1/5BK1 w - - 0 1')).includes('White has passed pawns on d3, e2, f3 and g2.'),
+  );
 });
 
 test('assessment buckets, scoring and bias', () => {
