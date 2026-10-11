@@ -8,7 +8,7 @@ A new look: black and white, square corners, large numbers.
 - **Puzzles** show the count large (04/12), still read out as "4 of 12".
 - **Debriefs** list the reasons likeliest first, each with how often your past debriefs gave it.
 - Archivo typeface, bundled so it works offline (SIL Open Font License). Sections sit under rules instead of in boxes; one signal colour marks improvement.
-- New black icon. A grey board is the default; if you had the old default (Walnut) you now get grey, and Walnut is still in Settings.
+- New black icon, under new file names so installed apps on Android and desktop pick it up. On iPhone and iPad, remove Rankup from the home screen and add it again to see it. A grey board is the default; if you had the old default (Walnut) you now get grey, and Walnut is still in Settings.
 - State version 8.
 
 ## 4.0.0

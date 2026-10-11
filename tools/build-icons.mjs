@@ -1,4 +1,6 @@
 // Render the app icons from the cburnett knight in the Rankup palette.
+// The file names carry the design (-bw): a new design gets new names, so
+// installed apps notice the change instead of keeping a cached icon.
 // Usage: node tools/build-icons.mjs   (uses the Playwright Chromium)
 import fs from 'node:fs';
 import path from 'node:path';
@@ -30,11 +32,11 @@ function svg(size, scale) {
 }
 
 const ICONS = [
-  { file: 'icon-192.png', size: 192, scale: 0.52 },
-  { file: 'icon-512.png', size: 512, scale: 0.52 },
+  { file: 'icon-192-bw.png', size: 192, scale: 0.52 },
+  { file: 'icon-512-bw.png', size: 512, scale: 0.52 },
   // Maskable icons are cropped to a circle of 80%: keep the knight well inside it.
-  { file: 'icon-maskable-512.png', size: 512, scale: 0.42 },
-  { file: 'apple-touch-icon.png', size: 180, scale: 0.54 },
+  { file: 'icon-maskable-512-bw.png', size: 512, scale: 0.42 },
+  { file: 'apple-touch-icon-bw.png', size: 180, scale: 0.54 },
 ];
 
 const browser = await chromium.launch();
