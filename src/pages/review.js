@@ -20,6 +20,10 @@ import { analyseGame as runAnalysis, MAX_PLIES, MATE_EVAL } from '../analyse.js'
 import { scheduleDeepAnalysis } from '../deep.js';
 import { enqueue, remove as dequeue, snapshot as queueSnapshot, subscribe as watchQueue, syncNow } from '../queue.js';
 import { gameKey } from '../sync.js';
+import { pickMoments, suggestReason, tagMoment, habits, REASONS, reasonById, needsDebrief } from '../debrief.js';
+import { replayCandidates } from '../replay.js';
+import { repertoireCards, dueCards } from '../repertoire.js';
+import { activeBlock, continueSession } from '../session.js';
 
 export { MAX_PLIES, MATE_EVAL };
 const SYMBOL = { inaccuracy: '?!', mistake: '?', blunder: '??' };
@@ -45,8 +49,18 @@ export function render(main, params = {}) {
     selected = null;
     viewer = null;
   }
-  if (params.review) viewer = { id: params.review, ply: params.ply ?? 0 };
+  if (params.review) {
+    viewer = { id: params.review, ply: params.ply ?? 0, debrief: !!Number(params.debrief || 0) };
+    // A debrief opens at the first moment still waiting for its note.
+    const r = viewer.debrief && app.state.reviews.find(x => x.id === params.review);
+    if (r) {
+      const moments = pickMoments(r);
+      viewer.ply = (moments.find(m => !m.reason) || moments[0])?.ply ?? 0;
+    }
+  }
   if (params.list) viewer = null;
+  // A finished debrief is not where the Games tab should reopen.
+  if (!params.review && viewer?.summary) viewer = null;
   if (!unwatch)
     unwatch = watchQueue(() => {
       const el = $('#queue-panel');
@@ -72,6 +86,42 @@ function draw() {
   drawImport();
 }
 
+/** Training built from your games: debriefs waiting, positions to play again, your repertoire. */
+function trainHTML() {
+  const pending = app.state.reviews.filter(needsDebrief);
+  const replays = replayCandidates(app.state).filter(c => !c.record?.success);
+  const cards = repertoireCards(app.state.reviews);
+  if (!pending.length && !replays.length && !cards.length) return '';
+  const due = dueCards(app.state).length;
+  const row = (id, title, detail) => `<li class="agenda-item"><button type="button" data-train="${id}">
+      <span class="agenda-text"><strong>${esc(title)}</strong><span class="small">${esc(detail)}</span></span><span class="agenda-time" aria-hidden="true">›</span>
+    </button></li>`;
+  return `<section class="train-games" aria-labelledby="train-games-title">
+    <h2 id="train-games-title">Train on your games</h2>
+    <ol class="agenda">${[
+      pending.length
+        ? row(
+            'debrief',
+            pending.length === 1 ? 'Debrief your latest game' : `Debrief ${pending.length} games`,
+            pending.length === 1
+              ? 'The moments that decided it, and why they went wrong.'
+              : 'Newest first: the moments that decided each one, and why.',
+          )
+        : '',
+      replays.length
+        ? row(
+            'replay',
+            `Play it again: ${plural(replays.length, 'position')}`,
+            'Wins that slipped and draws that were there, against your opponent’s strength.',
+          )
+        : '',
+      cards.length
+        ? row('repertoire', `Your repertoire: ${due} due`, `${plural(cards.length, 'position')} from the openings you play.`)
+        : '',
+    ].join('')}</ol>
+  </section>`;
+}
+
 // ---------- Import and analysis ----------
 
 function usernames() {
@@ -82,6 +132,7 @@ function drawImport() {
   const p = app.state.profiles;
   root.innerHTML =
     pageHead('', 'Your games') +
+    trainHTML() +
     `<div class="two-col">
       <section class="panel">
         <h2>Review a game</h2>
@@ -127,6 +178,15 @@ function drawImport() {
       <div id="mistake-list">${mistakesHTML()}</div>
     </section>`;
 
+  root.querySelectorAll('[data-train]').forEach(
+    b =>
+      (b.onclick = () => {
+        const kind = b.dataset.train;
+        if (kind === 'debrief') app.navigate('review', { review: app.state.reviews.find(needsDebrief).id, debrief: 1 });
+        else if (kind === 'replay') app.navigate('play', { replay: replayCandidates(app.state).find(c => !c.record?.success).id });
+        else app.navigate('drills', { drill: 'repertoire' });
+      }),
+  );
   root.querySelectorAll('[data-tab]').forEach(
     b =>
       (b.onclick = () => {
@@ -356,7 +416,7 @@ function reviewsHTML() {
       const counts = ['blunder', 'mistake', 'inaccuracy'].map(c => r.marks.filter(m => m.cls === c && !m.cleared).length);
       const time = timeSummary(r);
       return `<div class="review-item"><div><strong>${esc(r.white)} – ${esc(r.black)}</strong><p>${esc([r.result, formatDate(r.date), `you: ${r.colour === 'w' ? 'White' : 'Black'}`, r.opening?.name].filter(Boolean).join(' · '))}<br>${counts[0]} blunders · ${counts[1]} mistakes · ${counts[2]} inaccuracies${r.complete ? '' : ' · partial'}${time.rushed ? ` · ${time.rushed} rushed` : ''}</p></div>
-        <div class="item-actions"><button type="button" data-open="${esc(r.id)}">Open</button><button type="button" class="icon-button" data-delete-review="${esc(r.id)}" aria-label="Delete review of ${esc(r.white)} – ${esc(r.black)}">✕</button></div></div>`;
+        <div class="item-actions">${needsDebrief(r) ? `<button type="button" class="primary" data-debrief="${esc(r.id)}">Debrief</button>` : ''}<button type="button" data-open="${esc(r.id)}">Open</button><button type="button" class="icon-button" data-delete-review="${esc(r.id)}" aria-label="Delete review of ${esc(r.white)} – ${esc(r.black)}">✕</button></div></div>`;
     })
     .join('');
 }
@@ -416,6 +476,9 @@ function openingsHTML() {
 }
 
 function wireReviews() {
+  root
+    .querySelectorAll('[data-debrief]')
+    .forEach(b => (b.onclick = () => app.navigate('review', { review: b.dataset.debrief, debrief: 1 })));
   root.querySelectorAll('[data-open]').forEach(
     b =>
       (b.onclick = () => {
@@ -530,7 +593,10 @@ function drawViewer(review) {
   const ply = Math.max(0, Math.min(total, viewer.ply));
   viewer.ply = ply;
   viewer.solved ||= {}; // ply -> 'clean' | 'help', for marks worked on in this visit
-  const marks = review.marks.filter(m => !m.cleared);
+  if (viewer.debrief && viewer.summary) return drawDebriefSummary(review);
+  // A debrief walks only the moments that decided the game.
+  const moments = viewer.debrief ? pickMoments(review) : null;
+  const marks = moments || review.marks.filter(m => !m.cleared);
   const markAt = marks.find(m => m.ply === ply); // the reviewed side is about to move here
   const markJust = marks.find(m => m.ply === ply - 1); // the move just played
   const clearedJust = review.marks.find(m => m.cleared && m.ply === ply - 1);
@@ -542,7 +608,13 @@ function drawViewer(review) {
   const moveLabel = ply === 0 ? 'Start position' : labels[ply - 1];
   const evText =
     ev === null || ev === undefined ? '' : Math.abs(ev) >= MATE_EVAL ? (ev > 0 ? 'White mating' : 'Black mating') : formatScore(ev);
-  const done = marks.filter(m => viewer.solved[m.ply] || app.state.records[m.mistakeId]?.tries).length;
+  const done = viewer.debrief
+    ? marks.filter(m => m.reason).length
+    : marks.filter(m => viewer.solved[m.ply] || app.state.records[m.mistakeId]?.tries).length;
+  // After the better move is found or shown, a debrief asks why the moment went wrong.
+  const asking = viewer.debrief && markAt && viewer.solved[ply] && !markAt.reason;
+  const mistakeAt = markAt?.mistakeId ? app.state.mistakes.find(m => m.id === markAt.mistakeId) : null;
+  const suggested = asking ? suggestReason(review, markAt, mistakeAt) : null;
 
   let title = moveLabel;
   let message = '';
@@ -569,7 +641,11 @@ function drawViewer(review) {
   root.innerHTML = `<div class="focus review-focus">
     <div class="focus-top">
       <button type="button" id="back-to-list" class="secondary focus-menu" style="margin-left:0" aria-label="Back to all reviews">‹ Reviews</button>
-      <span class="focus-progress">${esc(review.white)} – ${esc(review.black)}${marks.length ? ` · ${done} of ${marks.length} ${marks.length === 1 ? 'mistake' : 'mistakes'}` : ''}</span>
+      <span class="focus-progress">${
+        viewer.debrief
+          ? `Debrief · ${done} of ${marks.length} ${marks.length === 1 ? 'moment' : 'moments'}`
+          : `${esc(review.white)} – ${esc(review.black)}${marks.length ? ` · ${done} of ${marks.length} ${marks.length === 1 ? 'mistake' : 'mistakes'}` : ''}`
+      }</span>
     </div>
     <div class="focus-prompt"><strong id="board-title">${esc(title)}</strong><span class="chip">${esc(evText || 'not analysed')}</span></div>
     <div class="focus-board"><div class="viewer-board">
@@ -585,10 +661,20 @@ function drawViewer(review) {
       <button type="button" id="board-flip" class="secondary" aria-label="Flip board"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 20V4M4.5 7.5 8 4l3.5 3.5M16 4v16M12.5 16.5 16 20l3.5-3.5"/></svg></button>
     </div>
     <div id="feedback" class="status ${tone}" role="status" aria-live="polite" ${message ? '' : 'hidden'}>${esc(message)}</div>
-    <div class="focus-actions">
+    ${
+      asking
+        ? `<div class="reason-pick" role="group" aria-labelledby="reason-title">
+            <p id="reason-title"><strong>What went wrong?</strong></p>
+            <div class="reason-grid">${REASONS.map(
+              r =>
+                `<button type="button" data-reason="${r.id}" class="${r.id === suggested ? 'suggested' : ''}">${esc(r.label)}${r.id === suggested ? '<span class="small">Likely</span>' : ''}</button>`,
+            ).join('')}</div>
+          </div>`
+        : `<div class="focus-actions">
       ${solving ? '<button type="button" id="show-answer">Show answer</button>' : ''}
-      <button type="button" id="next-mark" class="${solving ? 'secondary' : 'primary'}">${marks.length ? 'Next mistake' : 'Next move'}</button>
-    </div>
+      <button type="button" id="next-mark" class="${solving ? 'secondary' : 'primary'}">${viewer.debrief ? 'Next moment' : marks.length ? 'Next mistake' : 'Next move'}</button>
+    </div>`
+    }
     <details class="review-extra" ${viewer.extra ? 'open' : ''}>
       <summary>Graph, moves and details</summary>
       <p class="small">${esc([review.result, formatDate(review.date), `you played ${review.colour === 'w' ? 'White' : 'Black'}`, review.opening?.name].filter(Boolean).join(' · '))}</p>
@@ -636,11 +722,31 @@ function drawViewer(review) {
     .forEach(b => (b.onclick = () => go({ first: 0, prev: ply - 1, next: ply + 1, last: total }[b.dataset.step])));
   root.querySelectorAll('[data-ply]').forEach(b => (b.onclick = () => go(Number(b.dataset.ply))));
   $('#back-to-list', root).onclick = () => app.navigate('review', { list: true });
-  $('#next-mark', root).onclick = () => {
-    const next = marks.find(m => m.ply > ply) || marks[0];
+  $('#next-mark', root)?.addEventListener('click', () => {
+    if (viewer.debrief && marks.every(m => m.reason)) {
+      viewer.summary = true;
+      return drawViewer(review);
+    }
+    const next = viewer.debrief
+      ? marks.find(m => m.ply > ply && !m.reason) || marks.find(m => !m.reason)
+      : marks.find(m => m.ply > ply) || marks[0];
     if (next) go(next.ply);
     else go(ply + 1);
-  };
+  });
+  root.querySelectorAll('[data-reason]').forEach(
+    b =>
+      (b.onclick = () => {
+        tagMoment(review, markAt.ply, b.dataset.reason);
+        logAttempt(app.state, { kind: 'b', theme: b.dataset.reason, clean: true });
+        app.save();
+        const next = marks.find(m => m.ply > markAt.ply && !m.reason) || marks.find(m => !m.reason);
+        if (next) go(next.ply);
+        else {
+          viewer.summary = true;
+          drawViewer(review);
+        }
+      }),
+  );
   $('#show-answer', root)?.addEventListener('click', () => solvedMark(review, markAt, 'help'));
   $('#practise-game', root)?.addEventListener('click', () => {
     const first = review.marks.find(m => m.mistakeId && app.state.mistakes.some(x => x.id === m.mistakeId && !x.archived));
@@ -659,6 +765,39 @@ function drawViewer(review) {
     }
   };
   document.addEventListener('keydown', keyHandler);
+}
+
+/** The end of a debrief: what this game's moments were, your habit so far, and what next. */
+function drawDebriefSummary(review) {
+  const moments = pickMoments(review);
+  const h = habits(app.state);
+  const top = h.total >= 4 ? h.list[0] : null;
+  const replay = replayCandidates(app.state).find(c => c.reviewId === review.id && !c.record?.success);
+  const inSession = !!activeBlock();
+  root.innerHTML = `<div class="focus review-focus">
+    <div class="focus-top"><span class="focus-progress">Debrief · ${esc(review.white)} – ${esc(review.black)}</span></div>
+    <div class="panel debrief-summary">
+      <div class="eyebrow">Debrief done</div>
+      <h2>${moments.length === 1 ? 'The moment that decided it' : `The ${moments.length} moments that decided it`}</h2>
+      <ul class="debrief-list">${moments
+        .map(
+          m =>
+            `<li><strong>${esc(plyLabel(review, m.ply))}${SYMBOL[m.cls]}</strong> <span class="small">better ${esc(m.bestSan)}</span><br><span>${esc(reasonById(m.reason)?.label || 'No note')}</span></li>`,
+        )
+        .join('')}</ul>
+      ${
+        top
+          ? `<p class="small">Across your last ${h.total} debriefed moments, the most common is <strong>${esc(top.label.toLowerCase())}</strong> (${top.count}). Your plan trains it.</p>`
+          : '<p class="small">After a few more debriefs your most common reason shows here, and your plan trains it.</p>'
+      }
+      <div class="actions">
+        ${replay ? '<button type="button" id="debrief-replay">Play it again</button>' : ''}
+        <button type="button" class="primary" id="debrief-done">${inSession ? 'Continue session' : 'Back to your games'}</button>
+      </div>
+    </div>
+  </div>`;
+  $('#debrief-done', root).onclick = () => (inSession ? continueSession() : app.navigate('review', { list: true }));
+  $('#debrief-replay', root)?.addEventListener('click', () => app.navigate('play', { replay: replay.id }));
 }
 
 /** The user tries a move at a marked moment: the stored best, or anything Stockfish rates as good. */

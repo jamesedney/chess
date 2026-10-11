@@ -6,6 +6,11 @@ import { chooseUnit, currentBand, unitStatus, refresher, drillDone } from './cur
 import { skillMap, leaks } from './skills.js';
 import { isDue } from './srs.js';
 import { dateKey } from './state.js';
+import { needsDebrief, pickMoments } from './debrief.js';
+import { nextReplay } from './replay.js';
+import { dueCards } from './repertoire.js';
+import { focus } from './evidence.js';
+import { CLOCK_DRILLS } from './timeprofile.js';
 
 const DAY = 86400000;
 
@@ -23,6 +28,11 @@ export function undrilledGame(state, now = Date.now()) {
     if (open.length) return { review: r, open: open.length };
   }
   return null;
+}
+
+/** The newest game from the last three days still waiting for its debrief. */
+export function gameToDebrief(state, now = Date.now()) {
+  return state.reviews.find(r => (r.created || 0) >= now - 3 * DAY && needsDebrief(r)) || null;
 }
 
 /** Puzzle tags that train a skill around the current band. */
@@ -49,6 +59,8 @@ export function planSession(state, { now = Date.now(), puzzles = [], goalStatus 
   const unit = chooseUnit(state, order);
   const lk = leaks(state, now);
   const refresh = refresher(lk);
+  // What your debriefs, clock and recent results say to push on.
+  const push = focus(state, now);
   const blocks = [];
   const add = b => blocks.push(b);
 
@@ -63,8 +75,22 @@ export function planSession(state, { now = Date.now(), puzzles = [], goalStatus 
     optional: true,
   });
 
-  // 2. Your latest game first, while it is fresh.
-  const game = undrilledGame(state, now);
+  // 2. Your latest game first, while it is fresh: a debrief of the moments that
+  // decided it, or, for a game already debriefed, its saved positions.
+  const fresh = gameToDebrief(state, now);
+  const game = fresh ? null : undrilledGame(state, now);
+  if (fresh) {
+    const opp = fresh.colour === 'w' ? fresh.black : fresh.white;
+    const n = pickMoments(fresh).length;
+    add({
+      id: 'debrief',
+      type: 'debrief',
+      title: `Debrief: your game against ${opp}`,
+      detail: `${n === 1 ? 'The moment' : `The ${n} moments`} that decided it: find the better move, then say what went wrong.`,
+      est: Math.min(6, 1 + n * 1.5),
+      params: { review: fresh.id, debrief: 1 },
+    });
+  }
   if (game) {
     const opp = game.review.colour === 'w' ? game.review.black : game.review.white;
     add({
@@ -128,8 +154,30 @@ export function planSession(state, { now = Date.now(), puzzles = [], goalStatus 
       });
   }
 
-  // 7. The weakest other skill, or a refresher if your games keep leaking it.
-  const weak = refresh && refresh.skill !== unit?.skill ? refresh.skill : order.find(s => s !== unit?.skill);
+  // 7. Your clock habit, when it is the problem: the drill that trains it.
+  if (push?.drill) {
+    const d = push.drill;
+    const n = d === 'pause' ? 6 : 10;
+    const own = state.mistakes.filter(m => !m.archived).length >= 3;
+    add({
+      id: 'clock',
+      type: 'clock',
+      title: `${CLOCK_DRILLS[d].title}: ${n} positions`,
+      detail: `${push.reason} ${CLOCK_DRILLS[d].detail}`,
+      est: d === 'pause' ? 4 : 3,
+      params: { mode: d === 'pause' && own ? 'mistakes' : 'daily', clock: d, limit: n },
+      count: n,
+    });
+  }
+
+  // 8. The weakest other skill: the one your debriefs point at, a refresher if
+  // your games keep leaking it, or the furthest behind.
+  const weak =
+    push?.skill && push.skill !== unit?.skill
+      ? push.skill
+      : refresh && refresh.skill !== unit?.skill
+        ? refresh.skill
+        : order.find(s => s !== unit?.skill);
   if (weak) {
     const n = goalStatus === 'behind' ? 6 : 4;
     const rating = state.skills?.[weak]?.rating || state.puzzle.rating;
@@ -140,7 +188,12 @@ export function planSession(state, { now = Date.now(), puzzles = [], goalStatus 
         refresh && refresh.skill === weak
           ? `Refresher: ${refresh.title.toLowerCase()}`
           : `${map.find(s => s.id === weak).label}: ${n} puzzles`,
-      detail: refresh && refresh.skill === weak ? 'Your recent games show this coming back.' : 'Your weakest skill after today’s unit.',
+      detail:
+        push?.skill === weak
+          ? push.reason
+          : refresh && refresh.skill === weak
+            ? 'Your recent games show this coming back.'
+            : 'Your weakest skill after today’s unit.',
       est: n,
       params: {
         mode: 'daily',
@@ -154,7 +207,37 @@ export function planSession(state, { now = Date.now(), puzzles = [], goalStatus 
     });
   }
 
-  // 8. Play: apply it in a game with one objective. A game is part of the
+  // 9. Play it again: one position from your games where a win slipped away
+  // or a draw was there; first in line when conversions are slipping.
+  const replay = nextReplay(state);
+  if (replay)
+    add({
+      id: 'replay',
+      type: 'replay',
+      title: replay.goal === 'convert' ? 'Play it again: convert the win' : 'Play it again: hold the position',
+      detail: `From your game against ${replay.opponent}, before ${replay.played}.`,
+      est: 6,
+      params: { replay: replay.id },
+      optional: !push?.replay,
+    });
+
+  // 10. Your repertoire: the opening positions due for recall.
+  const repDue = dueCards(state, now).length;
+  if (repDue >= 3) {
+    const n = Math.min(repDue, 6);
+    add({
+      id: 'repertoire',
+      type: 'repertoire',
+      title: `Your repertoire: ${n} positions`,
+      detail: 'Your moves in the openings you play, and the better ones where you lost ground.',
+      est: 3,
+      params: { drill: 'repertoire', limit: n },
+      count: n,
+      optional: true,
+    });
+  }
+
+  // 11. Play: apply it in a game with one objective. A game is part of the
   // session when you have not played one (here or online) for two days.
   const recentGame =
     state.games.some(g => g.d >= dateKey(new Date(now - 2 * DAY))) || state.reviews.some(r => (r.created || 0) >= now - 2 * DAY);
@@ -195,6 +278,7 @@ export function baseline(state) {
     visual: state.calc.visual.runs,
     checks: state.calc.checks.runs,
     assess: state.calc.assess.runs,
+    replays: Object.values(state.replays || {}).reduce((a, r) => a + r.tries, 0),
     endgames: Object.fromEntries(Object.entries(state.endgames).map(([k, v]) => [k, v.tries])),
   };
 }
@@ -222,6 +306,14 @@ export function blockDone(state, block) {
     }
     case 'game':
       return state.games.length > base.games;
+    case 'debrief':
+      return !!state.reviews.find(r => r.id === block.params.review)?.debriefed;
+    case 'clock':
+      return since.filter(e => e.k === 'p' && e.t === block.params.clock).length >= (block.count || 1);
+    case 'replay':
+      return Object.values(state.replays || {}).reduce((a, r) => a + r.tries, 0) > (base.replays || 0);
+    case 'repertoire':
+      return since.filter(e => e.k === 'o').length >= (block.count || 1);
     default:
       return false;
   }

@@ -1,6 +1,6 @@
 // Rankup service worker: precache the app for offline use.
 // Bump VERSION (and package.json) for every release; tests check they match.
-const VERSION = '3.0.6';
+const VERSION = '4.0.0';
 const CACHE = 'rankup-v' + VERSION;
 const FILES = [
   './',
@@ -50,6 +50,11 @@ const FILES = [
   './src/curriculum.js',
   './src/program.js',
   './src/session.js',
+  './src/debrief.js',
+  './src/replay.js',
+  './src/repertoire.js',
+  './src/timeprofile.js',
+  './src/evidence.js',
   './src/pages/today.js',
   './src/maia.js',
   './src/maia-core.js',

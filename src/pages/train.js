@@ -18,6 +18,7 @@ import { snapshot as queueSnapshot, subscribe as watchQueue } from '../queue.js'
 import { recordSkillPuzzle } from '../skills.js';
 import { recordUnitPuzzle, unitById } from '../curriculum.js';
 import { activeBlock, continueSession } from '../session.js';
+import { CLOCK_DRILLS } from '../timeprofile.js';
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const SPRINT_MS = 60000;
@@ -30,6 +31,7 @@ let board = null;
 let vision = null;
 let seeds = null;
 let unwatch = null;
+let clockTimer = null; // the pace countdown or the pause lock
 
 /**
  * Session options: tags (focus, or the only tags when strict), review (one
@@ -40,8 +42,9 @@ let unwatch = null;
 function newSession(
   mode = 'daily',
   theme = null,
-  { tags = [], review = null, step = null, limit = null, strict = false, unit = null, rating = null, due = false } = {},
+  { tags = [], review = null, step = null, limit = null, strict = false, unit = null, rating = null, due = false, clock = null } = {},
 ) {
+  stopClock();
   session = {
     mode,
     theme,
@@ -50,8 +53,10 @@ function newSession(
     step,
     strict,
     unit,
-    rating,
+    // The pace drill picks easier positions: speed comes from simple ones.
+    rating: rating || (clock === 'pace' ? app.state.puzzle.rating - 250 : null),
     due,
+    clock,
     done: 0,
     clean: 0,
     seen: [],
@@ -75,6 +80,7 @@ function optionsFrom(params) {
     unit: params.unit || null,
     rating: Number(params.rating) || null,
     due: !!Number(params.due || 0),
+    clock: params.clock === 'pace' || params.clock === 'pause' ? params.clock : null,
   };
 }
 
@@ -159,6 +165,55 @@ function loadPuzzle(p) {
     message: p.setup ? 'Watch the opponent’s move, then find the reply.' : 'Your move. Scan checks, captures and threats first.',
     tone: '',
   };
+  if (!p.setup) startClock(current);
+}
+
+// ---------- Clock drills ----------
+
+function stopClock() {
+  if (clockTimer) clearInterval(clockTimer);
+  clockTimer = null;
+}
+
+/** Pace: a countdown for the position. Pause: the board stays locked while you look. */
+function startClock(c) {
+  stopClock();
+  if (!session?.clock || c !== current || c.complete) return;
+  if (session.clock === 'pace') c.deadline = Date.now() + CLOCK_DRILLS.pace.seconds * 1000;
+  else {
+    c.lockUntil = Date.now() + CLOCK_DRILLS.pause.lock * 1000;
+    c.locked = true;
+    c.message = `Hands off for ${CLOCK_DRILLS.pause.lock} seconds. What does their last move threaten? What are your checks and captures?`;
+    c.tone = '';
+  }
+  clockTimer = setInterval(() => tickClock(c), 250);
+  tickClock(c);
+}
+
+function tickClock(c) {
+  if (c !== current || c.complete || app.page !== 'train') return stopClock();
+  const el = $('#drill-clock');
+  if (session.clock === 'pace') {
+    const left = c.deadline - Date.now();
+    if (el) {
+      el.textContent = `${Math.max(0, Math.ceil(left / 1000))}s`;
+      el.classList.toggle('urgent', left < 5000);
+    }
+    if (left <= 0 && !c.busy && !c.setupPending) {
+      stopClock();
+      c.timedOut = true;
+      showSolution();
+    }
+  } else {
+    const left = c.lockUntil - Date.now();
+    if (el) el.textContent = left > 0 ? `${Math.ceil(left / 1000)}s` : 'Go';
+    if (left <= 0 && c.locked) {
+      c.locked = false;
+      stopClock();
+      refreshBoard();
+      feedback('Now choose your move.');
+    }
+  }
 }
 
 export function render(main, params = {}) {
@@ -176,6 +231,7 @@ export function render(main, params = {}) {
 }
 
 export function leave() {
+  stopClock();
   // A sprint cannot pause: leaving the page abandons it.
   if (vision?.phase === 'running' || vision?.phase === 'countdown') {
     stopVisionTimer();
@@ -188,7 +244,7 @@ export function leave() {
  * @param {string} mode
  * @param {string | null} [theme]
  * @param {{ redraw?: boolean, tags?: string[], review?: string | null, step?: string | null, limit?: number | null,
- *   strict?: boolean, unit?: string | null, rating?: number | null, due?: boolean }} [options]
+ *   strict?: boolean, unit?: string | null, rating?: number | null, due?: boolean, clock?: 'pace' | 'pause' | null }} [options]
  */
 function startSession(mode, theme, { redraw = true, ...options } = {}) {
   stopVisionTimer();
@@ -233,17 +289,20 @@ function topLine() {
     const n = Math.min(session.done + (current && !current.complete ? 1 : 0), goal) || Math.min(session.done, goal);
     progress = `${Math.max(1, n)} of ${goal} · rating ${s.puzzle.rating}`;
   }
-  const chip = session.theme
-    ? `<span class="chip">${esc(session.theme)} <button type="button" class="chip-close" id="clear-theme" aria-label="Clear theme filter">×</button></span>`
-    : session.mode === 'mistakes'
-      ? `<span class="chip">${session.review ? 'This game’s mistakes' : 'My mistakes'}</span>`
-      : activeBlock()
-        ? '' // the session bar above already names the block
-        : session.unit && unitById(session.unit)
-          ? `<span class="chip">${esc(unitById(session.unit).title)}</span>`
-          : session.tags?.length
-            ? `<span class="chip">${esc(tagSummary(session.tags))}</span>`
-            : '';
+  const chip =
+    session.clock && !activeBlock()
+      ? `<span class="chip">${esc(CLOCK_DRILLS[session.clock].title)}</span>`
+      : session.theme
+        ? `<span class="chip">${esc(session.theme)} <button type="button" class="chip-close" id="clear-theme" aria-label="Clear theme filter">×</button></span>`
+        : session.mode === 'mistakes'
+          ? `<span class="chip">${session.review ? 'This game’s mistakes' : 'My mistakes'}</span>`
+          : activeBlock()
+            ? '' // the session bar above already names the block
+            : session.unit && unitById(session.unit)
+              ? `<span class="chip">${esc(unitById(session.unit).title)}</span>`
+              : session.tags?.length
+                ? `<span class="chip">${esc(tagSummary(session.tags))}</span>`
+                : '';
   return `<div class="focus-top">
     <span id="focus-progress" class="focus-progress">${esc(progress)}</span>
     ${chip}
@@ -283,6 +342,9 @@ function openMenu() {
       <button type="button" data-drill="visualise">Visualisation</button>
       <button type="button" data-drill="checks">Find every check</button>
       <button type="button" data-drill="assess">Assess the position</button>
+      <button type="button" data-drill="repertoire">Your repertoire</button>
+      <button type="button" data-clock="pace">Pace drill</button>
+      <button type="button" data-clock="pause">Pause drill</button>
     </div>
     ${session.theme ? `<p class="small">Theme filter: ${esc(session.theme)}. Choosing a mode clears it.</p>` : ''}
     <div class="actions"><button type="button" id="menu-flip">Flip board</button><button type="button" id="menu-progress">See progress</button></div>`);
@@ -298,6 +360,17 @@ function openMenu() {
       (b.onclick = () => {
         closeModal();
         app.navigate('drills', { drill: b.dataset.drill });
+      }),
+  );
+  $$('#modal [data-clock]').forEach(
+    b =>
+      (b.onclick = () => {
+        closeModal();
+        const pause = b.dataset.clock === 'pause';
+        startSession(pause && app.activeMistakes().length >= 3 ? 'mistakes' : 'daily', null, {
+          clock: b.dataset.clock,
+          limit: pause ? 6 : 10,
+        });
       }),
   );
   $('#menu-progress').onclick = () => {
@@ -389,7 +462,7 @@ function drawPuzzle(body) {
   body.innerHTML = `
     <div class="focus-prompt">
       <strong id="board-title">${esc(c.complete ? 'Position complete' : p.goal)}</strong>
-      <span class="chip" id="board-chip"></span>
+      ${session.clock && !c.complete ? '<span class="chip sprint-clock" id="drill-clock" role="timer" aria-live="off"></span>' : '<span class="chip" id="board-chip"></span>'}
     </div>
     <div class="focus-board"><div id="board"></div></div>
     <div class="focus-meta small">${esc(p.theme)}${ratingText ? ' · ' + ratingText : ''}${isMistake(p) ? ` · you played ${esc(p.played || 'a weaker move')}` : ''}</div>
@@ -439,7 +512,7 @@ function refreshBoard() {
   board.set({
     game: c.game,
     orientation: board.game ? board.orientation : c.solver,
-    interactive: !c.complete && !c.setupPending && !c.busy,
+    interactive: !c.complete && !c.setupPending && !c.busy && !c.locked,
     movable: c.solver,
     lastMove: c.lastMove,
     marks: c.marks,
@@ -473,6 +546,10 @@ async function playSetup(c) {
   refreshBoard();
   feedback(`${c.solver === 'w' ? 'Black' : 'White'} played ${m.san}. Your move.`);
   board.announce(`Opponent played ${m.san}. Your move.`);
+  if (session.clock) {
+    startClock(c);
+    if (c.locked) feedback(c.message);
+  }
 }
 
 async function handleMove(move) {
@@ -559,6 +636,7 @@ async function acceptMove(c, m, engineReply, alternative) {
 
 function finish(c, revealed) {
   if (c.complete) return;
+  stopClock();
   c.complete = true;
   c.busy = false;
   const clean = !c.failed && !c.hint && !revealed;
@@ -581,15 +659,21 @@ function finish(c, revealed) {
   const today = app.today();
   today.attempts++;
   if (clean) today.clean++;
-  logAttempt(s, { kind: isMistake(p) ? 'm' : 'p', theme: isMistake(p) ? p.kind || 'positional' : p.theme, clean });
+  logAttempt(s, {
+    kind: isMistake(p) && !session.clock ? 'm' : 'p',
+    theme: session.clock || (isMistake(p) ? p.kind || 'positional' : p.theme),
+    clean,
+  });
   session.done++;
   if (clean) session.clean++;
   app.save();
-  const lead = clean
-    ? 'Solved without help.'
-    : revealed
-      ? 'Study this line, then try it again later.'
-      : 'Good recovery. This position will return soon.';
+  const lead = c.timedOut
+    ? 'Out of time: here is the line.'
+    : clean
+      ? 'Solved without help.'
+      : revealed
+        ? 'Study this line, then try it again later.'
+        : 'Good recovery. This position will return soon.';
   let mainLine = '';
   if (c.offBook) {
     const start = new Chess(p.fen);

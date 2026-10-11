@@ -9,6 +9,9 @@ import { calibration } from '../assess.js';
 import { skillMap } from '../skills.js';
 import { goalStatus, goalSeries, PUZZLE_PERF } from '../progress-model.js';
 import { pathSummary } from '../curriculum.js';
+import { evidence } from '../evidence.js';
+import { habits } from '../debrief.js';
+import { timeProfile, profileText, CLOCK_DRILLS } from '../timeprofile.js';
 
 let platformFilter = null;
 let ratingsOpen = false;
@@ -131,6 +134,11 @@ export function render(main) {
     render(main);
   });
   $('.ratings-log', main).addEventListener('toggle', e => (ratingsOpen = e.target.open));
+  $('#clock-drill', main)?.addEventListener('click', e => {
+    const d = e.target.dataset.clock;
+    const own = app.activeMistakes().length >= 3;
+    app.navigate('train', { mode: d === 'pause' && own ? 'mistakes' : 'daily', clock: d, limit: d === 'pause' ? 6 : 10 });
+  });
   $('#go-assess', main).onclick = () => app.navigate('drills', { drill: 'assess' });
   $('#train-weak', main).onclick = () => {
     const tried = THEMES.filter(t => s.themes[t]?.count >= 3);
@@ -204,6 +212,63 @@ function youHTML() {
         )
         .join('')}</div>
       <p class="small muted">↓ means your recent games lose points in this skill more than your puzzles suggest.</p>
+    </section>
+  </div>
+  ${workingHTML()}`;
+}
+
+const VERDICT_WORD = { better: 'Better', worse: 'Worse', steady: 'Steady', unknown: '' };
+
+/** Is it working: your last two weeks against the six before, what you trained, your habits and your clock. */
+function workingHTML() {
+  const s = app.state;
+  const ev = evidence(s);
+  const h = habits(s);
+  const p = timeProfile(s);
+  const t = ev.recent.training;
+  const trained = [
+    [t.debriefs, 'debriefed moment'],
+    [t.replays, 'replay'],
+    [t.repertoire, 'repertoire position'],
+    [t.clock, 'clock-drill position'],
+    [t.puzzles - t.clock, 'puzzle'],
+    [t.ownMistakes, 'own mistake'],
+  ]
+    .filter(([n]) => n > 0)
+    .map(([n, w]) => plural(n, w));
+  return `<div class="two-col">
+    <section class="panel" aria-labelledby="working-title">
+      <h2 id="working-title">Is it working? <span class="h2-note">last two weeks against the six before</span></h2>
+      ${
+        ev.rows.every(r => r.verdict === 'unknown')
+          ? `<p class="muted">Comparisons start with three reviewed games in the last two weeks and three in the six before. So far: ${ev.recent.games} and ${ev.before.games}.</p>`
+          : ''
+      }
+      <ul class="evidence-list" ${ev.rows.every(r => r.verdict === 'unknown') ? 'hidden' : ''}>${ev.rows
+        .map(
+          r => `<li class="evidence ${r.verdict}"><span class="evidence-label">${esc(r.label)}</span>
+            <span class="evidence-value">${esc(r.text)}</span>${VERDICT_WORD[r.verdict] ? `<span class="verdict ${r.verdict}">${VERDICT_WORD[r.verdict]}</span>` : ''}</li>`,
+        )
+        .join('')}</ul>
+      <p class="small">${trained.length ? `You trained: ${esc(trained.join(', '))}.` : 'No training logged in the last two weeks yet.'} ${ev.recent.games} reviewed ${ev.recent.games === 1 ? 'game' : 'games'} in the last two weeks, ${ev.before.games} in the six before.</p>
+    </section>
+    <section class="panel" aria-labelledby="habits-title">
+      <h2 id="habits-title">Your habits</h2>
+      ${
+        h.total
+          ? `<div class="skill-bars">${h.list
+              .map(
+                r => `<div class="skill-bar"><span class="bar-label">${esc(r.label)}</span>
+                <span class="skill-track"><span class="skill-fill" style="width:${Math.max(4, r.share * 100)}%"></span></span>
+                <span class="bar-value">${r.count}</span></div>`,
+              )
+              .join('')}</div>
+             <p class="small">What went wrong in your last ${h.total} debriefed ${h.total === 1 ? 'moment' : 'moments'}.</p>`
+          : '<p class="muted">Debrief a game to start: after each one you note why its decisive moments went wrong.</p>'
+      }
+      <h3>Your clock</h3>
+      <p class="small">${esc(profileText(p))}</p>
+      ${p.drill ? `<div class="actions"><button type="button" id="clock-drill" data-clock="${p.drill}">${esc(CLOCK_DRILLS[p.drill].title)}</button></div>` : ''}
     </section>
   </div>`;
 }

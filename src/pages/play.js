@@ -9,7 +9,8 @@ import { LEVELS, levelById, pickNoisyMove, adaptLevel } from '../strength.js';
 import { humanMove } from '../maia.js';
 import { isTrainableMistake, winPercentLoss } from '../evaluation.js';
 import { createMistake, deleteMistake } from '../mistakes.js';
-import { dateKey, logGame, logCandidates } from '../state.js';
+import { dateKey, logGame, logCandidates, logAttempt } from '../state.js';
+import { replayCandidates, nextReplay, opponentLevel, judgeReplay, recordReplay, goalText, MAX_MOVES } from '../replay.js';
 
 const SAVE_KEY = 'rankup-practice';
 let root = null;
@@ -28,6 +29,7 @@ const play = {
   level: null,
   candidates: [], // squares named before the move, when the habit is on
   marking: false,
+  challenge: null, // Play it again: { id, goal, text, level, moves, done: null | 'success' | 'fail' }
 };
 
 (function restore() {
@@ -42,6 +44,7 @@ const play = {
     play.mistakes = saved.mistakes || {};
     play.recorded = !!saved.recorded;
     play.level = saved.level || null;
+    play.challenge = saved.challenge || null;
   } catch {}
 })();
 
@@ -56,6 +59,7 @@ function persist() {
         mistakes: play.mistakes,
         recorded: play.recorded,
         level: play.level,
+        challenge: play.challenge,
       }),
     );
   } catch {}
@@ -63,6 +67,7 @@ function persist() {
 
 export function render(main, params = {}) {
   root = main;
+  if (params.replay) startReplay(params.replay);
   // The user keeps the side they solved the puzzle with; Stockfish replies first.
   if (params.fen) newGame({ fen: params.fen, from: params.from || 'a puzzle', color: params.colour || new Chess(params.fen).turn() });
   // A session game: a fresh game unless one is under way, with one thing to practise.
@@ -85,9 +90,78 @@ function gameStatus() {
   return g.turn() === play.color ? 'Your move. Check the threat before choosing.' : `${opponentName()} to move.`;
 }
 
+/** The opponent for this game: the challenge's, or your chosen practice level. */
+function currentLevel() {
+  return levelById(play.challenge?.level || app.state.strength);
+}
+
 /** Who the practice opponent is: Maia for the human-like levels, otherwise Stockfish. */
 function opponentName() {
-  return levelById(app.state.strength).mode === 'maia' ? 'Maia' : 'Stockfish';
+  return currentLevel().mode === 'maia' ? 'Maia' : 'Stockfish';
+}
+
+// ---------- Play it again ----------
+
+/** Start a challenge from one of your games: the position before your mistake, against their strength. */
+function startReplay(id) {
+  const c = replayCandidates(app.state).find(x => x.id === id);
+  if (!c) return toast('That position is no longer in your games.');
+  const yours = app.state.ratings.at(-1)?.rating || app.state.puzzle.rating;
+  newGame({ fen: c.fen, from: `your game against ${c.opponent}`, color: c.colour });
+  play.challenge = { id: c.id, goal: c.goal, text: goalText(c), level: opponentLevel(c.oppElo, yours), moves: 0, done: null };
+  persist();
+}
+
+/** The game ended, or reached the move limit: judge it, save it, say so. */
+function settleChallenge({ result = null, evalUser = null }) {
+  const ch = play.challenge;
+  if (!ch || ch.done) return;
+  const success = judgeReplay(ch.goal, { result, evalUser });
+  ch.done = success ? 'success' : 'fail';
+  recordReplay(app.state, ch.id, success, dateKey());
+  logAttempt(app.state, { kind: 'r', theme: ch.goal, clean: success });
+  app.save();
+  persist();
+  play.note = success
+    ? ch.goal === 'convert'
+      ? 'Converted: the win you let slip in the game.'
+      : 'Held: the half point you let slip in the game.'
+    : ch.goal === 'convert'
+      ? 'The win slipped again. This position comes back for another try.'
+      : 'Lost again. This position comes back for another try.';
+  if (success) toast(play.note);
+}
+
+/** The challenge line above the board, with your move count once you have started. */
+function challengeText() {
+  const ch = play.challenge;
+  return `<strong>Play it again:</strong> ${esc(ch.text)}${ch.moves ? ` Move ${ch.moves} of ${MAX_MOVES}.` : ''}`;
+}
+
+const resultFor = g => (g.isCheckmate() ? (g.turn() === play.color ? 'loss' : 'win') : 'draw');
+
+/** Ask the engine where the position stands, from your side. */
+async function judgeNow() {
+  const ch = play.challenge;
+  if (!ch || ch.done || play.thinking) return;
+  const token = play.token;
+  play.thinking = true;
+  refreshBoard();
+  status('Stockfish is judging the position…');
+  try {
+    const r = await engine.analyse(play.game.fen(), { nodes: BUDGET.coach });
+    if (token !== play.token) return;
+    const mine = play.game.turn() === play.color;
+    const score = r.mate ? (r.mate > 0 ? 10000 : -10000) : r.score;
+    settleChallenge({ evalUser: mine ? score : -score });
+  } catch (e) {
+    if (token === play.token) status(e.message, 'error');
+  } finally {
+    if (token === play.token) {
+      play.thinking = false;
+      draw();
+    }
+  }
 }
 
 function moveRecord() {
@@ -114,11 +188,12 @@ function draw() {
   const g = play.game;
   root.innerHTML = `<div class="focus">
     <div class="focus-top">
-      <span class="focus-progress">${esc(shortLevel(app.state.strength))} · you play ${play.color === 'w' ? 'White' : 'Black'}</span>
+      <span class="focus-progress">${esc(shortLevel(play.challenge?.level || app.state.strength))} · you play ${play.color === 'w' ? 'White' : 'Black'}</span>
       <button type="button" id="play-menu" class="secondary focus-menu" aria-haspopup="dialog" aria-label="Game options: opponent, colour, coach, export and review">Options</button>
     </div>
     <div class="focus-prompt"><strong id="board-title">${esc(play.from ? `From: ${play.from}` : 'Practice game')}</strong><span class="chip" id="board-chip"></span></div>
     ${play.objective && !play.from ? `<p class="objective small"><strong>Objective:</strong> ${esc(play.objective)}</p>` : ''}
+    ${play.challenge && !play.challenge.done ? `<p class="objective small" id="challenge-text">${challengeText()}</p>` : ''}
     <div class="focus-board"><div id="board"></div></div>
     <div id="history" class="history small">${esc(moveRecord())}</div>
     <div id="play-status" class="status" role="status" aria-live="polite">${esc((play.note ? play.note + ' ' : '') + gameStatus())}</div>
@@ -126,7 +201,13 @@ function draw() {
       ${
         play.marking
           ? '<button type="button" id="candidates-done" class="primary">Done</button>'
-          : `<button type="button" id="new-game" class="primary">New game</button>
+          : play.challenge && !play.challenge.done
+            ? `<button type="button" id="judge" ${play.challenge.moves >= 10 && !play.thinking && !g.isGameOver() ? '' : 'disabled'}>Judge position</button>
+               <button type="button" id="give-up" class="secondary">Stop</button>`
+            : play.challenge
+              ? `<button type="button" id="replay-again">Try again</button>
+                 <button type="button" id="replay-next" class="primary">${nextReplay(app.state) ? 'Next position' : 'New game'}</button>`
+              : `<button type="button" id="new-game" class="primary">New game</button>
              ${app.state.settings.candidates ? `<button type="button" id="candidates" ${g.turn() === play.color && !g.isGameOver() && !play.thinking ? '' : 'disabled'}>Candidates</button>` : ''}
              <button type="button" id="undo-game" ${g.history().length && !play.thinking ? '' : 'disabled'}>Take back</button>`
       }
@@ -141,6 +222,23 @@ function draw() {
   $('#undo-game', root)?.addEventListener('click', takeBack);
   $('#candidates', root)?.addEventListener('click', () => setMarking(true));
   $('#candidates-done', root)?.addEventListener('click', () => setMarking(false));
+  $('#judge', root)?.addEventListener('click', judgeNow);
+  $('#give-up', root)?.addEventListener('click', () => {
+    settleChallenge({ result: 'loss' });
+    draw();
+  });
+  $('#replay-again', root)?.addEventListener('click', () => {
+    startReplay(play.challenge.id);
+    draw();
+    if (play.game.turn() !== play.color) engineTurn();
+  });
+  $('#replay-next', root)?.addEventListener('click', () => {
+    const next = nextReplay(app.state);
+    if (next) startReplay(next.id);
+    else newGame({ color: play.color });
+    draw();
+    if (play.game.turn() !== play.color) engineTurn();
+  });
 }
 
 /** Candidate moves: name up to three squares you are considering before you move. */
@@ -234,7 +332,7 @@ function openMenu() {
 function pgnWithHeaders() {
   const g = new Chess();
   g.loadPgn(play.game.pgn());
-  const label = levelById(app.state.strength).label;
+  const label = currentLevel().label;
   g.setHeader('Event', 'Rankup practice');
   g.setHeader('Date', dateKey().replace(/-/g, '.'));
   g.setHeader('White', play.color === 'w' ? 'You' : `Stockfish (${label})`);
@@ -257,6 +355,7 @@ function newGame({ fen = null, color = 'w', from = null }) {
   play.candidates = [];
   play.marking = false;
   play.level = fen ? null : app.state.strength; // games from a puzzle position do not count towards the ladder
+  play.challenge = null;
   engine.newGame();
   persist();
 }
@@ -310,6 +409,10 @@ function refreshBoard() {
     h.textContent = moveRecord();
     h.scrollTop = h.scrollHeight;
   }
+  const challenge = $('#challenge-text');
+  if (challenge && play.challenge && !play.challenge.done) challenge.innerHTML = challengeText();
+  const judge = $('#judge');
+  if (judge) judge.disabled = !(play.challenge?.moves >= 10) || play.thinking || g.isGameOver();
   const undo = $('#undo-game');
   if (undo) undo.disabled = !g.history().length || play.thinking;
   if ($('#export-game')) $('#export-game').disabled = !g.history().length;
@@ -362,11 +465,15 @@ async function onMove(move) {
         ? `The engine's best, ${bestSan}, was among your candidates.`
         : `The engine preferred ${bestSan}, which was not among your candidates.`;
     }
+    if (play.challenge && !play.challenge.done) play.challenge.moves++;
     persist();
     refreshBoard();
     board.announce(`You played ${m.san}.`);
-    if (g.isGameOver()) return recordResult();
-    const level = levelById(app.state.strength);
+    if (g.isGameOver()) {
+      if (play.challenge) settleChallenge({ result: resultFor(g) });
+      return recordResult();
+    }
+    const level = currentLevel();
     let after = null;
     if (app.state.coach || level.mode === 'noise' || level.mode === 'full') {
       after = await engine.analyse(g.fen(), { nodes: BUDGET.coach, multipv: level.mode === 'noise' ? level.multipv : 1 });
@@ -390,13 +497,23 @@ async function onMove(move) {
     }
     status((play.note ? play.note + ' ' : '') + `${opponentName()} is thinking…`);
     await engineMove(token, after, level);
+    // The challenge is judged by the engine once you have made your moves.
+    const ch = play.challenge;
+    if (token === play.token && ch && !ch.done && !g.isGameOver() && ch.moves >= MAX_MOVES) {
+      play.thinking = false;
+      return judgeNow();
+    }
   } catch (e) {
     if (token === play.token) status(e.message, 'error');
   } finally {
     if (token === play.token) {
       play.thinking = false;
       refreshBoard();
-      status((play.note ? play.note + ' ' : '') + gameStatus(), play.note ? 'warning' : '');
+      status(
+        (play.note ? play.note + ' ' : '') + gameStatus(),
+        play.challenge?.done === 'success' ? 'success' : play.note ? 'warning' : '',
+      );
+      if (play.challenge?.done) draw();
       prepareCoach();
     }
   }
@@ -429,7 +546,10 @@ async function engineMove(token, after, level) {
   play.lastMove = [m.from, m.to];
   persist();
   if (board) board.announce(`${opponentName()} played ${m.san}.`);
-  if (g.isGameOver()) recordResult();
+  if (g.isGameOver()) {
+    if (play.challenge) settleChallenge({ result: resultFor(g) });
+    recordResult();
+  }
 }
 
 async function engineTurn() {
@@ -438,7 +558,7 @@ async function engineTurn() {
   refreshBoard();
   status(`${opponentName()} is thinking…`);
   try {
-    await engineMove(token, null, levelById(app.state.strength));
+    await engineMove(token, null, currentLevel());
   } catch (e) {
     if (token === play.token) status(e.message, 'error');
   } finally {

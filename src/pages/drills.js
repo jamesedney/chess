@@ -21,6 +21,8 @@ import { logAttempt, dateKey } from '../state.js';
 import { pickPositions, BUCKETS, ROUNDS as ASSESS_ROUNDS, scoreGuess, evalText, playerBias, calibration } from '../assess.js';
 import { explainPosition } from '../structure.js';
 import { cue } from '../sound.js';
+import { dueCards, repertoireCards, weakLines, lineText as repLine } from '../repertoire.js';
+import { schedule } from '../srs.js';
 
 const ENDGAME_NODES = 400000;
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -37,7 +39,11 @@ export function render(main, params = {}) {
   else if (kind === 'visualise') view = { kind: 'visualise', phase: 'intro' };
   else if (kind === 'checks') view = { kind: 'checks', phase: 'intro' };
   else if (kind === 'assess') view = { kind: 'assess', phase: 'intro' };
-  else view = { kind: 'endgames', phase: 'list' };
+  else if (kind === 'repertoire') {
+    view = { kind: 'repertoire', phase: 'intro' };
+    // From today's plan: start straight away on the positions due.
+    if (params.limit) startRepertoire(Number(params.limit));
+  } else view = { kind: 'endgames', phase: 'list' };
   draw();
 }
 
@@ -72,6 +78,7 @@ function draw() {
   if (view.kind === 'endgames') view.phase === 'list' ? drawEndgameList() : drawEndgame();
   else if (view.kind === 'visualise') drawVisualise();
   else if (view.kind === 'assess') drawAssess();
+  else if (view.kind === 'repertoire') drawRepertoire();
   else drawChecks();
   $('#drill-exit', root)?.addEventListener('click', () =>
     view?.kind === 'endgames' && view.phase !== 'list' ? app.navigate('drills', { drill: 'endgames' }) : app.navigate('train'),
@@ -610,5 +617,120 @@ function finishAssess() {
   logAttempt(app.state, { kind: 'c', theme: 'assess', clean: total > 0 && v.score >= total * 1.2 });
   app.save();
   Object.assign(v, { phase: 'done', total, bias });
+  draw();
+}
+
+// ---------- Repertoire ----------
+
+/** Practise the positions due (or, when none are, the first few), at most `limit`. */
+function startRepertoire(limit = 10) {
+  const due = dueCards(app.state);
+  const cards = (due.length ? due : repertoireCards(app.state.reviews)).slice(0, limit);
+  view = {
+    kind: 'repertoire',
+    phase: cards.length ? 'play' : 'intro',
+    cards,
+    i: 0,
+    tries: 0,
+    answered: false,
+    clean: 0,
+    message: '',
+    tone: '',
+  };
+}
+
+function drawRepertoire() {
+  const v = view;
+  if (v.phase !== 'play') {
+    const all = repertoireCards(app.state.reviews);
+    const due = dueCards(app.state).length;
+    const weak = weakLines(app.state.reviews).slice(0, 3);
+    root.innerHTML = `<div class="focus">${top('Your repertoire')}
+      <div class="panel">
+        <h2>${v.phase === 'done' ? `${v.clean} of ${v.cards.length} from memory` : 'Your openings, from your games'}</h2>
+        <p>${
+          all.length
+            ? `${plural(all.length, 'position')} you reach in your games, with your move there, or the engine’s better move where you lost ground. ${due ? `${due} due now.` : 'All caught up.'}`
+            : 'Review a few of your games and the positions you keep reaching appear here, with the moves to play.'
+        }</p>
+        ${
+          weak.length
+            ? `<h3>Lines that go badly</h3><ul class="weak-lines">${weak
+                .map(
+                  l =>
+                    `<li>As ${l.colour === 'w' ? 'White' : 'Black'}: <strong>${esc(l.line)}</strong> <span class="small">${Math.round(l.score * 100)}% in ${l.games} games</span></li>`,
+                )
+                .join('')}</ul>`
+            : ''
+        }
+        ${all.length ? `<div class="actions"><button type="button" class="primary" id="rep-start">${due ? `Practise ${Math.min(due, 10)} positions` : 'Practise anyway'}</button></div>` : '<div class="actions"><button type="button" class="primary" id="rep-review">Your games</button></div>'}
+      </div></div>`;
+    $('#rep-start', root)?.addEventListener('click', () => {
+      startRepertoire(10);
+      draw();
+    });
+    $('#rep-review', root)?.addEventListener('click', () => app.navigate('review'));
+    return;
+  }
+  const c = v.cards[v.i];
+  const game = new Chess(c.fen);
+  root.innerHTML = `<div class="focus">${top(`Position ${v.i + 1} of ${v.cards.length}`)}
+    <div class="focus-prompt"><strong id="board-title">${v.answered ? esc(c.answer) : 'Your move'}</strong><span class="chip" id="board-chip">${esc(turnLabel(game))}</span></div>
+    <div class="focus-board"><div id="board"></div></div>
+    <div class="focus-meta small">${c.line.length ? `After ${esc(repLine(c.line))}` : 'The first move'} · ${plural(c.games, 'game')}, you scored ${Math.round(c.score * 100)}%</div>
+    <div id="feedback" class="status ${v.tone}" role="status" aria-live="polite" ${v.message ? '' : 'hidden'}>${esc(v.message)}</div>
+    <div class="focus-actions">${
+      v.answered ? '<button type="button" class="primary" id="rep-next">Next</button>' : '<button type="button" id="rep-show">Show</button>'
+    }</div>
+  </div>`;
+  board = new BoardView($('#board', root), {
+    label: 'Repertoire board',
+    askPromotion: choosePromotion,
+    onMove: v.answered ? null : repertoireMove,
+  });
+  board.set({ game, orientation: c.colour, interactive: !v.answered, movable: c.colour });
+  $('#rep-show', root)?.addEventListener('click', () => answerRepertoire(false, true));
+  $('#rep-next', root)?.addEventListener('click', () => {
+    v.i++;
+    Object.assign(v, { tries: 0, answered: false, message: '', tone: '' });
+    if (v.i >= v.cards.length) v.phase = 'done';
+    draw();
+  });
+  $('#rep-next', root)?.focus({ preventScroll: true });
+}
+
+function repertoireMove(move) {
+  const v = view;
+  const c = v.cards[v.i];
+  let m;
+  try {
+    m = new Chess(c.fen).move(move);
+  } catch {
+    return;
+  }
+  if (m.san === c.answer) return answerRepertoire(v.tries === 0, false);
+  v.tries++;
+  cue('error');
+  board.flash(m.to);
+  if (v.tries >= 2) return answerRepertoire(false, true);
+  say(
+    c.fix && m.san === c.played ? `That is what you played, and it cost you. Find the better move.` : 'Not your move here. Try again.',
+    'error',
+  );
+}
+
+function answerRepertoire(clean, shown) {
+  const v = view;
+  const c = v.cards[v.i];
+  app.state.rep[c.id] = schedule(app.state.rep[c.id], clean, Date.now());
+  logAttempt(app.state, { kind: 'o', theme: c.colour, clean });
+  if (clean) v.clean++;
+  app.save();
+  v.answered = true;
+  cue(clean ? 'success' : 'error');
+  Object.assign(v, {
+    message: `${shown ? `The move is ${c.answer}.` : `Yes: ${c.answer}.`} ${c.why}${clean ? '' : ' It comes back soon.'}`,
+    tone: clean ? 'success' : 'warning',
+  });
   draw();
 }

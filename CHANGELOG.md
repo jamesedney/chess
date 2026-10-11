@@ -1,5 +1,20 @@
 # Changelog
 
+## 4.0.0
+
+Your games are the curriculum.
+
+- **Post-game debrief.** Each newly imported game opens as a debrief of the moments that decided it: find the better move, then say what went wrong with one tap. A likely reason is suggested from your clock and the kind of mistake. Today's plan starts with it, and the background-review message opens it.
+- **Play it again.** Positions from your games where a win slipped away or a draw was there to hold, replayed from the Play page against your opponent's strength (Maia near 1100, 1500 or 1900, otherwise Stockfish). Win, or stay clearly winning, or hold, within 30 moves; Judge position asks the engine sooner. Attempts are kept, and unsolved positions return.
+- **Your repertoire.** A drill of the positions you reach in your openings: your move, or the engine's better move where your usual one cost you, on a spaced-repetition schedule. Lines you score under 40% in are listed.
+- **Clock skills.** A clock profile from your games' %clk data: critical moves played in a hurry, time trouble before move 30, losses on time. Two drills: Pause (the board stays locked for eight seconds on your own critical positions) and Pace (easier positions, 15 seconds each).
+- **Is it working?** The You page compares your last two weeks of reviewed games with the six weeks before, on blunders, missed threats, rushed critical moves, conversion of winning positions and score, and lists what you trained. Today shows the clearest change.
+- **The plan uses all of it.** Today's session can include a debrief, a clock drill when your clock is the problem, the skill your debriefs keep naming, a position to play again and repertoire positions due.
+- The Games page opens with Train on your games: debriefs waiting, positions to play again and your repertoire.
+- Tapping the tab you are on goes back to its main screen; a finished debrief no longer reopens when you return to Games.
+- Reviews keep the opponent's rating. Saved data moves to version 7; games reviewed before this version are not asked about again.
+
+
 ## 3.0.6
 
 - Assess the position explains itself better. The answer now starts with the material ("Black is up a piece for a pawn"), says when material does not explain the engine's verdict (look for threats, a weak king or better pieces), says who controls an open file, and only calls a bishop hemmed in when it really has little room: a bishop on the same colour as its pawns can still be active, as one on d7 attacking g4 was in a reported position.

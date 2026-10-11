@@ -23,7 +23,7 @@ import { scheduleDeepAnalysis } from './deep.js';
 import { startAutoSync, syncNow } from './queue.js';
 import { CONTROLS } from './sync.js';
 
-export const VERSION = '3.0.6';
+export const VERSION = '4.0.0';
 const PAGES = { today, train, coach, path, play, review, progress, drills };
 // Pages without their own tab light up the tab they belong to.
 const NAV_AS = { train: 'today', drills: 'today', coach: 'progress' };
@@ -86,7 +86,25 @@ function hashParams() {
   if (!q) return {};
   const out = {};
   for (const [k, v] of new URLSearchParams(q))
-    if (['puzzle', 'theme', 'mode', 'review', 'tags', 'strict', 'limit', 'unit', 'rating', 'due', ...ADDRESS_KEYS].includes(k)) out[k] = v;
+    if (
+      [
+        'puzzle',
+        'theme',
+        'mode',
+        'review',
+        'tags',
+        'strict',
+        'limit',
+        'unit',
+        'rating',
+        'due',
+        'debrief',
+        'replay',
+        'clock',
+        ...ADDRESS_KEYS,
+      ].includes(k)
+    )
+      out[k] = v;
   if (out.theme && !out.mode) out.mode = 'daily';
   return out;
 }
@@ -95,6 +113,15 @@ window.addEventListener('hashchange', () => {
   const params = pendingParams || hashParams();
   pendingParams = null;
   show(currentPage(), params);
+});
+
+// Tapping the tab you are on goes back to its main screen, as in phone apps:
+// the address does not change, so no hashchange would fire.
+document.querySelector('nav')?.addEventListener('click', e => {
+  const link = /** @type {HTMLElement} */ (e.target).closest('a[data-page]');
+  if (!link || link.getAttribute('href') !== location.hash) return;
+  e.preventDefault();
+  show(/** @type {HTMLElement} */ (link).dataset.page, { list: true });
 });
 
 function updateSidebar() {

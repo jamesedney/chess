@@ -2998,3 +2998,109 @@ button.big {
   width: 18px;
   height: 18px;
 }
+
+/* ---------- V4: debrief ---------- */
+
+.reason-pick p {
+  margin: 0 0 8px;
+}
+
+.reason-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.reason-grid button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  font-weight: 550;
+  padding: 10px 12px;
+}
+
+.reason-grid button.suggested {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+
+.reason-grid .small {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.debrief-list {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  line-height: 1.5;
+}
+
+.debrief-list li + li {
+  margin-top: 8px;
+}
+
+/* ---------- V4: games training, evidence ---------- */
+
+.train-games {
+  margin-bottom: 18px;
+}
+
+.train-games h2 {
+  margin-bottom: 10px;
+}
+
+.evidence-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.evidence {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.evidence:last-child {
+  border-bottom: 0;
+}
+
+.evidence-label {
+  font-weight: 600;
+}
+
+.evidence-value {
+  grid-column: 1;
+  color: var(--muted);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.evidence .verdict {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-size: 14px;
+}
+
+.evidence-line {
+  margin: 0 2px;
+}
+
+.evidence-line a {
+  color: var(--muted);
+}
+
+.weak-lines {
+  padding-left: 20px;
+  line-height: 1.6;
+}
+
+.debrief-list {
+  list-style: none;
+  padding-left: 0;
+}

@@ -13,7 +13,7 @@ import { SKILLS } from '../data/curriculum.js';
 
 export const STORAGE_KEY = 'rankup-v1'; // Kept for continuity; the version lives inside.
 export const RECOVERY_PREFIX = 'rankup-recovery-';
-export const CURRENT_VERSION = 6;
+export const CURRENT_VERSION = 7;
 export const MAX_GAMES = 50;
 export const MAX_REVIEWS = 20;
 export const MAX_LOG = 4000;
@@ -55,6 +55,9 @@ export function defaults() {
     skills: seedSkills(STAGES[0].rating), // skill id -> { rating, count }
     curriculum: { units: {}, current: null, placed: false },
     session: null, // today's plan; see program.js
+    // Added in version 7.
+    replays: {}, // "reviewId:ply" -> { tries, success, last }: positions played again; see replay.js
+    rep: {}, // "rep:<colour>:<position>" -> spaced-repetition record for repertoire moves
   };
 }
 
@@ -151,6 +154,14 @@ export const MIGRATIONS = [
         session: null,
         sync: { ...s.sync, ratingsAt: 0 },
       };
+    },
+  },
+  {
+    from: 6,
+    run(s) {
+      // Games reviewed before debriefs existed are not asked about again.
+      const reviews = (s.reviews || []).map(r => ({ ...r, debriefed: true }));
+      return { ...s, reviews, replays: {}, rep: {} };
     },
   },
   {
@@ -278,6 +289,10 @@ export function validate(s) {
   if (!sy || typeof sy.auto !== 'boolean' || typeof sy.ratedOnly !== 'boolean' || !Array.isArray(sy.controls)) return 'sync';
   if (!sy.controls.every(c => CONTROLS.includes(c)) || !finite(sy.minMoves, 0, 60) || !finite(sy.dailyCap, 1, 50)) return 'sync';
   if (!sy.last || !finite(sy.last.lichess, 0) || !finite(sy.last.chesscom, 0) || !Array.isArray(sy.seen)) return 'sync';
+  if (!s.replays || typeof s.replays !== 'object') return 'replays';
+  for (const r of Object.values(s.replays)) if (!finite(r?.tries, 0) || typeof r.success !== 'boolean') return 'replay';
+  if (!s.rep || typeof s.rep !== 'object') return 'repertoire';
+  for (const r of Object.values(s.rep)) if (!finite(r?.tries, 0) || !finite(r?.due, 0)) return 'repertoire record';
   if (!Array.isArray(s.games) || s.games.length > MAX_GAMES * 2) return 'games';
   for (const g of s.games) if (!g || !isDate(g.d) || !LEVELS.some(l => l.id === g.level) || ![0, 0.5, 1].includes(g.r)) return 'game';
   return null;

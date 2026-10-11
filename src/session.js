@@ -44,6 +44,14 @@ function route(block) {
       return block.params.mode === 'vision' ? ['train', block.params] : ['drills', block.params];
     case 'game':
       return ['play', block.params];
+    case 'debrief':
+      return ['review', block.params];
+    case 'clock':
+      return ['train', block.params];
+    case 'replay':
+      return ['play', block.params];
+    case 'repertoire':
+      return ['drills', block.params];
     default:
       return ['train', block.params];
   }
@@ -57,10 +65,11 @@ export function mergeNewGames() {
   const s = app.state;
   const plan = s.session;
   if (!plan || plan.date !== dateKey()) return;
-  if (plan.blocks.some(b => b.type === 'review' && b.status === 'todo')) return;
+  const isGame = b => b.type === 'review' || b.type === 'debrief';
+  if (plan.blocks.some(b => isGame(b) && b.status === 'todo')) return;
   const fresh = planSession(s, { puzzles: app.allPuzzles(), target: s.target?.target || null });
-  const review = fresh.blocks.find(b => b.type === 'review');
-  if (!review || plan.blocks.some(b => b.type === 'review' && b.params.review === review.params.review)) return;
+  const review = fresh.blocks.find(isGame);
+  if (!review || plan.blocks.some(b => isGame(b) && b.params.review === review.params.review)) return;
   if (plan.blocks.some(b => b.id === review.id)) review.id = `review-${plan.blocks.length}`;
   const at = plan.blocks.findIndex(b => b.status === 'todo');
   plan.blocks.splice(at < 0 ? plan.blocks.length : at, 0, review);

@@ -343,10 +343,24 @@ test('planner: a fresh game review comes first and blocks know when they are don
       colour: 'w',
       white: 'me',
       black: 'Rival',
-      marks: [{ mistakeId: 'm1', cls: 'mistake' }],
+      marks: [{ ply: 0, mistakeId: 'm1', cls: 'mistake', loss: 20, bestSan: 'e4' }],
     },
   ];
+  // A fresh game is debriefed first: its decisive moments and why they went wrong.
+  const first = planSession(s, { now: NOW.getTime(), target: 1400 });
+  const debrief = first.blocks.find(b => b.id === 'debrief');
+  assert.ok(debrief, first.blocks.map(b => b.id).join());
+  assert.match(debrief.title, /Debrief: your game against Rival/);
+  assert.deepEqual(debrief.params, { review: 'r1', debrief: 1 });
+  assert.equal(first.blocks[0].id === 'debrief' || first.blocks[1].id === 'debrief', true);
+  const started = { ...debrief, base: baseline(s) };
+  assert.equal(blockDone(s, started), false);
+  s.reviews[0].marks[0].reason = 'chance';
+  s.reviews[0].debriefed = true;
+  assert.equal(blockDone(s, started), true);
+  // Once debriefed, its saved positions are drilled instead.
   const plan = planSession(s, { now: NOW.getTime(), target: 1400 });
+  assert.ok(!plan.blocks.some(b => b.id === 'debrief'));
   const review = plan.blocks.find(b => b.id === 'review');
   assert.ok(review, plan.blocks.map(b => b.id).join());
   assert.match(review.title, /Rival/);
@@ -403,7 +417,7 @@ test('goal model: choosing another time control moves the goal to it', () => {
 });
 
 test('state v6: new fields default, migrate and validate', () => {
-  assert.equal(CURRENT_VERSION, 6);
+  assert.equal(CURRENT_VERSION, 7);
   const d = fresh();
   assert.equal(d.onboarded, false);
   assert.deepEqual(d.curriculum, { units: {}, current: null, placed: false });
@@ -414,7 +428,7 @@ test('state v6: new fields default, migrate and validate', () => {
   delete old.target;
   delete old.milestones;
   const m = migrate(old);
-  assert.equal(m.version, 6);
+  assert.equal(m.version, 7);
   assert.ok(m.skills.safety);
   assert.ok(Array.isArray(m.milestones));
   assert.doesNotThrow(() => validate(m));

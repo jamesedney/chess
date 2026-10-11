@@ -49,13 +49,28 @@ test('a linked account is synced, the game is reviewed in the background, and th
   await page.click('#close-modal');
   // The review finishes in the background and offers itself; the saved mistakes become the next step.
   await expect(page.locator('.toast.show')).toContainText('me – rival reviewed', { timeout: 120000 });
-  // Today's session now starts with that game's mistakes.
+  // Today's session now starts with a debrief of that game.
   await page.goto('./#today');
-  await expect(page.locator('.agenda')).toContainText('Your game against rival');
-  await page.locator('.agenda-item', { hasText: 'against rival' }).locator('button').click();
-  await expect(page.locator('.focus-meta')).toContainText('you played');
-  await expect(page.locator('#focus-progress')).toBeVisible();
+  await expect(page.locator('.agenda')).toContainText('Debrief: your game against rival');
+  await page.locator('.agenda-item', { hasText: 'Debrief: your game against rival' }).locator('button').click();
+  await expect(page.locator('.focus-progress')).toContainText('Debrief · 0 of');
+  await expect(page.locator('#board-title')).toHaveText('Find the better move');
   await expect(page.locator('#session-bar')).toContainText('against rival');
+  // Shown the answer, then asked why it went wrong, with a likely reason marked.
+  await page.click('#show-answer');
+  await expect(page.locator('.reason-pick')).toContainText('What went wrong?');
+  await expect(page.locator('.reason-grid .suggested')).toHaveCount(1);
+  // Note every moment, then the summary.
+  while (!(await page.locator('.debrief-summary').count())) {
+    if (await page.locator('#show-answer').count()) await page.click('#show-answer');
+    await page.locator('.reason-grid button').first().click();
+  }
+  await expect(page.locator('.debrief-summary')).toContainText('Debrief done');
+  await expect(page.locator('.debrief-summary')).toContainText('Missed their threat');
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')));
+  expect(saved.reviews[0].debriefed).toBe(true);
+  expect(saved.reviews[0].marks.some(m => m.reason === 'threat')).toBe(true);
+  await expect(page.locator('#session-bar #session-next')).toContainText(/Next|Finish/);
   // The review itself carries the opening, Lichess evaluations and time data.
   await page.click('nav a[data-page="review"]');
   await expect(page.locator('.review-item').first()).toContainText('me – rival');
@@ -74,7 +89,8 @@ test('the review-ready notification opens the game, even from behind the Setting
   // Tap the text of the notification, not its button, while the dialog is still open.
   await page.locator('.toast.show span').click();
   await expect(page).toHaveURL(/#review$/);
-  await expect(page.locator('.focus-progress')).toContainText('me – rival');
+  // A fresh game opens as a debrief.
+  await expect(page.locator('.focus-progress')).toContainText('Debrief');
   await expect(page.locator('#modal')).not.toHaveAttribute('open');
 });
 
@@ -106,7 +122,7 @@ test('several games reviewed in the background give one dismissable message and 
   await expect(page.locator('.toast.show')).toContainText('2 games reviewed', { timeout: 150000 });
   await expect(page.locator('.toast.show')).not.toContainText('me – rival reviewed');
   // The plan picked the newest game up without a reload.
-  await expect(page.locator('.agenda')).toContainText('Your game against');
+  await expect(page.locator('.agenda')).toContainText(/your game against/i);
   // Close dismisses without navigating.
   await page.click('.toast.show .toast-close');
   await expect(page.locator('.toast.show')).toBeHidden();

@@ -10,6 +10,7 @@ import { toast } from './ui.js';
 import { scheduleDeepAnalysis } from './deep.js';
 import { mergeNewGames } from './session.js';
 import { syncRatings } from './rating-sync.js';
+import { needsDebrief } from './debrief.js';
 
 const KEY = 'rankup-queue';
 const MAX_QUEUE = 12;
@@ -114,7 +115,7 @@ export function runQueue(delay = 1500) {
       if (!duplicate) {
         batch.games++;
         batch.found += found || 0;
-        batch.last = { id: review.id, label: label(item) };
+        batch.last = { id: review.id, label: label(item), debrief: needsDebrief(review) };
       }
       scheduleDeepAnalysis();
     } catch (e) {
@@ -141,7 +142,9 @@ function reportBatch() {
   const positions = found ? `${found} new position${found === 1 ? '' : 's'} to practise` : 'no serious mistakes';
   if (games === 1)
     toast(`${last.label} reviewed: ${positions}.`, {
-      action: { label: 'Open', onClick: () => app.navigate('review', { review: last.id, ply: 0 }) },
+      action: last.debrief
+        ? { label: 'Debrief', onClick: () => app.navigate('review', { review: last.id, debrief: 1 }) }
+        : { label: 'Open', onClick: () => app.navigate('review', { review: last.id, ply: 0 }) },
     });
   else
     toast(`${games} games reviewed: ${positions}.${found ? ' They are in today’s session.' : ''}`, {

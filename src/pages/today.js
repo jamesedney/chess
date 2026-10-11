@@ -7,6 +7,7 @@ import { goalStatus, updateGoal, PUZZLE_PERF } from '../progress-model.js';
 import { pathSummary, place, unitById, unitStatus } from '../curriculum.js';
 import { syncRatings } from '../rating-sync.js';
 import { RATING_PERFS } from '../ratings.js';
+import { evidence, headlineText } from '../evidence.js';
 import { syncNow } from '../queue.js';
 import { dateKey, streaks } from '../state.js';
 import { STAGES } from '../themes.js';
@@ -217,6 +218,10 @@ function draw() {
   root.innerHTML = `<div class="focus today">
     ${goalHTML()}
     <p class="level-line"><strong>${esc(path.band.label)}</strong> · ${path.bandDone} of ${path.bandTotal} units${unit ? ` · now: ${esc(unit.title)} (${unitPct}%)` : ''}</p>
+    ${(() => {
+      const line = headlineText(evidence(s));
+      return line ? `<p class="evidence-line small">${esc(line)} <a href="#progress">See all</a></p>` : '';
+    })()}
     <button type="button" id="start-session" class="primary big" ${prog.complete ? 'disabled' : ''}>${esc(label)}</button>
     <ol class="agenda">${session.blocks
       .map(

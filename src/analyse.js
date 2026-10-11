@@ -87,6 +87,10 @@ export async function analyseGame(
     marks: [],
     complete: false,
     opening: identifyOpening(fens),
+    // The opponent's rating, so Play it again can match their strength.
+    ...(Number(headers[colour === 'w' ? 'BlackElo' : 'WhiteElo']) > 0
+      ? { oppElo: Number(headers[colour === 'w' ? 'BlackElo' : 'WhiteElo']) }
+      : {}),
     ...(clocks ? { clocks: clocks.slice(0, limit), tc } : {}),
     ...(given ? { source: 'lichess-evals' } : {}),
   };

@@ -15,6 +15,13 @@ Enter your Lichess or Chess.com username and Rankup does the rest: it reads your
 - **Your games import themselves.** New games from your account are fetched whenever the app is open and reviewed in the background. Their mistakes become tomorrow's first block.
 - **The opponent adapts.** Score well over five practice games and the next one is a rung higher on a ladder that interleaves Maia and Stockfish levels; struggle and it steps down.
 
+### Training from your games
+- **Post-game debrief.** After each imported game, the two or three moments that decided it: find the better move, then one tap on what went wrong (missed their threat, missed my chance, miscalculated, played too fast, short of time, wrong plan). The likely reason is offered first, from your clock and the kind of mistake. Over many games the notes become your habits, and the plan trains them.
+- **Play it again.** Positions from your games where you were winning and did not win, or worse but holdable and then lost, replayed against Maia or Stockfish at your opponent's rating. Convert the win, or hold, within 30 moves; the engine judges the rest.
+- **Your repertoire.** The positions you keep reaching in your openings, with your move there, or the engine's better move where you lost ground, drilled with spaced repetition. Lines you score badly in are listed.
+- **Clock skills.** From the clock data in your games: whether you rush critical moves or run short of time. The pause drill locks the board for eight seconds on your own critical positions; the pace drill gives 15 seconds for easier ones.
+- **Is it working?** Your last two weeks of games against the six before: blunders, missed threats, rushed critical moves, wins converted and score, with what you trained in each period. The planner pushes hardest on what your debriefs, clock and results point at.
+
 ### Coaching
 - **A coach that reads your games.** Every saved mistake is classified: allowed a mating attack, left material en prise, missed a mate, missed a tactic, or a quieter slip. The Coach page shows which one you make most, in which phase of the game, how many blunders you make per game, and whether you rush critical moves or run short of time.
 - **A weekly plan.** Each Monday brings a plan aimed at your main weakness: training days, focused puzzles, re-solving your own mistakes, reviewing games and one drill. Targets rise after a completed week and ease off after a missed one.
