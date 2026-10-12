@@ -87,6 +87,7 @@ function gameStatus() {
   if (g.isInsufficientMaterial()) return 'Draw: not enough material to mate.';
   if (g.isDraw()) return 'The game is drawn.';
   if (play.thinking) return `${opponentName()} is thinking…`;
+  if (play.challenge?.done) return '';
   return g.turn() === play.color ? 'Your move. Check the threat before choosing.' : `${opponentName()} to move.`;
 }
 
@@ -112,8 +113,15 @@ function startReplay(id) {
   persist();
 }
 
-/** The game ended, or reached the move limit: judge it, save it, say so. */
-function settleChallenge({ result = null, evalUser = null }) {
+/** An evaluation from your side in words: "+3.1", "−0.4", "a forced mate for you". */
+function evalWords(cp) {
+  if (Math.abs(cp) >= 10000) return cp > 0 ? 'a forced mate for you' : 'a forced mate against you';
+  const pawns = Math.abs(cp / 100).toFixed(1);
+  return cp >= 0 ? `+${pawns} for you` : `−${pawns} against you`;
+}
+
+/** The game ended, or reached the move limit: judge it, save it, say plainly what happened. */
+function settleChallenge({ result = null, evalUser = null, stopped = false }) {
   const ch = play.challenge;
   if (!ch || ch.done) return;
   const success = judgeReplay(ch.goal, { result, evalUser });
@@ -122,20 +130,29 @@ function settleChallenge({ result = null, evalUser = null }) {
   logAttempt(app.state, { kind: 'r', theme: ch.goal, clean: success });
   app.save();
   persist();
+  const what = stopped
+    ? 'you stopped'
+    : result === 'win'
+      ? 'you won the game'
+      : result === 'draw'
+        ? 'the game was drawn'
+        : result === 'loss'
+          ? 'you lost the game'
+          : `after ${ch.moves} moves Stockfish has it at ${evalWords(evalUser)}`;
+  const convert = ch.goal === 'convert';
   play.note = success
-    ? ch.goal === 'convert'
-      ? 'Converted: the win you let slip in the game.'
-      : 'Held: the half point you let slip in the game.'
-    : ch.goal === 'convert'
-      ? 'The win slipped again. This position comes back for another try.'
-      : 'Lost again. This position comes back for another try.';
-  if (success) toast(play.note);
+    ? `Passed. In your game ${convert ? 'this win slipped away' : 'you lost from here'}; this time ${what}.`
+    : `Not passed: ${what}. ${
+        convert
+          ? `To pass, win or be +4.0 or better after ${MAX_MOVES} moves.`
+          : `To pass, draw or win, or be no worse than −1.0 after ${MAX_MOVES} moves.`
+      } This position comes back for another try.`;
 }
 
-/** The challenge line above the board, with your move count once you have started. */
+/** The challenge line above the board, with your move count while it is running. */
 function challengeText() {
   const ch = play.challenge;
-  return `<strong>Play it again:</strong> ${esc(ch.text)}${ch.moves ? ` Move ${ch.moves} of ${MAX_MOVES}.` : ''}`;
+  return `<strong>Play it again:</strong> ${esc(ch.text)}${ch.moves && !ch.done ? ` Move ${ch.moves} of ${MAX_MOVES}.` : ''}`;
 }
 
 const resultFor = g => (g.isCheckmate() ? (g.turn() === play.color ? 'loss' : 'win') : 'draw');
@@ -193,10 +210,10 @@ function draw() {
     </div>
     <div class="focus-prompt"><strong id="board-title">${esc(play.from ? `From: ${play.from}` : 'Practice game')}</strong><span class="chip" id="board-chip"></span></div>
     ${play.objective && !play.from ? `<p class="objective small"><strong>Objective:</strong> ${esc(play.objective)}</p>` : ''}
-    ${play.challenge && !play.challenge.done ? `<p class="objective small" id="challenge-text">${challengeText()}</p>` : ''}
+    ${play.challenge ? `<p class="objective small" id="challenge-text">${challengeText()}</p>` : ''}
     <div class="focus-board"><div id="board"></div></div>
     <div id="history" class="history small">${esc(moveRecord())}</div>
-    <div id="play-status" class="status" role="status" aria-live="polite">${esc((play.note ? play.note + ' ' : '') + gameStatus())}</div>
+    <div id="play-status" class="status ${play.challenge?.done === 'success' ? 'success' : ''}" role="status" aria-live="polite">${esc((play.note ? play.note + ' ' : '') + gameStatus())}</div>
     <div class="focus-actions">
       ${
         play.marking
@@ -224,7 +241,7 @@ function draw() {
   $('#candidates-done', root)?.addEventListener('click', () => setMarking(false));
   $('#judge', root)?.addEventListener('click', judgeNow);
   $('#give-up', root)?.addEventListener('click', () => {
-    settleChallenge({ result: 'loss' });
+    settleChallenge({ result: 'loss', stopped: true });
     draw();
   });
   $('#replay-again', root)?.addEventListener('click', () => {
@@ -397,7 +414,7 @@ function refreshBoard() {
   board.set({
     game: g,
     orientation: board.game ? board.orientation : play.color,
-    interactive: !play.marking && !play.thinking && g.turn() === play.color && !g.isGameOver(),
+    interactive: !play.marking && !play.thinking && !play.challenge?.done && g.turn() === play.color && !g.isGameOver(),
     movable: play.color,
     lastMove: play.lastMove,
     marks: Object.fromEntries(play.candidates.map(sq => [sq, 'hint'])),

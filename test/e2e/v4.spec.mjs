@@ -97,7 +97,12 @@ test('play it again starts from the position before the blunder against your opp
   await expect(page.locator('#play-status')).toContainText('Your move', { timeout: 30000 });
   await expect(page.locator('.objective')).toContainText('Move 1 of 30');
   await page.click('#give-up');
-  await expect(page.locator('#play-status')).toContainText('The win slipped again');
+  await expect(page.locator('#play-status')).toContainText('Not passed: you stopped. To pass, win or be +4.0 or better after 30 moves.');
+  await expect(page.locator('#play-status')).not.toContainText('Your move');
+  // The goal stays in view, and the board takes no more moves.
+  await expect(page.locator('#challenge-text')).toContainText('Convert it');
+  await page.locator('#board [data-square="e1"]').click();
+  await expect(page.locator('#board [data-square="e1"]')).not.toHaveClass(/selected/);
   await expect(page.locator('#replay-again')).toBeVisible();
   const s = await saved(page);
   expect(Object.values(s.replays)).toEqual([{ tries: 1, success: false, last: expect.any(String) }]);

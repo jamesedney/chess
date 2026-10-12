@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.1.3
+
+- Play it again says plainly how it went: "Passed. In your game you lost from here; this time after 30 moves Stockfish has it at +3.1 for you." or "Not passed: … To pass, …". The goal stays above the board after the result, "Your move" no longer follows it, and the board stops taking moves once the challenge is decided.
+
 ## 4.1.2
 
 - Fixed: the app could reset itself. 4.0 recorded debriefs, "Play it again" attempts and repertoire drills in your history, but the check that runs when the app opens did not know those entries, so the next launch treated your saved progress as unreadable, set it aside and started fresh. Those entries are now accepted, and progress that was set aside this way is brought back automatically on the next launch (the state it replaces is kept as a recovery copy).
