@@ -2,6 +2,7 @@
 
 ## 4.1.4
 
+- Practice games give you White or Black at random by default, and the engine opens when you get Black. Choose White or Black under Options to fix it; the choice is remembered.
 - Repertoire drill, clearer: your opening line and record come first, then a plain question ("You played 5… Bc5 here. Find a better move." or "What do you play here as Black?"). The result appears above the board: "Correct: 5… Qd4. In your game you played 5… Bc5, which cost you 11% winning chances. Next review in 3 days." The board shows the move played, and moves keep their numbers.
 
 ## 4.1.3

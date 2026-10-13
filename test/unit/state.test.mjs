@@ -227,3 +227,12 @@ test('the heaviest readable recovery copy wins', () => {
   assert.equal(out.restored, true);
   assert.equal(out.state.log.length, 30);
 });
+
+test('the practice colour defaults to random, and only w, b or r are accepted', () => {
+  assert.equal(defaults().settings.colour, 'r');
+  const old = { ...defaults() };
+  old.settings = { ...old.settings };
+  delete old.settings.colour;
+  assert.equal(migrate(old).settings.colour, 'r');
+  assert.equal(validate({ ...defaults(), settings: { ...defaults().settings, colour: 'x' } }), 'settings');
+});

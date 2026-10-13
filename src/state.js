@@ -41,7 +41,7 @@ export function defaults() {
     plan: null, // this week's plan; see plan.js
     endgames: {}, // drill id -> { tries, wins, best }
     calc: { visual: emptyDrillStats(), checks: emptyDrillStats(), assess: emptyDrillStats() },
-    settings: { ...DEFAULT_APPEARANCE, sound: true, haptics: true, autoLevel: true, candidates: false, perf: 'auto' },
+    settings: { ...DEFAULT_APPEARANCE, sound: true, haptics: true, autoLevel: true, candidates: false, perf: 'auto', colour: 'r' },
     // Added in version 4.
     sync: DEFAULT_SYNC(), // automatic import of your online games
     games: [], // finished practice games: { d: date, level, r: 1 win | 0.5 draw | 0 loss }
@@ -272,6 +272,7 @@ export function validate(s) {
     return 'settings';
   if (typeof st.autoLevel !== 'boolean' || typeof st.candidates !== 'boolean') return 'settings';
   if (!['auto', ...RATING_PERFS].includes(st.perf)) return 'settings';
+  if (!['w', 'b', 'r'].includes(st.colour)) return 'settings';
   if (!s.candidates || !finite(s.candidates.asked, 0) || !finite(s.candidates.hit, 0) || !Array.isArray(s.candidates.last))
     return 'candidates';
   if (typeof s.onboarded !== 'boolean' || ![10, 20, 30, 45, 60].includes(s.minutes)) return 'onboarding';

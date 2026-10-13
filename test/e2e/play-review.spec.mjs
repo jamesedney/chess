@@ -223,3 +223,25 @@ test('pieces can be dragged with a finger on a touch screen @mobile', async ({ p
   await sq(page, 'f3').tap();
   await expect(page.locator('#history')).toContainText(/2\. Nf3/, { timeout: 60000 });
 });
+
+test('a new game gives you a random colour by default, and Black means the engine opens', async ({ page }) => {
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('fresh')) return;
+    sessionStorage.setItem('fresh', '1');
+    localStorage.removeItem('rankup-practice');
+    Math.random = () => 0.9; // the coin lands on Black
+  });
+  await open(page, 'play');
+  await expect(page.locator('.focus-progress')).toContainText('you play Black');
+  await expect(page.locator('#play-status')).toContainText('Your move', { timeout: 30000 });
+  await expect(page.locator('#history')).toContainText('1.');
+  await page.click('#play-menu');
+  await expect(page.locator('#play-colour')).toHaveValue('r');
+  // Choosing White sticks for later games.
+  await page.selectOption('#play-colour', 'w');
+  await page.click('#menu-new');
+  await page.click('[data-answer="yes"]');
+  await expect(page.locator('.focus-progress')).toContainText('you play White');
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')).settings.colour);
+  expect(saved).toBe('w');
+});

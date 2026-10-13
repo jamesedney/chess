@@ -35,7 +35,10 @@ const play = {
 (function restore() {
   try {
     const saved = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
-    if (!saved) return;
+    if (!saved) {
+      play.color = pickColour();
+      return;
+    }
     const g = new Chess();
     g.loadPgn(saved.pgn);
     play.game = g;
@@ -47,6 +50,12 @@ const play = {
     play.challenge = saved.challenge || null;
   } catch {}
 })();
+
+/** Your colour for a new game: your choice in Options, or White or Black at random (the default). */
+function pickColour() {
+  const c = app.state.settings.colour;
+  return c === 'w' || c === 'b' ? c : Math.random() < 0.5 ? 'w' : 'b';
+}
 
 function persist() {
   try {
@@ -73,7 +82,7 @@ export function render(main, params = {}) {
   // A session game: a fresh game unless one is under way, with one thing to practise.
   if (params.objective) {
     play.objective = params.objective;
-    if (play.game.isGameOver() || play.from || play.recorded) newGame({ color: play.color });
+    if (play.game.isGameOver() || play.from || play.recorded) newGame({ color: pickColour() });
   }
   draw();
   if (play.game.turn() !== play.color && !play.game.isGameOver() && !play.thinking) engineTurn();
@@ -235,7 +244,7 @@ function draw() {
   refreshBoard();
   $('#board-flip', root).onclick = () => board.set({ orientation: opposite(board.orientation) });
   $('#play-menu', root).onclick = openMenu;
-  $('#new-game', root)?.addEventListener('click', () => startNewGame(play.color));
+  $('#new-game', root)?.addEventListener('click', () => startNewGame(app.state.settings.colour));
   $('#undo-game', root)?.addEventListener('click', takeBack);
   $('#candidates', root)?.addEventListener('click', () => setMarking(true));
   $('#candidates-done', root)?.addEventListener('click', () => setMarking(false));
@@ -252,7 +261,7 @@ function draw() {
   $('#replay-next', root)?.addEventListener('click', () => {
     const next = nextReplay(app.state);
     if (next) startReplay(next.id);
-    else newGame({ color: play.color });
+    else newGame({ color: pickColour() });
     draw();
     if (play.game.turn() !== play.color) engineTurn();
   });
@@ -309,7 +318,7 @@ function openMenu() {
         .map(option)
         .join('')}</optgroup>
     </select><small>${app.state.settings.autoLevel ? 'Adjusts to your results after five games at a level. Turn that off in Settings to pin one.' : 'Maia plays like people of that rating; Stockfish levels play engine moves with a strength limit.'}</small></div>
-    <div class="field"><label for="play-colour">Your colour</label><select id="play-colour"><option value="w">White</option><option value="b">Black</option><option value="r">Random</option></select></div>
+    <div class="field"><label for="play-colour">Your colour</label><select id="play-colour"><option value="r">Random</option><option value="w">White</option><option value="b">Black</option></select><small>For each new game. This game: ${play.color === 'w' ? 'White' : 'Black'}.</small></div>
     <div class="checks">
       <label><input type="checkbox" id="coach" ${app.state.coach ? 'checked' : ''}> Coach: save my missed opportunities as exercises</label>
       <label><input type="checkbox" id="candidates-on" ${app.state.settings.candidates ? 'checked' : ''}> Candidate moves: name the squares I am considering before I move</label>
@@ -319,7 +328,11 @@ function openMenu() {
       <button type="button" id="export-game" ${g.history().length ? '' : 'disabled'}>Export PGN</button>
       <button type="button" id="review-game" ${g.history().length >= 6 ? '' : 'disabled'}>Review this game</button>
     </div>`);
-  $('#play-colour').value = play.color;
+  $('#play-colour').value = app.state.settings.colour;
+  $('#play-colour').onchange = e => {
+    app.state.settings.colour = e.target.value;
+    app.save();
+  };
   $('#difficulty').onchange = e => {
     app.state.strength = e.target.value;
     app.save();
@@ -338,9 +351,8 @@ function openMenu() {
     draw();
   };
   $('#menu-new').onclick = () => {
-    const c = $('#play-colour').value;
     closeModal();
-    startNewGame(c);
+    startNewGame(app.state.settings.colour);
   };
   $('#export-game').onclick = () => download(`rankup-practice-${dateKey()}.pgn`, pgnWithHeaders(), 'application/x-chess-pgn');
   $('#review-game').onclick = () => app.navigate('review', { pgn: pgnWithHeaders(), colour: play.color });

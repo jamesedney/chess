@@ -3,6 +3,11 @@ import { test as base, expect } from '@playwright/test';
 /** A page that fails the test on any uncaught error or console error. */
 export const test = base.extend({
   page: async ({ page, browserName }, use) => {
+    // The first practice game picks a colour at random; tests play it as White
+    // unless they say otherwise.
+    await page.addInitScript(() => {
+      if (!localStorage.getItem('rankup-practice')) localStorage.setItem('rankup-practice', JSON.stringify({ pgn: '', color: 'w' }));
+    });
     const errors = [];
     // WebKit occasionally traps inside the Stockfish WebAssembly build. The app
     // restarts the engine and retries, which the tests still have to see work.
