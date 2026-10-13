@@ -126,7 +126,7 @@ function streakState(now) {
     onboarded: true,
     ledger: [...evenings(now), ...streakRows(now)],
     reviews,
-    mistakes: reviews.map(r => mistake(r.id.slice(1), r.created)),
+    mistakes: reviews.map(r => mistake(r.id, r.created)),
     stop: { since: dateKey(new Date(now - 10 * DAY)), resets: [] },
     streak: { since: dateKey(new Date(now - 2 * DAY)), leak: 'safety', count: 7, counted: 6 },
     // Five clocked practice games: 4 blunders, 1 of them fast, one flag.
