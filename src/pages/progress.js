@@ -239,7 +239,9 @@ function workingHTML() {
     [t.replays, 'replay'],
     [t.repertoire, 'repertoire position'],
     [t.clock, 'clock-drill position'],
-    [t.puzzles - t.clock, 'puzzle'],
+    [t.safe, 'Safe or hanging? position'],
+    [t.real, 'Same clock position'],
+    [t.puzzles - t.clock - t.safe - t.real, 'puzzle'],
     [t.ownMistakes, 'own mistake'],
   ]
     .filter(([n]) => n > 0)
