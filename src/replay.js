@@ -17,6 +17,18 @@ export const MAX_MOVES = 30;
 const pov = (evalWhite, colour) => (evalWhite == null ? null : colour === 'w' ? evalWhite : -evalWhite);
 
 /**
+ * The clock to replay on: the seconds you had before the mistake (never under
+ * 10) with the game's increment; without clocks, one minute for blitz and
+ * nothing slower, since a rapid position needs no clock to be fair.
+ */
+function replayClock(review, ply) {
+  const tc = review.tc || null;
+  const before = review.clocks ? (ply >= 2 ? review.clocks[ply - 2] : tc?.base) : null;
+  if (before != null) return { left: Math.max(10, before), inc: tc?.inc ?? 0 };
+  return tc?.base != null && tc.base <= 300 ? { left: 60, inc: 0 } : null;
+}
+
+/**
  * Positions to play again, newest game first. Each is the position before your
  * mistake: "convert" where you were winning and did not win, "hold" where you
  * were worse but not lost and then lost.
@@ -66,6 +78,7 @@ export function replayCandidates(state, limit = 20) {
       opponent,
       oppElo: review.oppElo || null,
       created: review.created || 0,
+      clock: replayClock(review, pick.mark.ply),
       record: state.replays?.[id] || null,
     });
     if (out.length >= limit) break;
@@ -103,11 +116,21 @@ export function judgeReplay(goal, { result = null, evalUser = null } = {}) {
   return goal === 'convert' ? evalUser >= 400 : evalUser >= -100;
 }
 
-/** Save an attempt. Returns the record. */
-export function recordReplay(state, id, success, date) {
+/**
+ * Save an attempt. On a clock, `flagged` counts the tries lost on time and
+ * `left` keeps the seconds left at the end of the last try. Returns the record.
+ */
+export function recordReplay(state, id, success, date, { flagged = false, left = null } = {}) {
   state.replays ||= {};
   const r = state.replays[id] || { tries: 0, success: false };
-  state.replays[id] = { tries: r.tries + 1, success: r.success || success, last: date };
+  const flags = (r.flagged || 0) + (flagged ? 1 : 0);
+  state.replays[id] = {
+    tries: r.tries + 1,
+    success: r.success || success,
+    last: date,
+    ...(flags ? { flagged: flags } : {}),
+    ...(left !== null ? { left } : r.left !== undefined ? { left: r.left } : {}),
+  };
   return state.replays[id];
 }
 

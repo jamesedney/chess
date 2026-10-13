@@ -64,4 +64,5 @@ export function profileText(p) {
 export const CLOCK_DRILLS = {
   pace: { title: 'Pace drill', seconds: 15, detail: 'Easier positions, 15 seconds each: decide quickly when it is simple.' },
   pause: { title: 'Pause drill', lock: 8, detail: 'Your own critical positions: the board waits 8 seconds while you check their threats.' },
+  real: { title: 'Same clock', detail: 'Your own positions, with the seconds you actually had.' },
 };
