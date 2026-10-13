@@ -3678,3 +3678,24 @@ button.big {
   line-height: 1.45;
   color: var(--ink);
 }
+
+/* Safe or hanging?: two equal answer buttons, big enough for a thumb. */
+.safe-actions {
+  flex-wrap: nowrap;
+}
+.safe-actions button {
+  flex: 1 1 50%;
+  min-height: 56px;
+  margin: 0;
+}
+
+/* Blitz clock on Play: your clock in the chip beside the board title. */
+.focus-prompt .chip.sprint-clock {
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 700;
+  min-width: 0;
+}
+.focus-prompt .chip.sprint-clock.urgent {
+  color: var(--danger);
+}

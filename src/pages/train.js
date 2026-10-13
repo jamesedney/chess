@@ -1,4 +1,5 @@
-// Today's training: adaptive puzzle sessions, personal mistakes and vision sprints.
+// Today's training: adaptive puzzle sessions, personal mistakes, vision sprints,
+// Safe or hanging? and the clock drills.
 import { Chess } from '../../vendor/chess.js';
 import { app } from '../app-context.js';
 import { engine, BUDGET } from '../engine.js';
@@ -7,7 +8,7 @@ import { $, $$, esc, choosePromotion, plural, showModal, closeModal, settle } fr
 import { schedule, choosePuzzle, dueCount, isMistake } from '../srs.js';
 import { updateRating, pushHistory, weakestTheme } from '../rating.js';
 import { judgeAlternative, rejectionMessage } from '../verify.js';
-import { moveToUci, playUci, uciLineToSan, opposite, NAMES } from '../chess-utils.js';
+import { moveToUci, playUci, tryUci, uciLineToSan, opposite, NAMES } from '../chess-utils.js';
 import { hintForTags, displayTags, TAG_LABELS } from '../themes.js';
 import { dateKey, streaks, logAttempt } from '../state.js';
 import { makeVisionDrill, isVisionAnswer } from '../vision.js';
@@ -19,6 +20,8 @@ import { recordSkillPuzzle } from '../skills.js';
 import { recordUnitPuzzle, unitById } from '../curriculum.js';
 import { activeBlock, continueSession } from '../session.js';
 import { CLOCK_DRILLS } from '../timeprofile.js';
+import { safeItems, hasSafeBank, judgeSafe, runSummary, recordSafeRun, SAFE_SECONDS } from '../safecheck.js';
+import { pressurePositions, promptFor, recordRealRun, MIN_POSITIONS } from '../pressure.js';
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const SPRINT_MS = 60000;
@@ -29,6 +32,8 @@ let session = null;
 let current = null;
 let board = null;
 let vision = null;
+/** @type {{ phase: 'ready' | 'running' | 'done', items: any[], i: number, answers: any[], deadline: number | null, timer: any, started?: number, locked?: boolean, summary?: any } | null} */
+let safe = null;
 let seeds = null;
 let unwatch = null;
 let clockTimer = null; // the pace countdown or the pause lock
@@ -45,6 +50,8 @@ function newSession(
   { tags = [], review = null, step = null, limit = null, strict = false, unit = null, rating = null, due = false, clock = null } = {},
 ) {
   stopClock();
+  // Same clock: your own decisive positions, one pass, with the seconds you had.
+  const set = clock === 'real' ? pressurePositions(app.state, { limit: limit || 6 }) : null;
   session = {
     mode,
     theme,
@@ -61,8 +68,11 @@ function newSession(
     clean: 0,
     seen: [],
     finished: false,
-    total: null,
-    limit,
+    total: set ? set.length : null,
+    limit: set ? set.length || limit : limit,
+    set,
+    setIndex: 0,
+    real: { n: 0, inTime: 0, first: 0, firstInTime: 0, recorded: false },
     ratingStart: app.state.puzzle.rating,
   };
   current = null;
@@ -80,7 +90,9 @@ function optionsFrom(params) {
     unit: params.unit || null,
     rating: Number(params.rating) || null,
     due: !!Number(params.due || 0),
-    clock: params.clock === 'pace' || params.clock === 'pause' ? params.clock : null,
+    clock: ['pace', 'pause', 'real'].includes(params.clock) ? params.clock : null,
+    // The leak's decisive positions come first; only navigation passes them, never the address.
+    first: Array.isArray(params.first) ? params.first.filter(id => typeof id === 'string') : [],
   };
 }
 
@@ -98,6 +110,17 @@ function followStep(step) {
 }
 
 function loadNext() {
+  // A fixed set (Same clock): the next saved position, finished when the set is used up.
+  if (session.set) {
+    while (session.setIndex < session.set.length) {
+      const item = session.set[session.setIndex++];
+      const p = app.findPuzzle(item.id);
+      if (p) return loadPuzzle(p, item);
+    }
+    session.finished = true;
+    current = null;
+    return;
+  }
   const target = (session.rating || app.state.puzzle.rating) + app.state.difficulty;
   let pool = app.allPuzzles();
   // Drilling one game: only the positions saved from that review.
@@ -138,7 +161,7 @@ function loadNext() {
   loadPuzzle(p);
 }
 
-function loadPuzzle(p) {
+function loadPuzzle(p, real = null) {
   if (!p) {
     current = null;
     return;
@@ -159,6 +182,7 @@ function loadPuzzle(p) {
     offBook: false,
     busy: false,
     setupPending: !!p.setup,
+    real, // the Same clock item: the seconds you had, and whether this is a first attempt
     lastMove: [],
     marks: {},
     arrows: [],
@@ -175,12 +199,17 @@ function stopClock() {
   clockTimer = null;
 }
 
-/** Pace: a countdown for the position. Pause: the board stays locked while you look. */
+const countdown = clock => clock === 'pace' || clock === 'real';
+
+/** Pace and Same clock: a countdown for the position. Pause: the board stays locked while you look. */
 function startClock(c) {
   stopClock();
   if (!session?.clock || c !== current || c.complete) return;
-  if (session.clock === 'pace') c.deadline = Date.now() + CLOCK_DRILLS.pace.seconds * 1000;
-  else {
+  if (countdown(session.clock)) {
+    const seconds = session.clock === 'real' && c.real ? c.real.seconds : CLOCK_DRILLS.pace.seconds;
+    c.deadline = Date.now() + seconds * 1000;
+    if (session.clock === 'real' && c.real) feedback(promptFor(c.real));
+  } else {
     c.lockUntil = Date.now() + CLOCK_DRILLS.pause.lock * 1000;
     c.locked = true;
     c.message = `Hands off for ${CLOCK_DRILLS.pause.lock} seconds. What does their last move threaten? What are your checks and captures?`;
@@ -193,7 +222,7 @@ function startClock(c) {
 function tickClock(c) {
   if (c !== current || c.complete || app.page !== 'train') return stopClock();
   const el = $('#drill-clock');
-  if (session.clock === 'pace') {
+  if (countdown(session.clock)) {
     const left = c.deadline - Date.now();
     if (el) {
       el.textContent = `${Math.max(0, Math.ceil(left / 1000))}s`;
@@ -202,7 +231,7 @@ function tickClock(c) {
     if (left <= 0 && !c.busy && !c.setupPending) {
       stopClock();
       c.timedOut = true;
-      feedback('Out of time.', 'error');
+      feedback(session.clock === 'real' ? 'Out of time, as in the game.' : 'Out of time.', 'error');
       showSolution();
     }
   } else {
@@ -239,22 +268,31 @@ export function leave() {
     vision = { phase: 'ready', score: 0, misses: 0 };
   }
   stopVisionTimer();
+  // Nor can a Safe or hanging? run: it starts over from the ready screen.
+  if (safe?.phase === 'running') {
+    stopSafeTimer();
+    safe = { ...safe, phase: 'ready', i: 0, answers: [], deadline: null, timer: null, locked: false };
+  }
 }
 
 /**
  * @param {string} mode
  * @param {string | null} [theme]
  * @param {{ redraw?: boolean, tags?: string[], review?: string | null, step?: string | null, limit?: number | null,
- *   strict?: boolean, unit?: string | null, rating?: number | null, due?: boolean, clock?: 'pace' | 'pause' | null }} [options]
+ *   strict?: boolean, unit?: string | null, rating?: number | null, due?: boolean, clock?: 'pace' | 'pause' | 'real' | null,
+ *   first?: string[] }} [options]
  */
-function startSession(mode, theme, { redraw = true, ...options } = {}) {
+function startSession(mode, theme, { redraw = true, first = [], ...options } = {}) {
   stopVisionTimer();
+  stopSafeTimer();
   newSession(mode, theme, options);
+  vision = null;
+  safe = null;
   if (mode === 'vision') vision = { phase: 'ready', score: 0, misses: 0 };
-  else {
-    vision = null;
-    loadNext();
-  }
+  else if (mode === 'safe') {
+    const items = safeItems(app.state, { limit: options.limit || 10, first, Chess });
+    safe = { phase: 'ready', items, i: 0, answers: [], deadline: null, timer: null };
+  } else loadNext();
   if (redraw) draw();
 }
 
@@ -276,6 +314,7 @@ function keepGoing() {
   session.limit = sessionGoal() + app.state.goal;
   session.finished = false;
   if (session.mode === 'mistakes') session.seen = [];
+  if (session.set) session.setIndex = 0; // a second pass over the same positions
   loadNext();
   draw();
 }
@@ -286,6 +325,8 @@ function topLine() {
   const goal = sessionGoal();
   let progress;
   if (session.mode === 'vision') progress = esc(`Vision sprint · best ${s.vision.best}`);
+  else if (session.mode === 'safe')
+    progress = safe?.phase === 'running' ? progressHTML(safe.i + 1, safe.items.length, null) : 'Safe or hanging?';
   else {
     const n = Math.min(session.done + (current && !current.complete ? 1 : 0), goal) || Math.min(session.done, goal);
     progress = progressHTML(Math.max(1, n), goal, s.puzzle.rating);
@@ -293,17 +334,21 @@ function topLine() {
   const chip =
     session.clock && !activeBlock()
       ? `<span class="chip">${esc(CLOCK_DRILLS[session.clock].title)}</span>`
-      : session.theme
-        ? `<span class="chip">${esc(session.theme)} <button type="button" class="chip-close" id="clear-theme" aria-label="Clear theme filter">×</button></span>`
-        : session.mode === 'mistakes'
-          ? `<span class="chip">${session.review ? 'This game’s mistakes' : 'My mistakes'}</span>`
-          : activeBlock()
-            ? '' // the session bar above already names the block
-            : session.unit && unitById(session.unit)
-              ? `<span class="chip">${esc(unitById(session.unit).title)}</span>`
-              : session.tags?.length
-                ? `<span class="chip">${esc(tagSummary(session.tags))}</span>`
-                : '';
+      : session.mode === 'safe'
+        ? safe?.phase === 'running' && !activeBlock()
+          ? '<span class="chip">Safe or hanging?</span>'
+          : ''
+        : session.theme
+          ? `<span class="chip">${esc(session.theme)} <button type="button" class="chip-close" id="clear-theme" aria-label="Clear theme filter">×</button></span>`
+          : session.mode === 'mistakes'
+            ? `<span class="chip">${session.review ? 'This game’s mistakes' : 'My mistakes'}</span>`
+            : activeBlock()
+              ? '' // the session bar above already names the block
+              : session.unit && unitById(session.unit)
+                ? `<span class="chip">${esc(unitById(session.unit).title)}</span>`
+                : session.tags?.length
+                  ? `<span class="chip">${esc(tagSummary(session.tags))}</span>`
+                  : '';
   return `<div class="focus-top">
     <span id="focus-progress" class="focus-progress">${progress}</span>
     ${chip}
@@ -311,10 +356,10 @@ function topLine() {
   </div>`;
 }
 
-/** "04/12" in large type, read out as "4 of 12", then the puzzle rating. */
+/** "04/12" in large type, read out as "4 of 12", then the puzzle rating when there is one. */
 function progressHTML(n, goal, rating) {
   const pad = v => String(v).padStart(2, '0');
-  return `<span class="count" aria-hidden="true">${pad(n)}</span><span class="of" aria-hidden="true">/${pad(goal)}</span><span class="visually-hidden">${n} of ${goal}</span><span class="small"> · rating ${rating}</span>`;
+  return `<span class="count" aria-hidden="true">${pad(n)}</span><span class="of" aria-hidden="true">/${pad(goal)}</span><span class="visually-hidden">${n} of ${goal}</span>${rating ? `<span class="small"> · rating ${rating}</span>` : ''}`;
 }
 
 /** Two readable tag names and how many more, e.g. "Quiet move · Advanced pawn +3". */
@@ -342,6 +387,7 @@ function openMenu() {
       <button type="button" data-mode="daily" class="${session.mode === 'daily' && !session.theme ? 'active' : ''}">Adaptive session</button>
       <button type="button" data-mode="mistakes" class="${session.mode === 'mistakes' ? 'active' : ''}">My mistakes · ${active}</button>
       <button type="button" data-mode="vision" class="${session.mode === 'vision' ? 'active' : ''}">Vision sprint</button>
+      ${hasSafeBank(app.state, { Chess }) ? `<button type="button" data-mode="safe" class="${session.mode === 'safe' ? 'active' : ''}">Safe or hanging?</button>` : ''}
     </div>
     <h3>Drills</h3>
     <div class="pill-row" role="group" aria-label="Drills">
@@ -352,6 +398,7 @@ function openMenu() {
       <button type="button" data-drill="repertoire">Your repertoire</button>
       <button type="button" data-clock="pace">Pace drill</button>
       <button type="button" data-clock="pause">Pause drill</button>
+      ${pressurePositions(s, { limit: MIN_POSITIONS }).length >= MIN_POSITIONS ? '<button type="button" data-clock="real">Same clock</button>' : ''}
     </div>
     ${session.theme ? `<p class="small">Theme filter: ${esc(session.theme)}. Choosing a mode clears it.</p>` : ''}
     <div class="actions"><button type="button" id="menu-flip">Flip board</button><button type="button" id="menu-progress">See progress</button></div>`);
@@ -373,11 +420,9 @@ function openMenu() {
     b =>
       (b.onclick = () => {
         closeModal();
-        const pause = b.dataset.clock === 'pause';
-        startSession(pause && app.activeMistakes().length >= 3 ? 'mistakes' : 'daily', null, {
-          clock: b.dataset.clock,
-          limit: pause ? 6 : 10,
-        });
+        const clock = b.dataset.clock;
+        const own = clock === 'real' || (clock === 'pause' && app.activeMistakes().length >= 3);
+        startSession(own ? 'mistakes' : 'daily', null, { clock, limit: clock === 'pace' ? 10 : 6 });
       }),
   );
   $('#menu-progress').onclick = () => {
@@ -398,6 +443,7 @@ function draw() {
   $('#clear-theme', root)?.addEventListener('click', () => startSession('daily'));
   const body = $('#train-body', root);
   if (session.mode === 'vision') return drawVision(body);
+  if (session.mode === 'safe') return drawSafe(body);
   if (session.finished) return drawFinished(body);
   if (!current) return drawEmpty(body);
   drawPuzzle(body);
@@ -416,7 +462,7 @@ function refreshGuide() {
   const sameDrill = step.id === 'drill' && session.mode === 'mistakes' && (!session.review || session.review === step.action.params.review);
   const sameDaily = ['puzzles', 'due'].includes(step.id) && session.mode === 'daily' && !session.theme;
   const doingIt = (session.step === step.id || sameDrill || sameDaily) && !session.finished;
-  if (doingIt || session.mode === 'vision') {
+  if (doingIt || session.mode === 'vision' || session.mode === 'safe') {
     el.innerHTML = step.note && !session.finished ? `<p class="guide-note small">${esc(step.note)}</p>` : '';
     return;
   }
@@ -441,6 +487,13 @@ function drawEmpty(body) {
 function drawFinished(body) {
   const change = app.state.puzzle.rating - session.ratingStart;
   const block = activeBlock();
+  // One Same clock run is recorded once, however many times the screen is drawn.
+  if (session.clock === 'real' && !session.real.recorded && session.real.n) {
+    const { n, inTime, first, firstInTime } = session.real;
+    recordRealRun(app.state, { n, inTime, first, firstInTime });
+    session.real.recorded = true;
+    app.save();
+  }
   if (block) {
     const unit = unitById(session.unit);
     body.innerHTML = `<div class="panel dark-panel"><div class="eyebrow">Block complete</div><h2>${esc(block.title)}</h2>
@@ -677,6 +730,14 @@ function finish(c, revealed) {
   });
   session.done++;
   if (clean) session.clean++;
+  if (session.clock === 'real') {
+    session.real.n++;
+    if (clean) session.real.inTime++;
+    if (c.real?.first) {
+      session.real.first++;
+      if (clean) session.real.firstInTime++;
+    }
+  }
   app.save();
   const lead = c.timedOut
     ? 'Out of time: here is the line.'
@@ -748,7 +809,10 @@ async function showSolution() {
     sans.push(m.san);
     c.lastMove = [m.from, m.to];
     refreshBoard();
-    feedback((c.timedOut ? 'Out of time. Solution: ' : 'Solution: ') + sans.join(' '));
+    feedback(
+      (c.timedOut ? (session.clock === 'real' ? 'Out of time, as in the game. Solution: ' : 'Out of time. Solution: ') : 'Solution: ') +
+        sans.join(' '),
+    );
   }
   finish(c, true);
 }
@@ -919,6 +983,177 @@ function endSprint() {
   const today = app.today();
   today.vision = (today.vision || 0) + 1;
   logAttempt(s, { kind: 'v', theme: 'sprint', clean: v.score > 0 });
+  app.save();
+  if (app.page === 'train') draw();
+}
+
+// ---------- Safe or hanging? ----------
+
+function stopSafeTimer() {
+  if (safe?.timer) clearInterval(safe.timer);
+  if (safe) safe.timer = null;
+}
+
+/** "Best 80% · 4 runs" from the saved runs. */
+function safeBestText() {
+  const s = app.state.calc.safe;
+  return `Best ${s.best}% · ${plural(s.runs, 'run')}`;
+}
+
+function drawSafe(body) {
+  const v = safe;
+  const n = v.items.length;
+  const block = activeBlock();
+  if (v.phase === 'done') {
+    const summary = v.summary || runSummary(v.answers);
+    body.innerHTML = `<div class="panel dark-panel"><div class="eyebrow">${block ? 'Block complete' : 'Run complete'}</div><h2>${esc(summary.text)}</h2>
+      <p>${esc(safeBestText())}</p>
+      <div class="actions">${
+        block
+          ? '<button type="button" id="session-next" class="lime">Continue session</button><button type="button" id="safe-again">Go again</button>'
+          : '<button type="button" id="safe-again" class="lime">Go again</button><button type="button" id="to-progress">See progress</button>'
+      }</div></div>`;
+    $('#session-next', body)?.addEventListener('click', continueSession);
+    $('#safe-again', body).onclick = startSafe;
+    $('#to-progress', body)?.addEventListener('click', () => app.navigate('progress'));
+    ($('#session-next', body) || $('#safe-again', body)).focus({ preventScroll: true });
+    return;
+  }
+  if (v.phase === 'ready') {
+    body.innerHTML = `
+      <div class="focus-prompt"><strong id="board-title">Safe or hanging?</strong><span class="chip" id="board-chip"></span></div>
+      <div class="focus-board"><div id="board"></div></div>
+      <div class="status" role="status">${
+        n
+          ? `${n} of your positions. The move you played is drawn. Five seconds: safe, or hanging?`
+          : 'No positions yet. Review a few of your games first: this drill is built from them.'
+      }</div>
+      <div class="focus-actions"><span class="small">${esc(safeBestText())}</span>${n ? '<button type="button" class="primary" id="safe-start">Start</button>' : ''}</div>`;
+    board = new BoardView($('#board', body), { label: 'Safe or hanging board' });
+    board.set({ game: new Chess(), interactive: false });
+    $('#safe-start', body)?.addEventListener('click', startSafe);
+    return;
+  }
+  body.innerHTML = `
+    <div class="focus-prompt"><strong id="board-title">Safe or hanging?</strong><span class="chip sprint-clock" id="drill-clock" role="timer" aria-live="off">${SAFE_SECONDS}s</span></div>
+    <div class="focus-board"><div id="board"></div></div>
+    <div class="focus-meta small" id="safe-meta"></div>
+    <div id="feedback" class="status" role="status" aria-live="polite"></div>
+    <div class="focus-actions safe-actions">
+      <button type="button" id="safe-yes">Safe</button>
+      <button type="button" id="safe-no">Hanging</button>
+    </div>`;
+  board = new BoardView($('#board', body), { label: 'Safe or hanging board' });
+  $('#safe-yes', body).onclick = () => answerSafe('safe');
+  $('#safe-no', body).onclick = () => answerSafe('hanging');
+  showSafeItem();
+}
+
+function startSafe() {
+  stopSafeTimer();
+  if (!safe?.items.length) return;
+  safe = { ...safe, phase: 'running', i: 0, answers: [], deadline: null, timer: null, locked: false, summary: null };
+  draw();
+}
+
+/** The position after the move you played: where the refutation is searched and played. */
+function fenAfterPlayed(item) {
+  const g = new Chess(item.fen);
+  playUci(g, item.uci);
+  return g;
+}
+
+/** Show the item, with the played move drawn, and start its five seconds (after one search for an old mark without a refutation). */
+async function showSafeItem() {
+  const v = safe;
+  const item = v.items[v.i];
+  if (!item) return endSafe();
+  v.locked = true;
+  const chip = $('#drill-clock');
+  for (const id of ['#safe-yes', '#safe-no']) $(id)?.removeAttribute('disabled');
+  const meta = $('#safe-meta');
+  if (meta) meta.textContent = `Your game against ${item.opponent} · you played ${item.played}`;
+  feedbackVision('', '');
+  board.set({ game: new Chess(item.fen), orientation: item.colour, interactive: false, lastMove: [], marks: {}, arrows: [] });
+  if (item.needsRefute && engine.available) {
+    if (chip) chip.textContent = 'loading';
+    try {
+      const after = fenAfterPlayed(item);
+      const r = await engine.analyse(after.fen(), { nodes: BUDGET.hint });
+      if (safe !== v || v.phase !== 'running') return;
+      if (r?.best) {
+        const mark = app.state.reviews.find(x => x.id === item.reviewId)?.marks.find(m => m.ply === item.ply);
+        if (mark) {
+          mark.refute = r.best;
+          app.save();
+        }
+        item.refute = r.best;
+        item.refuteSan = tryUci(after, r.best)?.san ?? null;
+      }
+    } catch {}
+    item.needsRefute = false;
+    if (safe !== v || v.phase !== 'running') return;
+  }
+  board.set({ arrows: [{ from: item.uci.slice(0, 2), to: item.uci.slice(2, 4), kind: 'played' }] });
+  board.announce(`Your game against ${item.opponent}: you played ${item.played}. Safe or hanging?`);
+  const prog = $('#focus-progress');
+  if (prog) prog.innerHTML = progressHTML(v.i + 1, v.items.length, null);
+  v.locked = false;
+  v.started = Date.now();
+  v.deadline = v.started + SAFE_SECONDS * 1000;
+  v.timer = setInterval(tickSafe, 100);
+  tickSafe();
+}
+
+function tickSafe() {
+  const v = safe;
+  if (!v || v.phase !== 'running' || app.page !== 'train') return stopSafeTimer();
+  const left = v.deadline - Date.now();
+  const el = $('#drill-clock');
+  if (el) {
+    el.textContent = `${Math.max(0, Math.ceil(left / 1000))}s`;
+    el.classList.toggle('urgent', left < 2000);
+  }
+  if (left <= 0) answerSafe(null);
+}
+
+/** Judge the answer (null on a timeout), show the verdict, then the next item. */
+async function answerSafe(answer) {
+  const v = safe;
+  if (!v || v.phase !== 'running' || v.locked) return;
+  const item = v.items[v.i];
+  stopSafeTimer();
+  v.locked = true;
+  for (const id of ['#safe-yes', '#safe-no']) $(id)?.setAttribute('disabled', '');
+  const verdict = judgeSafe(item, answer, answer === null ? null : Date.now() - v.started);
+  v.answers.push(verdict);
+  const s = app.state;
+  const today = app.today();
+  today.attempts++;
+  if (verdict.correct) today.clean++;
+  logAttempt(s, { kind: 'p', theme: 'safe', clean: verdict.correct });
+  app.save();
+  cue(verdict.correct ? 'success' : 'error');
+  feedbackVision(verdict.text, verdict.correct ? 'success' : 'error');
+  board.announce(verdict.text);
+  if (item.answer === 'hanging' && item.refute) {
+    const g = fenAfterPlayed(item);
+    const m = tryUci(g, item.refute);
+    board.set({ game: g, lastMove: m ? [m.from, m.to] : [] });
+  }
+  await wait(item.answer === 'hanging' ? 1200 : 700);
+  if (safe !== v || v.phase !== 'running') return;
+  v.i++;
+  showSafeItem();
+}
+
+function endSafe() {
+  const v = safe;
+  if (!v || v.phase !== 'running') return;
+  stopSafeTimer();
+  v.phase = 'done';
+  v.summary = runSummary(v.answers);
+  recordSafeRun(app.state, v.summary);
   app.save();
   if (app.page === 'train') draw();
 }

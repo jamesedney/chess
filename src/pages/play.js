@@ -1,4 +1,4 @@
-// Practice games against Stockfish with an optional coach.
+// Practice games against Stockfish with an optional coach, on a clock when asked.
 import { Chess } from '../../vendor/chess.js';
 import { app } from '../app-context.js';
 import { engine, BUDGET } from '../engine.js';
@@ -11,10 +11,15 @@ import { isTrainableMistake, winPercentLoss } from '../evaluation.js';
 import { createMistake, deleteMistake } from '../mistakes.js';
 import { dateKey, logGame, logCandidates, logAttempt } from '../state.js';
 import { replayCandidates, nextReplay, opponentLevel, judgeReplay, recordReplay, goalText, MAX_MOVES } from '../replay.js';
+import { makeClock, startTurn, endTurn, timeLeft, flagged, userControl, controlText, clockText } from '../gameclock.js';
+import { thresholds } from '../clocks.js';
 
 const SAVE_KEY = 'rankup-practice';
+/** Under this many seconds the clock chip turns urgent. */
+const URGENT_SECONDS = 30;
 let root = null;
 let board = null;
+let clockTimer = null; // the 250 ms tick of the user's clock
 const play = {
   game: new Chess(),
   color: 'w',
@@ -29,7 +34,11 @@ const play = {
   level: null,
   candidates: [], // squares named before the move, when the habit is on
   marking: false,
-  challenge: null, // Play it again: { id, goal, text, level, moves, done: null | 'success' | 'fail' }
+  challenge: null, // Play it again: { id, goal, text, level, moves, clock, done: null | 'success' | 'fail' }
+  clock: null, // the user's clock (gameclock.js) or null when the game is untimed
+  blunders: 0, // coach mistakes saved this game
+  fast: 0, // of those, played in under the control's rushed threshold
+  flagged: false, // the game ended because the clock ran out
 };
 
 (function restore() {
@@ -48,6 +57,11 @@ const play = {
     play.recorded = !!saved.recorded;
     play.level = saved.level || null;
     play.challenge = saved.challenge || null;
+    // A reload pauses the clock; it starts again on your turn.
+    play.clock = saved.clock && typeof saved.clock === 'object' ? { ...saved.clock, running: false, at: null } : null;
+    play.blunders = saved.blunders || 0;
+    play.fast = saved.fast || 0;
+    play.flagged = !!saved.flagged;
   } catch {}
 })();
 
@@ -69,34 +83,148 @@ function persist() {
         recorded: play.recorded,
         level: play.level,
         challenge: play.challenge,
+        clock: play.clock,
+        blunders: play.blunders,
+        fast: play.fast,
+        flagged: play.flagged,
       }),
     );
   } catch {}
 }
 
+/** The control a `clock` parameter asks for: 1 for your most played, "180+2" for that one; null for none. */
+function clockParam(value) {
+  if (value === 1 || value === '1') return userControl(app.state.ledger);
+  const m = /^(\d+)\+(\d+)$/.exec(String(value ?? ''));
+  return m ? { base: Number(m[1]), inc: Number(m[2]) } : null;
+}
+
+/** The control for a free game: your most played when the Clock option is on, else none. */
+function freeClock() {
+  return app.state.settings.clock ? userControl(app.state.ledger) : null;
+}
+
 export function render(main, params = {}) {
   root = main;
+  stopClockTimer();
   if (params.replay) startReplay(params.replay);
   // The user keeps the side they solved the puzzle with; Stockfish replies first.
   if (params.fen) newGame({ fen: params.fen, from: params.from || 'a puzzle', color: params.colour || new Chess(params.fen).turn() });
-  // A session game: a fresh game unless one is under way, with one thing to practise.
-  if (params.objective) {
-    play.objective = params.objective;
-    if (play.game.isGameOver() || play.from || play.recorded) newGame({ color: pickColour() });
+  // A session game: a fresh game unless one is under way, with one thing to practise, on a clock when asked.
+  const control = clockParam(params.clock);
+  if (params.objective || control) {
+    if (params.objective) play.objective = params.objective;
+    const fresh = !play.game.history().length;
+    if (play.game.isGameOver() || play.from || play.recorded || (control && fresh)) newGame({ color: pickColour(), clock: control });
+  }
+  // A free game not yet begun takes the Clock option as it stands.
+  if (!play.clock && !play.game.history().length && !play.from && !play.challenge && app.state.settings.clock) {
+    play.clock = makeClock(freeClock());
+    persist();
   }
   draw();
-  if (play.game.turn() !== play.color && !play.game.isGameOver() && !play.thinking) engineTurn();
+  if (play.game.turn() !== play.color && !play.game.isGameOver() && !play.thinking && !play.flagged) engineTurn();
+  else beginUserTurn();
+}
+
+export function leave() {
+  stopClockTimer();
+}
+
+// ---------- The clock ----------
+
+function stopClockTimer() {
+  if (clockTimer) clearInterval(clockTimer);
+  clockTimer = null;
+}
+
+/** Your turn begins: the clock runs once the opponent's move is on the board (or a replay position is set). */
+function beginUserTurn() {
+  const g = play.game;
+  const ch = play.challenge;
+  if (!play.clock || play.flagged || g.isGameOver() || g.turn() !== play.color || ch?.done) return;
+  if (!g.history().length && !ch) return;
+  if (ch && ch.moves >= MAX_MOVES) return; // being judged
+  startTurn(play.clock, Date.now());
+  persist();
+  if (!clockTimer) clockTimer = setInterval(tickClock, 250);
+  tickClock();
+}
+
+/** Stop the clock where it stands (a challenge settled, or time run out). */
+function haltClock(now = Date.now()) {
+  const c = play.clock;
+  if (!c) return;
+  c.left = timeLeft(c, now);
+  c.running = false;
+  c.at = null;
+}
+
+function tickClock() {
+  const c = play.clock;
+  if (!c || app.page !== 'play' || !c.running) return stopClockTimer();
+  const now = Date.now();
+  updateClockChip(now);
+  // While your move is being validated the time up to the tap is what counts.
+  if (!play.thinking && flagged(c, now)) flagOut(now);
+}
+
+function updateClockChip(now = Date.now()) {
+  const el = $('#play-clock');
+  if (!el || !play.clock) return;
+  const left = timeLeft(play.clock, now);
+  const text = clockText(left);
+  if (el.textContent !== text) el.textContent = text;
+  el.classList.toggle('urgent', left < URGENT_SECONDS);
+}
+
+/** Out of time: the game is lost, as online. */
+function flagOut(now = Date.now()) {
+  if (play.flagged) return;
+  play.flagged = true;
+  haltClock(now);
+  stopClockTimer();
+  play.token++;
+  play.thinking = false;
+  play.prepared = null;
+  play.marking = false;
+  if (play.challenge) settleChallenge({ result: 'loss', timed: true });
+  else recordResult();
+  persist();
+  draw();
+}
+
+/** "Blunders 2, in under 5 seconds 1, 0:41 left." */
+function clockLine() {
+  const c = play.clock;
+  const rushed = Math.ceil(thresholds(c).rushed);
+  return `Blunders ${play.blunders}, in under ${rushed} seconds ${play.fast}, ${clockText(timeLeft(c))} left.`;
+}
+
+/** The line above the board: "Maia 1500 · you play White · 5+0". */
+function progressText(level) {
+  return `${shortLevel(level)} · you play ${play.color === 'w' ? 'White' : 'Black'}${play.clock ? ` · ${controlText(play.clock)}` : ''}`;
 }
 
 function gameStatus() {
   const g = play.game;
-  if (g.isCheckmate()) return g.turn() === play.color ? 'Checkmate. Review what opened your king.' : 'Checkmate. Well played.';
-  if (g.isStalemate()) return 'Draw by stalemate.';
-  if (g.isThreefoldRepetition()) return 'Draw by repetition.';
-  if (g.isInsufficientMaterial()) return 'Draw: not enough material to mate.';
-  if (g.isDraw()) return 'The game is drawn.';
+  if (play.flagged) return play.challenge ? '' : 'You lost on time.';
+  const over = g.isCheckmate()
+    ? g.turn() === play.color
+      ? 'Checkmate. Review what opened your king.'
+      : 'Checkmate. Well played.'
+    : g.isStalemate()
+      ? 'Draw by stalemate.'
+      : g.isThreefoldRepetition()
+        ? 'Draw by repetition.'
+        : g.isInsufficientMaterial()
+          ? 'Draw: not enough material to mate.'
+          : g.isDraw()
+            ? 'The game is drawn.'
+            : '';
+  if (over) return play.clock ? `${over} ${clockLine()}` : over;
   if (play.thinking) return `${opponentName()} is thinking…`;
-  if (play.challenge?.done) return '';
+  if (play.challenge?.done) return play.clock ? clockLine() : '';
   return g.turn() === play.color ? 'Your move. Check the threat before choosing.' : `${opponentName()} to move.`;
 }
 
@@ -112,13 +240,24 @@ function opponentName() {
 
 // ---------- Play it again ----------
 
-/** Start a challenge from one of your games: the position before your mistake, against their strength. */
+/** Start a challenge from one of your games: the position before your mistake, against their strength, on their clock. */
 function startReplay(id) {
   const c = replayCandidates(app.state).find(x => x.id === id);
   if (!c) return toast('That position is no longer in your games.');
   const yours = app.state.ratings.at(-1)?.rating || app.state.puzzle.rating;
-  newGame({ fen: c.fen, from: `your game against ${c.opponent}`, color: c.colour });
-  play.challenge = { id: c.id, goal: c.goal, text: goalText(c), level: opponentLevel(c.oppElo, yours), moves: 0, done: null };
+  // The game's control names the clock; the seconds you had before the mistake are what is left.
+  const base = app.state.reviews.find(r => r.id === c.reviewId)?.tc?.base ?? c.clock?.left;
+  newGame({ fen: c.fen, from: `your game against ${c.opponent}`, color: c.colour, clock: c.clock ? { base, inc: c.clock.inc } : null });
+  if (play.clock) play.clock.left = c.clock.left;
+  play.challenge = {
+    id: c.id,
+    goal: c.goal,
+    text: goalText(c),
+    level: opponentLevel(c.oppElo, yours),
+    moves: 0,
+    clock: c.clock,
+    done: null,
+  };
   persist();
 }
 
@@ -130,24 +269,27 @@ function evalWords(cp) {
 }
 
 /** The game ended, or reached the move limit: judge it, save it, say plainly what happened. */
-function settleChallenge({ result = null, evalUser = null, stopped = false }) {
+function settleChallenge({ result = null, evalUser = null, stopped = false, timed = false }) {
   const ch = play.challenge;
   if (!ch || ch.done) return;
+  haltClock();
   const success = judgeReplay(ch.goal, { result, evalUser });
   ch.done = success ? 'success' : 'fail';
-  recordReplay(app.state, ch.id, success, dateKey());
+  recordReplay(app.state, ch.id, success, dateKey(), { flagged: timed, left: play.clock ? Math.round(play.clock.left) : null });
   logAttempt(app.state, { kind: 'r', theme: ch.goal, clean: success });
   app.save();
   persist();
-  const what = stopped
-    ? 'you stopped'
-    : result === 'win'
-      ? 'you won the game'
-      : result === 'draw'
-        ? 'the game was drawn'
-        : result === 'loss'
-          ? 'you lost the game'
-          : `after ${ch.moves} moves Stockfish has it at ${evalWords(evalUser)}`;
+  const what = timed
+    ? 'you lost on time'
+    : stopped
+      ? 'you stopped'
+      : result === 'win'
+        ? 'you won the game'
+        : result === 'draw'
+          ? 'the game was drawn'
+          : result === 'loss'
+            ? 'you lost the game'
+            : `after ${ch.moves} moves Stockfish has it at ${evalWords(evalUser)}`;
   const convert = ch.goal === 'convert';
   play.note = success
     ? `Passed. In your game ${convert ? 'this win slipped away' : 'you lost from here'}; this time ${what}.`
@@ -158,10 +300,12 @@ function settleChallenge({ result = null, evalUser = null, stopped = false }) {
       } This position comes back for another try.`;
 }
 
-/** The challenge line above the board, with your move count while it is running. */
+/** The challenge line above the board, with your clock and your move count while it is running. */
 function challengeText() {
   const ch = play.challenge;
-  return `<strong>Play it again:</strong> ${esc(ch.text)}${ch.moves && !ch.done ? ` Move ${ch.moves} of ${MAX_MOVES}.` : ''}`;
+  return `<strong>Play it again:</strong> ${esc(ch.text)}${ch.clock ? ` You have ${clockText(ch.clock.left)}.` : ''}${
+    ch.moves && !ch.done ? ` Move ${ch.moves} of ${MAX_MOVES}.` : ''
+  }`;
 }
 
 const resultFor = g => (g.isCheckmate() ? (g.turn() === play.color ? 'loss' : 'win') : 'draw');
@@ -212,12 +356,17 @@ function shortLevel(id) {
 function draw() {
   if (!root) return;
   const g = play.game;
+  const left = play.clock ? timeLeft(play.clock) : 0;
   root.innerHTML = `<div class="focus">
     <div class="focus-top">
-      <span class="focus-progress">${esc(shortLevel(play.challenge?.level || app.state.strength))} · you play ${play.color === 'w' ? 'White' : 'Black'}</span>
-      <button type="button" id="play-menu" class="secondary focus-menu" aria-haspopup="dialog" aria-label="Game options: opponent, colour, coach, export and review">Options</button>
+      <span class="focus-progress">${esc(progressText(play.challenge?.level || app.state.strength))}</span>
+      <button type="button" id="play-menu" class="secondary focus-menu" aria-haspopup="dialog" aria-label="Game options: opponent, colour, coach, clock, export and review">Options</button>
     </div>
-    <div class="focus-prompt"><strong id="board-title">${esc(play.from ? `From: ${play.from}` : 'Practice game')}</strong><span class="chip" id="board-chip"></span></div>
+    <div class="focus-prompt"><strong id="board-title">${esc(play.from ? `From: ${play.from}` : 'Practice game')}</strong>${
+      play.clock
+        ? `<span class="chip sprint-clock${left < URGENT_SECONDS ? ' urgent' : ''}" id="play-clock" role="timer" aria-live="off">${clockText(left)}</span>`
+        : '<span class="chip" id="board-chip"></span>'
+    }</div>
     ${play.objective && !play.from ? `<p class="objective small"><strong>Objective:</strong> ${esc(play.objective)}</p>` : ''}
     ${play.challenge ? `<p class="objective small" id="challenge-text">${challengeText()}</p>` : ''}
     <div class="focus-board"><div id="board"></div></div>
@@ -234,8 +383,8 @@ function draw() {
               ? `<button type="button" id="replay-again">Try again</button>
                  <button type="button" id="replay-next" class="primary">${nextReplay(app.state) ? 'Next position' : 'New game'}</button>`
               : `<button type="button" id="new-game" class="primary">New game</button>
-             ${app.state.settings.candidates ? `<button type="button" id="candidates" ${g.turn() === play.color && !g.isGameOver() && !play.thinking ? '' : 'disabled'}>Candidates</button>` : ''}
-             <button type="button" id="undo-game" ${g.history().length && !play.thinking ? '' : 'disabled'}>Take back</button>`
+             ${app.state.settings.candidates ? `<button type="button" id="candidates" ${g.turn() === play.color && !g.isGameOver() && !play.thinking && !play.flagged ? '' : 'disabled'}>Candidates</button>` : ''}
+             <button type="button" id="undo-game" ${g.history().length && !play.thinking && !play.clock ? '' : 'disabled'}>Take back</button>`
       }
       <button type="button" id="board-flip" class="secondary" aria-label="Flip board"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 20V4M4.5 7.5 8 4l3.5 3.5M16 4v16M12.5 16.5 16 20l3.5-3.5"/></svg></button>
     </div>
@@ -257,13 +406,15 @@ function draw() {
     startReplay(play.challenge.id);
     draw();
     if (play.game.turn() !== play.color) engineTurn();
+    else beginUserTurn();
   });
   $('#replay-next', root)?.addEventListener('click', () => {
     const next = nextReplay(app.state);
     if (next) startReplay(next.id);
-    else newGame({ color: pickColour() });
+    else newGame({ color: pickColour(), clock: freeClock() });
     draw();
     if (play.game.turn() !== play.color) engineTurn();
+    else beginUserTurn();
   });
 }
 
@@ -290,7 +441,7 @@ function toggleCandidate(sq) {
 }
 
 async function startNewGame(colour) {
-  if (play.game.history().length && !play.game.isGameOver()) {
+  if (play.game.history().length && !play.game.isGameOver() && !play.flagged) {
     const ok = await confirmDialog({
       title: 'Start a new game?',
       body: 'The current game will be replaced. Export the PGN first if you want to keep it.',
@@ -299,12 +450,12 @@ async function startNewGame(colour) {
     if (!ok) return;
   }
   const c = colour === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : colour;
-  newGame({ color: c });
+  newGame({ color: c, clock: freeClock() });
   draw();
   if (play.color === 'b') engineTurn();
 }
 
-/** Opponent, colour, coach, export and review live behind one button. */
+/** Opponent, colour, coach, clock, export and review live behind one button. */
 function openMenu() {
   const level = app.state.strength;
   const g = play.game;
@@ -322,6 +473,7 @@ function openMenu() {
     <div class="checks">
       <label><input type="checkbox" id="coach" ${app.state.coach ? 'checked' : ''}> Coach: save my missed opportunities as exercises</label>
       <label><input type="checkbox" id="candidates-on" ${app.state.settings.candidates ? 'checked' : ''}> Candidate moves: name the squares I am considering before I move</label>
+      <label><input type="checkbox" id="clock-on" ${app.state.settings.clock ? 'checked' : ''}> Clock: ${esc(userControl(app.state.ledger).text)} in free games (your most played control)</label>
     </div>
     <div class="actions">
       <button type="button" id="menu-new" class="primary">New game</button>
@@ -337,7 +489,7 @@ function openMenu() {
     app.state.strength = e.target.value;
     app.save();
     const line = $('.focus-progress', root);
-    if (line) line.textContent = `${shortLevel(app.state.strength)} · you play ${play.color === 'w' ? 'White' : 'Black'}`;
+    if (line) line.textContent = progressText(app.state.strength);
   };
   $('#coach').onchange = e => {
     app.state.coach = e.target.checked;
@@ -349,6 +501,18 @@ function openMenu() {
     play.marking = false;
     app.save();
     draw();
+  };
+  $('#clock-on').onchange = e => {
+    app.state.settings.clock = e.target.checked;
+    app.save();
+    // A free game not yet begun follows the setting at once; a game under way keeps its clock.
+    if (!play.game.history().length && !play.from && !play.challenge) {
+      stopClockTimer();
+      play.clock = app.state.settings.clock ? makeClock(freeClock()) : null;
+      persist();
+      draw();
+      beginUserTurn();
+    }
   };
   $('#menu-new').onclick = () => {
     closeModal();
@@ -366,11 +530,15 @@ function pgnWithHeaders() {
   g.setHeader('Date', dateKey().replace(/-/g, '.'));
   g.setHeader('White', play.color === 'w' ? 'You' : `Stockfish (${label})`);
   g.setHeader('Black', play.color === 'b' ? 'You' : `Stockfish (${label})`);
-  if (play.game.isGameOver()) g.setHeader('Result', play.game.isCheckmate() ? (play.game.turn() === 'w' ? '0-1' : '1-0') : '1/2-1/2');
+  if (play.clock) g.setHeader('TimeControl', `${play.clock.base}+${play.clock.inc}`);
+  if (play.flagged) g.setHeader('Result', play.color === 'w' ? '0-1' : '1-0');
+  else if (play.game.isGameOver()) g.setHeader('Result', play.game.isCheckmate() ? (play.game.turn() === 'w' ? '0-1' : '1-0') : '1/2-1/2');
   return g.pgn();
 }
 
-function newGame({ fen = null, color = 'w', from = null }) {
+/** A fresh game; `clock` is a { base, inc } control, or null for no clock. */
+function newGame({ fen = null, color = 'w', from = null, clock = null }) {
+  stopClockTimer();
   play.token++;
   play.game = fen ? new Chess(fen) : new Chess();
   play.color = color;
@@ -385,20 +553,32 @@ function newGame({ fen = null, color = 'w', from = null }) {
   play.marking = false;
   play.level = fen ? null : app.state.strength; // games from a puzzle position do not count towards the ladder
   play.challenge = null;
+  play.clock = clock ? makeClock({ base: clock.base, inc: clock.inc }) : null;
+  play.blunders = 0;
+  play.fast = 0;
+  play.flagged = false;
   engine.newGame();
   persist();
 }
 
 /**
- * Once a full game ends, record the result and, when the setting is on, move
- * the opponent up or down the ladder for the next game.
+ * Once a full game ends (or your clock runs out), record the result and, when
+ * the setting is on, move the opponent up or down the ladder for the next game.
  */
 function recordResult() {
   const g = play.game;
-  if (play.recorded || !play.level || !g.isGameOver() || g.history().length < 6) return;
+  if (play.recorded || !play.level || !(g.isGameOver() || play.flagged) || (g.history().length < 6 && !play.flagged)) return;
   play.recorded = true;
-  const result = g.isCheckmate() ? (g.turn() === play.color ? 0 : 1) : 0.5;
-  logGame(app.state, { level: play.level, result });
+  const result = play.flagged ? 0 : g.isCheckmate() ? (g.turn() === play.color ? 0 : 1) : 0.5;
+  logGame(app.state, {
+    level: play.level,
+    result,
+    clock: play.clock,
+    left: play.clock ? timeLeft(play.clock) : null,
+    flagged: play.flagged,
+    blunders: play.blunders,
+    fast: play.fast,
+  });
   if (app.state.settings.autoLevel) {
     const next = adaptLevel(app.state.games, play.level);
     if (next.change) {
@@ -412,7 +592,7 @@ function recordResult() {
       const sel = $('#difficulty');
       if (sel) sel.value = next.level;
       const line = $('.focus-progress', root);
-      if (line) line.textContent = `${shortLevel(next.level)} · you play ${play.color === 'w' ? 'White' : 'Black'}`;
+      if (line) line.textContent = progressText(next.level);
     }
   }
   app.save();
@@ -426,13 +606,14 @@ function refreshBoard() {
   board.set({
     game: g,
     orientation: board.game ? board.orientation : play.color,
-    interactive: !play.marking && !play.thinking && !play.challenge?.done && g.turn() === play.color && !g.isGameOver(),
+    interactive: !play.marking && !play.thinking && !play.challenge?.done && !play.flagged && g.turn() === play.color && !g.isGameOver(),
     movable: play.color,
     lastMove: play.lastMove,
     marks: Object.fromEntries(play.candidates.map(sq => [sq, 'hint'])),
   });
   const chip = $('#board-chip');
   if (chip) chip.textContent = turnLabel(g);
+  updateClockChip();
   const h = $('#history');
   if (h) {
     h.textContent = moveRecord();
@@ -443,7 +624,7 @@ function refreshBoard() {
   const judge = $('#judge');
   if (judge) judge.disabled = !(play.challenge?.moves >= 10) || play.thinking || g.isGameOver();
   const undo = $('#undo-game');
-  if (undo) undo.disabled = !g.history().length || play.thinking;
+  if (undo) undo.disabled = !g.history().length || play.thinking || !!play.clock;
   if ($('#export-game')) $('#export-game').disabled = !g.history().length;
   if ($('#review-game')) $('#review-game').disabled = g.history().length < 6;
 }
@@ -459,7 +640,7 @@ function status(text, tone = '') {
 }
 
 function prepareCoach() {
-  if (!app.state.coach || play.game.isGameOver() || play.game.turn() !== play.color) return;
+  if (!app.state.coach || play.game.isGameOver() || play.flagged || play.game.turn() !== play.color) return;
   const fen = play.game.fen();
   const promise = engine.analyse(fen, { nodes: BUDGET.coach });
   promise.catch(() => {});
@@ -468,8 +649,9 @@ function prepareCoach() {
 
 async function onMove(move) {
   const g = play.game;
-  if (play.thinking || g.turn() !== play.color || g.isGameOver()) return;
+  if (play.thinking || g.turn() !== play.color || g.isGameOver() || play.flagged) return;
   const token = play.token;
+  const at = Date.now(); // your clock stops at the tap: no search time is ever charged
   const fen = g.fen();
   play.thinking = true;
   play.note = '';
@@ -483,6 +665,7 @@ async function onMove(move) {
     }
     if (token !== play.token) return;
     const m = g.move(move);
+    const spent = play.clock ? endTurn(play.clock, at) : 0;
     play.lastMove = [m.from, m.to];
     play.candidates = [];
     if (named.length && before?.best) {
@@ -520,6 +703,8 @@ async function onMove(move) {
       if (saved) {
         // Only positions created by this game are undone by a takeback.
         if (saved.created) play.mistakes[g.history().length - 1] = saved.mistake.id;
+        play.blunders++;
+        if (play.clock && spent < thresholds(play.clock).rushed) play.fast++;
         persist();
         play.note = 'Coach: a stronger move was available. Saved to My mistakes for later.';
       }
@@ -543,6 +728,7 @@ async function onMove(move) {
         play.challenge?.done === 'success' ? 'success' : play.note ? 'warning' : '',
       );
       if (play.challenge?.done) draw();
+      beginUserTurn();
       prepareCoach();
     }
   }
@@ -595,14 +781,16 @@ async function engineTurn() {
       play.thinking = false;
       refreshBoard();
       status(gameStatus());
+      beginUserTurn();
       prepareCoach();
     }
   }
 }
 
+/** Take back your last move; not on a clock, where a move played is a move made. */
 function takeBack() {
   const g = play.game;
-  if (play.thinking || !g.history().length) return;
+  if (play.thinking || !g.history().length || play.clock) return;
   g.undo();
   if (g.turn() !== play.color && g.history().length) g.undo();
   const length = g.history().length;
