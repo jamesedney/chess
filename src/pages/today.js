@@ -2,16 +2,19 @@
 // button that runs today's session. New players get a one-step setup.
 import { app } from '../app-context.js';
 import { $, esc, plural, formatDate, toast } from '../ui.js';
-import { todaysSession, startBlock, sessionProgress, checkSession } from '../session.js';
+import { todaysSession, startBlock, sessionProgress, checkSession, startReset } from '../session.js';
 import { goalStatus, goalSeries, updateGoal, PUZZLE_PERF } from '../progress-model.js';
 import { pathSummary, place, unitById, unitStatus } from '../curriculum.js';
 import { syncRatings } from '../rating-sync.js';
 import { RATING_PERFS } from '../ratings.js';
 import { evidence } from '../evidence.js';
 import { sparkline } from '../charts.js';
-import { syncNow } from '../queue.js';
+import { syncNow, lastSyncAt } from '../queue.js';
 import { dateKey, streaks } from '../state.js';
 import { STAGES } from '../themes.js';
+import { streakMode, diagnoseStreak, LEAKS, MIN_COUNTED } from '../leak.js';
+import { stopState, tiltProfile, ruleLine } from '../tilt.js';
+import { mainControl, rowsBetween } from '../ledger.js';
 
 let root = null;
 let setup = { step: 'account', site: 'lichess', name: '', busy: false, error: '' };
@@ -222,24 +225,144 @@ const METRIC = {
   rushed: 'Rushed moves',
   convert: 'Wins converted',
   score: 'Score',
+  afterLoss: 'After a loss',
+  run: 'Loss run',
+  leak: 'Leak share',
+  fast: 'Fast blunders',
 };
-const metricValue = (row, v) => (v === null ? '–' : row.id === 'convert' || row.id === 'score' ? `${Math.round(v * 100)}%` : v.toFixed(1));
+const PERCENT = new Set(['convert', 'score', 'afterLoss', 'leak']);
+const metricValue = (row, v) =>
+  v === null ? '–' : PERCENT.has(row.id) ? `${Math.round(v * 100)}%` : row.id === 'run' ? String(Math.round(v)) : v.toFixed(1);
+/** In streak mode the tiles that measure the streak come first. */
+const STREAK_ORDER = ['leak', 'fast', 'afterLoss', 'score', 'run', 'blunders', 'threats', 'rushed', 'convert'];
 
 /** Is it working: three numbers, last two weeks against the six before. Empty until comparisons exist. */
-function evidenceHTML() {
+function evidenceHTML(inStreak) {
   const ev = evidence(app.state);
-  const known = ev.rows.filter(r => r.verdict !== 'unknown');
+  const ordered = inStreak ? STREAK_ORDER.map(id => ev.rows.find(r => r.id === id)).filter(Boolean) : ev.rows;
+  const known = ordered.filter(r => r.verdict !== 'unknown');
   if (!known.length) return '';
-  const rows = [...known, ...ev.rows.filter(r => r.verdict === 'unknown' && r.now !== null)].slice(0, 3);
+  const rows = [...known, ...ordered.filter(r => r.verdict === 'unknown' && r.now !== null)].slice(0, 3);
+  const was = r => `was ${metricValue(r, r.before)}${r.id === 'score' && ev.scoreSource === 'ledger' ? ' · all games' : ''}`;
   return `<section aria-labelledby="working-head">
     <div class="section-rule"><span id="working-head">Is it working?</span><span>Last 2 weeks vs 6 before · <a href="#progress">All</a></span></div>
     <div class="metrics">${rows
       .map(
         r =>
-          `<div class="metric ${r.verdict}"><strong>${metricValue(r, r.now)}</strong><span>${esc(METRIC[r.id])}</span><small class="muted">was ${metricValue(r, r.before)}</small></div>`,
+          `<div class="metric ${r.verdict}"><strong>${metricValue(r, r.now)}</strong><span>${esc(METRIC[r.id])}</span><small class="muted">${esc(was(r))}</small></div>`,
       )
       .join('')}</div>
   </section>`;
+}
+
+// ---------- The stop line and the streak ----------
+
+/** "21:42", the local time of a timestamp. */
+const clockTime = ms => {
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
+/** The STOP card: a loss in the last 20 minutes, the reset button (or the reset already done) and when the ledger was last synced. */
+function stopHTML(stop) {
+  const synced = lastSyncAt();
+  const action = stop.resetDone
+    ? `<p class="small reset-done">Reset done ${esc(ago(stop.resetDone))}. Play one game, then come back.</p>`
+    : '<button type="button" id="stop-reset" class="primary big">Reset · 4 min</button>';
+  return `<section class="stop-card" aria-label="Stop">
+    <h2>STOP.</h2>
+    <p>${esc(stop.text)}</p>
+    ${action}
+    ${synced ? `<p class="small">as of your last sync, ${clockTime(synced)}</p>` : ''}
+  </section>`;
+}
+
+/** "3 games, 1–2": today's games as wins–losses. */
+function tonightScore(ledger, games) {
+  const key = dateKey();
+  let wins = 0;
+  let losses = 0;
+  for (const r of ledger) {
+    if (dateKey(new Date(r.t)) !== key) continue;
+    if (r.r === 1) wins++;
+    else if (r.r === 0) losses++;
+  }
+  return `${plural(games, 'game')}, ${wins}–${losses}`;
+}
+
+/**
+ * Under the Today header: the play rule once the ledger holds ten games of
+ * the main control (the first time it shows, the stop line's date is set),
+ * what the verdicts say, and tonight's games. After two losses in a row the
+ * tonight line is a bordered one that says what changes.
+ */
+function ruleHTML(stop) {
+  const s = app.state;
+  const ledger = s.ledger || [];
+  const profile = tiltProfile(ledger);
+  const parts = [];
+  const tonight = stop.tonight && !stop.live;
+  if (tonight) {
+    const first = stop.text.split(/(?<=\.)\s/)[0];
+    parts.push(
+      `<p class="rule-line tonight">Tonight: ${esc(tonightScore(ledger, profile.today.games))}. ${esc(first)} Reset first; no game block today.</p>`,
+    );
+  }
+  const control = mainControl(ledger);
+  if (!control || rowsBetween(ledger, 0, Infinity, { control }).length < 10) return parts.join('');
+  if (!s.stop) s.stop = { since: null, resets: [] };
+  if (!s.stop.since) {
+    s.stop.since = dateKey();
+    app.save();
+  }
+  parts.push(`<p class="rule-line small">${esc(ruleLine(profile))}${profile.rule.default ? ' · default' : ''}</p>`);
+  for (const line of profile.lines) parts.push(`<p class="small verdict-line">${esc(line)}</p>`);
+  if (!tonight && profile.today.games >= 1)
+    parts.push(`<p class="small tonight-line">Tonight: ${esc(tonightScore(ledger, profile.today.games))}.</p>`);
+  return parts.join('');
+}
+
+/** The streak: how many of the last ten were lost and the leak that started most of the losses, with its habit. */
+function leakHTML(d) {
+  const lead = `<strong>Losing ${d.lost10} of your last ${d.games10}.</strong>`;
+  let body;
+  if (d.leak)
+    body =
+      ` The leak: ${d.counts[d.leak]} of ${d.counted} losses began with ${esc(d.label || LEAKS[d.leak].label)}. ` +
+      `<span class="small">Habit: ${esc(d.habit || LEAKS[d.leak].habit)}</span>`;
+  else if (d.counted < MIN_COUNTED) body = ` ${d.counted} of them read so far: the leak appears at ${MIN_COUNTED}.`;
+  else body = ` ${d.counted} of them read: no one leak started enough of them yet.`;
+  return `<section aria-labelledby="streak-head">
+    <div class="section-rule"><span id="streak-head">The streak</span><span>last 10 games</span></div>
+    <p class="leak-line">${lead}${body}</p>
+  </section>`;
+}
+
+/**
+ * Remember the streak being worked on while streak mode is on; when it ends,
+ * say so once with the leak's count then and now.
+ */
+function trackStreak(on, d) {
+  const s = app.state;
+  if (on) {
+    const next = { leak: d.leak, count: d.leak ? d.counts[d.leak] : 0, counted: d.counted };
+    if (!s.streak) {
+      s.streak = { since: dateKey(), ...next };
+      app.save();
+    } else if (s.streak.leak !== next.leak || s.streak.count !== next.count || s.streak.counted !== next.counted) {
+      Object.assign(s.streak, next);
+      app.save();
+    }
+    return;
+  }
+  if (!s.streak) return;
+  const was = s.streak;
+  let text = `Streak over: ${d.lost10} of your last ${d.games10}.`;
+  if (d.counted >= 3 && was.leak)
+    text += ` Losses that began with the leak: ${was.count} of ${was.counted} → ${d.counts[was.leak]} of ${d.counted}.`;
+  s.streak = null;
+  app.save();
+  toast(text, { duration: 9000 });
 }
 
 function draw() {
@@ -257,11 +380,18 @@ function draw() {
     : prog.done
       ? `Continue · ${prog.minutesLeft} min left`
       : `Start today’s session · ${session.minutes} min`;
+  const stop = stopState(s);
+  const inStreak = streakMode(s);
+  const diagnosis = inStreak || s.streak ? diagnoseStreak(s) : null;
+  trackStreak(inStreak, diagnosis);
   root.innerHTML = `<div class="focus today">
+    ${stop.live ? stopHTML(stop) : ''}
     ${goalHTML()}
-    ${evidenceHTML()}
+    ${inStreak ? leakHTML(diagnosis) : ''}
+    ${evidenceHTML(inStreak)}
     <section aria-labelledby="today-head">
       <div class="section-rule"><span id="today-head">Today</span><span>${prog.complete ? 'All done' : `${prog.done} of ${session.blocks.length} done · ${prog.minutesLeft ?? session.minutes} min`}</span></div>
+      ${ruleHTML(stop)}
       <ol class="agenda">${session.blocks
         .map(
           (b, i) =>
@@ -284,6 +414,7 @@ function draw() {
     </div>
   </div>`;
   $('#start-session', root).onclick = () => startBlock(firstTodo);
+  $('#stop-reset', root)?.addEventListener('click', () => startReset());
   root.querySelectorAll('[data-block]').forEach(b => (b.onclick = () => startBlock(Number(b.dataset.block))));
   $('#more', root)?.addEventListener('click', () => {
     s.session = null;

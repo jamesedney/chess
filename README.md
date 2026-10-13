@@ -15,6 +15,14 @@ Enter your Lichess or Chess.com username and Rankup does the rest: it reads your
 - **Your games import themselves.** New games from your account are fetched whenever the app is open and reviewed in the background. Their mistakes become tomorrow's first block.
 - **The opponent adapts.** Score well over five practice games and the next one is a rung higher on a ladder that interleaves Maia and Stockfish levels; struggle and it steps down.
 
+### The losing streak
+- **Every game counts.** A ledger of every game the sync fetches, reviewed or not: result, how it ended, the clock, both ratings. Four hundred games, filled from the sync's own downloads.
+- **One leak.** When you are losing, the last ten losses are read for the first decisive error in each and the one category that owns most of them is named, with one habit. Today is rebuilt around that habit until the results recover. Nothing is said below four losses or a 40% share.
+- **The stop line.** A STOP card within twenty minutes of a loss with your own after-loss score, a four-minute reset, a fixed play rule (four games, stop after two losses in a row, two minutes between games) and, on You, how your evenings go: straight after a loss, games five and later in a sitting, the longest run, losses on time, and since the stop line.
+- **Safe or hanging?** Your own positions with the move you played drawn, five seconds each. Hanging comes from a real blunder with its refutation; safe from a tense position where your move held. Scored as hits minus false alarms.
+- **A real clock.** Session games on your most played blitz control, Play it again with the seconds you actually had, and a clock for free games on request. Running out is a loss.
+- **Same clock, better move.** Your decisive positions on the seconds you had when you got them wrong.
+
 ### Training from your games
 - **Post-game debrief.** After each imported game, the two or three moments that decided it: find the better move, then one tap on what went wrong (missed their threat, missed my chance, miscalculated, played too fast, short of time, wrong plan). The likely reason is offered first, from your clock and the kind of mistake. Over many games the notes become your habits, and the plan trains them.
 - **Play it again.** Positions from your games where you were winning and did not win, or worse but holdable and then lost, replayed against Maia or Stockfish at your opponent's rating. Convert the win, or hold, within 30 moves; the engine judges the rest.

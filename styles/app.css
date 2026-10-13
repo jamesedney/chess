@@ -3706,3 +3706,76 @@ button.big {
   line-height: 1.15;
   overflow-wrap: anywhere;
 }
+
+/* Today: the stop line and the leak. The STOP card is the one inverted block
+   on the page: a loss in the last twenty minutes, the reset button, the sync
+   time. The rule line sits under the Today header; after two losses in a row
+   it is the bordered tonight line. The leak reads as one paragraph. */
+.stop-card {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 14px 16px 12px;
+  display: grid;
+  gap: 8px;
+}
+.stop-card h2 {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 800;
+  font-stretch: var(--narrow);
+  letter-spacing: 0.02em;
+}
+.stop-card p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.stop-card .small {
+  color: var(--line-strong);
+}
+.stop-card .reset-done {
+  color: var(--paper);
+  border-top: 1px solid var(--line-strong);
+  padding-top: 8px;
+}
+.stop-card button.primary {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--paper);
+  margin: 2px 0 0;
+}
+.stop-card button.primary:hover {
+  background: var(--line);
+  border-color: var(--line);
+  color: var(--ink);
+}
+.rule-line {
+  margin: 0 0 4px;
+  line-height: 1.35;
+}
+.rule-line.tonight {
+  border: 2px solid var(--ink);
+  padding: 8px 10px;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 2px 0 6px;
+}
+.verdict-line,
+.tonight-line {
+  margin: 0 0 4px;
+  color: var(--muted);
+}
+.leak-line {
+  margin: 0 0 4px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.leak-line strong {
+  font-weight: 800;
+}
+.leak-line .small {
+  display: block;
+  color: var(--muted);
+  margin-top: 2px;
+}
