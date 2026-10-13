@@ -77,6 +77,8 @@ export function repertoireCards(reviews) {
       answer: fix ? main.better : main.san,
       played: main.san,
       fix,
+      loss: main.loss,
+      count: main.count,
       games: node.games,
       score: node.points / node.games,
       why: fix

@@ -115,19 +115,23 @@ test('the repertoire drill asks for your move, or the better one where you lost 
   await expect(page.locator('#main')).toContainText('Your openings, from your games');
   await page.click('#rep-start');
   // Positions where you lost ground come first: here Nxf7, where Bxf7+ was better.
-  await expect(page.locator('.focus-meta')).toContainText('After 1. e4 e5 2. Nf3 Nc6 3. Bc4 Nd4 4. Nxe5 Qg5');
+  await expect(page.locator('.rep-line')).toContainText('1. e4 e5 2. Nf3 Nc6 3. Bc4 Nd4 4. Nxe5 Qg5');
+  await expect(page.locator('#board-title')).toHaveText('You played 5. Nxf7 here. Find a better move.');
   await move(page, 'e5', 'f7');
-  await expect(page.locator('#feedback')).toContainText('That is what you played, and it cost you');
+  await expect(page.locator('#feedback')).toContainText('That is what you played in your game, and it cost you');
   await move(page, 'c4', 'f7');
-  await expect(page.locator('#feedback')).toContainText('Yes: Bxf7+');
-  await expect(page.locator('#feedback')).toContainText('Better than Nxf7');
+  await expect(page.locator('#feedback')).toContainText('Yes: 5. Bxf7+, on your second try.');
+  await expect(page.locator('#feedback')).toContainText('In your game you played 5. Nxf7, which cost you 60% winning chances.');
+  await expect(page.locator('#board-title')).toHaveText('5. Bxf7+');
   await page.click('#rep-next');
   // Then your own moves, from the first.
-  await expect(page.locator('.focus-meta')).toContainText('The first move');
+  await expect(page.locator('.rep-line')).toContainText('The first move');
+  await expect(page.locator('#board-title')).toHaveText('What do you play here as White?');
   await move(page, 'a2', 'a3');
-  await expect(page.locator('#feedback')).toContainText('Not your move here');
+  await expect(page.locator('#feedback')).toContainText('Not your usual move here');
   await page.click('#rep-show');
-  await expect(page.locator('#feedback')).toContainText('The move is e4');
+  await expect(page.locator('#feedback')).toContainText('The move is 1. e4.');
+  await expect(page.locator('#feedback')).toContainText('You played it here in 2 of 2 games.');
   const s = await saved(page);
   expect(Object.keys(s.rep).length).toBe(2);
   // Neither was clean: one wrong try first, one shown.

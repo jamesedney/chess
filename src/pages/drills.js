@@ -635,6 +635,7 @@ function startRepertoire(limit = 10) {
     answered: false,
     clean: 0,
     message: '',
+    resultHtml: '',
     tone: '',
   };
 }
@@ -674,13 +675,34 @@ function drawRepertoire() {
   }
   const c = v.cards[v.i];
   const game = new Chess(c.fen);
+  const side = c.colour === 'w' ? 'White' : 'Black';
+  // Once answered, the board shows the move played, highlighted.
+  let lastMove = [];
+  if (v.answered) {
+    const m = game.move(c.answer);
+    lastMove = [m.from, m.to];
+  }
+  const record =
+    c.games === 1
+      ? c.score === 1
+        ? '1 game, won'
+        : c.score === 0
+          ? '1 game, lost'
+          : '1 game, drawn'
+      : `${c.games} games, you scored ${Math.round(c.score * 100)}%`;
+  const question = c.fix ? `You played ${numbered(c, c.played)} here. Find a better move.` : `What do you play here as ${side}?`;
   root.innerHTML = `<div class="focus">${top(`Position ${v.i + 1} of ${v.cards.length}`)}
-    <div class="focus-prompt"><strong id="board-title">${v.answered ? esc(c.answer) : 'Your move'}</strong><span class="chip" id="board-chip">${esc(turnLabel(game))}</span></div>
+    <div class="rep-line">
+      <span class="small">${c.line.length ? 'Your opening' : 'The first move'} · ${esc(record)}</span>
+      ${c.line.length ? `<p class="focus-meta">${lineHTML(c.line)}</p>` : ''}
+    </div>
+    <div class="focus-prompt"><strong id="board-title">${esc(v.answered ? numbered(c, c.answer) : question)}</strong><span class="chip" id="board-chip">${v.answered ? '' : esc(`${side} to move`)}</span></div>
+    <div id="feedback" class="status ${v.tone}" role="status" aria-live="polite" ${v.resultHtml || v.message ? '' : 'hidden'}>${v.resultHtml || esc(v.message)}</div>
     <div class="focus-board"><div id="board"></div></div>
-    <div class="focus-meta small">${c.line.length ? `After ${esc(repLine(c.line))}` : 'The first move'} · ${plural(c.games, 'game')}, you scored ${Math.round(c.score * 100)}%</div>
-    <div id="feedback" class="status ${v.tone}" role="status" aria-live="polite" ${v.message ? '' : 'hidden'}>${esc(v.message)}</div>
     <div class="focus-actions">${
-      v.answered ? '<button type="button" class="primary" id="rep-next">Next</button>' : '<button type="button" id="rep-show">Show</button>'
+      v.answered
+        ? '<button type="button" class="primary" id="rep-next">Next</button>'
+        : '<button type="button" id="rep-show">Show the move</button>'
     }</div>
   </div>`;
   board = new BoardView($('#board', root), {
@@ -688,15 +710,34 @@ function drawRepertoire() {
     askPromotion: choosePromotion,
     onMove: v.answered ? null : repertoireMove,
   });
-  board.set({ game, orientation: c.colour, interactive: !v.answered, movable: c.colour });
+  board.set({ game, orientation: c.colour, interactive: !v.answered, movable: c.colour, lastMove });
   $('#rep-show', root)?.addEventListener('click', () => answerRepertoire(false, true));
   $('#rep-next', root)?.addEventListener('click', () => {
     v.i++;
-    Object.assign(v, { tries: 0, answered: false, message: '', tone: '' });
+    Object.assign(v, { tries: 0, answered: false, message: '', resultHtml: '', tone: '' });
     if (v.i >= v.cards.length) v.phase = 'done';
     draw();
   });
   $('#rep-next', root)?.focus({ preventScroll: true });
+}
+
+/** A move with its number in the line: "5… Qd4" or "6. Nc3". */
+function numbered(c, san) {
+  const n = Math.floor(c.ply / 2) + 1;
+  return c.colour === 'w' ? `${n}.\u00a0${san}` : `${n}…\u00a0${san}`;
+}
+
+/** The opening so far, with the move just played in bold. */
+function lineHTML(line) {
+  const parts = repLine(line).split(' ');
+  const last = parts.pop();
+  return `${esc(parts.join(' '))} <strong>${esc(last)}</strong>`;
+}
+
+/** "tomorrow", "in 3 days". */
+function whenNext(due, now = Date.now()) {
+  const days = Math.max(1, Math.round((due - now) / 86400000));
+  return days === 1 ? 'tomorrow' : `in ${days} days`;
 }
 
 function repertoireMove(move) {
@@ -714,7 +755,11 @@ function repertoireMove(move) {
   board.flash(m.to);
   if (v.tries >= 2) return answerRepertoire(false, true);
   say(
-    c.fix && m.san === c.played ? `That is what you played, and it cost you. Find the better move.` : 'Not your move here. Try again.',
+    c.fix && m.san === c.played
+      ? `That is what you played in your game, and it cost you. One more try.`
+      : c.fix
+        ? 'Not the better move. One more try.'
+        : 'Not your usual move here. One more try.',
     'error',
   );
 }
@@ -722,15 +767,23 @@ function repertoireMove(move) {
 function answerRepertoire(clean, shown) {
   const v = view;
   const c = v.cards[v.i];
-  app.state.rep[c.id] = schedule(app.state.rep[c.id], clean, Date.now());
+  const record = schedule(app.state.rep[c.id], clean, Date.now());
+  app.state.rep[c.id] = record;
   logAttempt(app.state, { kind: 'o', theme: c.colour, clean });
   if (clean) v.clean++;
   app.save();
   v.answered = true;
   cue(clean ? 'success' : 'error');
+  const move = numbered(c, c.answer);
+  const head = clean ? `Correct: ${move}.` : shown ? `The move is ${move}.` : `Yes: ${move}, on your second try.`;
+  const why = c.fix
+    ? `In your game you played ${numbered(c, c.played)}, which cost you ${c.loss}% winning chances.`
+    : `You played it here in ${c.count} of ${plural(c.games, 'game')}.`;
+  const next = clean ? `Next review ${whenNext(record.due)}.` : 'You will see it again later today.';
   Object.assign(v, {
-    message: `${shown ? `The move is ${c.answer}.` : `Yes: ${c.answer}.`} ${c.why}${clean ? '' : ' It comes back soon.'}`,
-    tone: clean ? 'success' : 'warning',
+    message: '',
+    resultHtml: `<strong>${esc(head)}</strong> ${esc(why)} <span class="small">${esc(next)}</span>`,
+    tone: clean ? 'success' : '',
   });
   draw();
 }

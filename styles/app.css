@@ -3664,3 +3664,17 @@ button.big {
 .today button.big {
   min-height: 50px;
 }
+
+/* Repertoire drill: the opening first, then the question. */
+.rep-line {
+  display: grid;
+  gap: 2px;
+  border-top: 2px solid var(--ink);
+  padding-top: 8px;
+}
+.rep-line .focus-meta {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink);
+}

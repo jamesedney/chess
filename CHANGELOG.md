@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.1.4
+
+- Repertoire drill, clearer: your opening line and record come first, then a plain question ("You played 5… Bc5 here. Find a better move." or "What do you play here as Black?"). The result appears above the board: "Correct: 5… Qd4. In your game you played 5… Bc5, which cost you 11% winning chances. Next review in 3 days." The board shows the move played, and moves keep their numbers.
+
 ## 4.1.3
 
 - Play it again says plainly how it went: "Passed. In your game you lost from here; this time after 30 moves Stockfish has it at +3.1 for you." or "Not passed: … To pass, …". The goal stays above the board after the result, "Your move" no longer follows it, and the board stops taking moves once the challenge is decided.
