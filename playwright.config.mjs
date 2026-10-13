@@ -1,6 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const PORT = 4173;
+// PW_PORT and PW_SITE let several runs stage and serve side by side.
+const PORT = Number(process.env.PW_PORT) || 4173;
+const SITE = process.env.PW_SITE || '.e2e-site';
 export default defineConfig({
   testDir: 'test/e2e',
   timeout: 120000,
@@ -17,7 +19,7 @@ export default defineConfig({
   webServer: {
     // Serve the staged site, the exact files GitHub Pages publishes, so a file
     // missing from the deploy fails the tests instead of only the live app.
-    command: `node tools/stage-site.mjs .e2e-site && node tools/serve.mjs --port ${PORT} --base /rankup-chess/ --root .e2e-site`,
+    command: `node tools/stage-site.mjs ${SITE} && node tools/serve.mjs --port ${PORT} --base /rankup-chess/ --root ${SITE}`,
     url: `http://localhost:${PORT}/rankup-chess/`,
     reuseExistingServer: !process.env.CI,
   },
