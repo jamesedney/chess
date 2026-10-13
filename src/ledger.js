@@ -172,13 +172,15 @@ export function ledgerEntry(
 /**
  * Rows for every finished game of yours in a fetch result, deduped within the
  * batch. `known` keys are skipped before any parsing, so a sync that returns
- * the same two months again costs almost nothing.
+ * the same two months again costs almost nothing; so are games that ended at
+ * or before `after` (the oldest row of a full ledger), which could not stay.
  */
-export function ledgerFrom(fetched, { usernames, known = new Set() }) {
+export function ledgerFrom(fetched, { usernames, known = new Set(), after = 0 }) {
   const out = [];
   const seen = new Set();
   for (const g of fetched) {
     if (!g?.pgn) continue;
+    if (after && g.ended && g.ended <= after) continue;
     const key = gameKey(g.pgn);
     if (seen.has(key) || known.has(key)) continue;
     seen.add(key);
@@ -200,21 +202,22 @@ export function ledgerFrom(fetched, { usernames, known = new Set() }) {
 /**
  * Merge rows into the ledger: the same key replaces its old row, rows stay in
  * time order, and the oldest beyond MAX_LEDGER are dropped. Mutates `ledger`;
- * returns how many rows were new.
+ * returns how many new rows are in the ledger afterwards (a row older than a
+ * full ledger is dropped at once and not counted).
  */
 export function recordLedger(ledger, rows) {
-  let added = 0;
+  const pushed = [];
   for (const row of rows) {
     const i = ledger.findIndex(r => r.k === row.k);
     if (i >= 0) ledger[i] = row;
     else {
       ledger.push(row);
-      added++;
+      pushed.push(row);
     }
   }
   ledger.sort((a, b) => a.t - b.t);
   if (ledger.length > MAX_LEDGER) ledger.splice(0, ledger.length - MAX_LEDGER);
-  return added;
+  return pushed.filter(row => ledger.includes(row)).length;
 }
 
 /** The time-control class you play most over the last `days`, or null. */

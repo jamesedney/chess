@@ -104,7 +104,8 @@ function startMs(pgn) {
  */
 export async function fetchLichessNew(username, sync, { fetchImpl = fetch, now = Date.now() } = {}) {
   const normalSince = sync.last.lichess || now - FIRST_SYNC_DAYS * DAY;
-  const backfill = !sync.ledgerAt;
+  // The 60-day backfill runs on the first sync after 5.0 and on the first sync of a Lichess account linked later.
+  const backfill = !sync.ledgerAt || !sync.last.lichess;
   const since = backfill ? Math.min(normalSince, now - LEDGER_DAYS * DAY) : normalSince;
   let res;
   try {
@@ -167,6 +168,9 @@ export function selectNew(fetched, { usernames, sync, source, now = Date.now() }
   const today = dateKey(new Date(now));
   if (sync.today.d !== today) sync.today = { d: today, n: 0 };
   const chosen = [];
+  // Next time, fetch from an hour before this sync, or from before the start of
+  // a game still running, so it is fetched again when it ends; `seen` removes the overlap.
+  let from = now - 3600000;
   for (const g of fetched) {
     // Ledger-only games (before the review window) are neither queued nor marked seen.
     if (g.fresh === false) continue;
@@ -174,15 +178,18 @@ export function selectNew(fetched, { usernames, sync, source, now = Date.now() }
     if (sync.seen.includes(key)) continue;
     const verdict = acceptGame(g.pgn, usernames, sync, { rated: g.rated ?? null, control: g.control ?? null });
     // A game still in progress is not seen yet: it is fetched again when it ends.
-    if (!verdict.ok && verdict.reason === 'unfinished') continue;
+    if (!verdict.ok && verdict.reason === 'unfinished') {
+      const start = startMs(g.pgn);
+      if (start !== null) from = Math.min(from, start - 60000);
+      continue;
+    }
     sync.seen.push(key);
     if (!verdict.ok) continue;
     if (sync.today.n >= sync.dailyCap) continue;
     sync.today.n++;
     chosen.push({ pgn: g.pgn, colour: verdict.colour, source, key, added: now });
   }
-  // Next time, fetch from an hour before this sync; `seen` removes the overlap.
-  sync.last[source] = now - 3600000;
+  sync.last[source] = from;
   if (sync.seen.length > MAX_SEEN) sync.seen.splice(0, sync.seen.length - MAX_SEEN);
   return chosen;
 }

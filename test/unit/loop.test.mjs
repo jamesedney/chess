@@ -112,9 +112,13 @@ test('new games are chosen once, within the daily cap, and unfinished games are 
   assert.ok(sync.seen.includes('lichess.org/g4'), 'a game over the cap is still seen: it comes back tomorrow only if fetched again');
   assert.ok(!sync.seen.includes('lichess.org/g2'), 'an unfinished game is fetched again when it ends');
   assert.equal(sync.today.n, 2);
-  assert.equal(sync.last.lichess, NOW - 3600000);
+  // The next fetch starts a minute before the unfinished game began, so it is fetched again when it ends.
+  assert.equal(sync.last.lichess, Math.min(NOW - 3600000, Date.UTC(2026, 9, 8, 9, 59, 0)));
   const again = selectNew(fetched, { usernames: ['me'], sync, source: 'lichess', now: NOW });
   assert.equal(again.length, 0, 'nothing is queued twice');
+  // With every game finished the next fetch starts an hour before this one.
+  selectNew([fetched[0]], { usernames: ['me'], sync, source: 'lichess', now: NOW });
+  assert.equal(sync.last.lichess, NOW - 3600000);
 });
 
 test('fetching maps site responses and errors', async () => {

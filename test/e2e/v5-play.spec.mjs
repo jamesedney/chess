@@ -5,6 +5,9 @@ const MOVES = ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Nd4', 'Nxe5', 'Qg5', 'Nxf7', 'Q
 const FEN_BEFORE_NXF7 = 'r1b1kbnr/pppp1ppp/8/4N1q1/2BnP3/8/PPPP1PPP/RNBQK2R w KQkq - 1 5';
 const DAY = 86400000;
 
+/** Seconds from a clock chip's "4:49". */
+const toSeconds = text => text.split(':').reduce((a, b) => a * 60 + Number(b), 0);
+
 /** A reviewed blitz game you lost after Nxf7?? with 41 seconds on your clock before it. */
 function lostGame(id, created) {
   const evals = new Array(MOVES.length + 1).fill(null);
@@ -102,6 +105,26 @@ test('a clocked game runs on your turn only, and flagging is a loss', async ({ p
   await expect(page.locator('#board [data-square="d2"]')).not.toHaveClass(/selected/);
   const s = await saved(page);
   expect(s.games.at(-1)).toMatchObject({ r: 0, fl: 1, tc: '300+0', left: 0, b: 0, f: 0 });
+});
+
+test('leaving the page pauses your clock where it stands', async ({ page }) => {
+  await page.clock.install();
+  await seed(page, { ledger: Array.from({ length: 12 }, (_, i) => row(i, i + 1)), settings: { colour: 'w' } });
+  await open(page, 'play?clock=1');
+  await move(page, 'e2', 'e4');
+  await expect(page.locator('#play-status')).toContainText('Your move', { timeout: 60000 });
+  await page.clock.fastForward('00:10');
+  const before = await page.locator('#play-clock').textContent();
+  // Six minutes on Today would flag you if the clock kept running.
+  await page.locator('nav a[data-page="today"]').click();
+  await expect(page.locator('#today-head')).toBeVisible();
+  await page.clock.fastForward('06:00');
+  await page.locator('nav a[data-page="play"]').click();
+  await expect(page.locator('#play-status')).toContainText('Your move');
+  const after = await page.locator('#play-clock').textContent();
+  expect(Math.abs(toSeconds(before) - toSeconds(after))).toBeLessThanOrEqual(1);
+  const s = await saved(page);
+  expect(s.games ?? []).toHaveLength(0);
 });
 
 test('play it again on the real clock', async ({ page }) => {

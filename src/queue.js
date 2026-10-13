@@ -11,7 +11,7 @@ import { scheduleDeepAnalysis } from './deep.js';
 import { mergeNewGames } from './session.js';
 import { syncRatings } from './rating-sync.js';
 import { needsDebrief } from './debrief.js';
-import { ledgerFrom, recordLedger } from './ledger.js';
+import { ledgerFrom, recordLedger, MAX_LEDGER } from './ledger.js';
 
 const KEY = 'rankup-queue';
 const MAX_QUEUE = 12;
@@ -187,26 +187,42 @@ export async function syncNow({ force = false, gap = SYNC_GAP_MS, fetchImpl = fe
   if (s.profiles.lichess) jobs.push(['lichess', () => fetchLichessNew(s.profiles.lichess, s.sync, { fetchImpl, now })]);
   if (s.profiles.chesscom) jobs.push(['chesscom', () => fetchChessComNew(s.profiles.chesscom, s.sync, { fetchImpl, now })]);
   let ledgered = 0;
-  for (const [source, run] of jobs) {
-    try {
-      const fetched = await run();
-      // Every finished game goes in the ledger, reviewed or not.
-      s.ledger ||= [];
-      ledgered += recordLedger(s.ledger, ledgerFrom(fetched, { usernames: names, known: new Set(s.ledger.map(r => r.k)) }));
-      items.push(...selectNew(fetched, { usernames: names, sync: s.sync, source, now }));
-    } catch (e) {
-      errors.push(e.message);
+  let added = 0;
+  try {
+    for (const [source, run] of jobs) {
+      try {
+        const fetched = await run();
+        // Every finished game goes in the ledger, reviewed or not. A full ledger
+        // skips games older than its oldest row before parsing them.
+        s.ledger ||= [];
+        const after = s.ledger.length >= MAX_LEDGER ? s.ledger[0].t : 0;
+        const known = new Set(s.ledger.map(r => r.k));
+        ledgered += recordLedger(s.ledger, ledgerFrom(fetched, { usernames: names, known, after }));
+        items.push(...selectNew(fetched, { usernames: names, sync: s.sync, source, now }));
+        // The backfill is Lichess's: it is done once Lichess has answered, whatever the other site did.
+        if (source === 'lichess' && !s.sync.ledgerAt) s.sync.ledgerAt = now;
+      } catch (e) {
+        errors.push(e.message);
+      }
     }
+    if (!s.profiles.lichess && !s.sync.ledgerAt && !errors.length) s.sync.ledgerAt = now;
+    if (!errors.length) lastSuccess = now;
+    app.save();
+    if (ledgered)
+      for (const fn of ledgerListeners) {
+        try {
+          fn();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    added = enqueue(items);
+    // A new game means a new rating: read it now rather than at the next check.
+    if (items.length) syncRatings({ force: true, fetchImpl, now }).catch(() => {});
+  } finally {
+    syncing = false;
+    notify();
   }
-  if (!s.sync.ledgerAt && !errors.length) s.sync.ledgerAt = now;
-  if (!errors.length) lastSuccess = now;
-  app.save();
-  if (ledgered) for (const fn of ledgerListeners) fn();
-  const added = enqueue(items);
-  // A new game means a new rating: read it now rather than at the next check.
-  if (items.length) syncRatings({ force: true, fetchImpl, now }).catch(() => {});
-  syncing = false;
-  notify();
   return { added, errors };
 }
 

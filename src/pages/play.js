@@ -127,8 +127,13 @@ export function render(main, params = {}) {
   else beginUserTurn();
 }
 
+/** Leaving the page pauses your clock where it stands, as a reload does; it runs again when you come back. */
 export function leave() {
   stopClockTimer();
+  if (play.clock?.running) {
+    haltClock();
+    persist();
+  }
 }
 
 // ---------- The clock ----------

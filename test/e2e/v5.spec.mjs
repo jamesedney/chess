@@ -264,6 +264,30 @@ const LICHESS_PGN = `[Event "Rated blitz game"]
 
 1. e4 { [%eval 0.17] [%clk 0:05:00] } 1... e5 { [%eval 0.2] [%clk 0:05:00] } 2. Nf3 { [%eval 0.1] [%clk 0:04:58] } 2... Nc6 { [%eval 0.2] [%clk 0:04:57] } 3. Bc4 { [%eval 0.1] [%clk 0:04:55] } 3... Nd4 { [%eval 0.9] [%clk 0:04:50] } 4. Nxe5 { [%eval -0.4] [%clk 0:04:52] } 4... Qg5 { [%eval -0.6] [%clk 0:04:45] } 5. Nxf7 { [%eval -5.5] [%clk 0:04:40] } 5... Qxg2 { [%eval -5.8] [%clk 0:04:40] } 6. Rf1 { [%eval -7.9] [%clk 0:04:35] } 6... Qxe4+ { [%eval -8.5] [%clk 0:04:35] } 7. Be2 { [%eval #-1] [%clk 0:04:30] } 7... Nf3# { [%clk 0:04:30] } 0-1`;
 
+test('a second site that fails does not stop the ledger or its backfill flag', async ({ page }) => {
+  await page.route('https://lichess.org/api/user/**', route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(route.request().url().endsWith('/rating-history') ? [] : { perfs: { blitz: { rating: 1150, games: 60 } } }),
+    }),
+  );
+  await page.route('https://lichess.org/api/games/user/**', route =>
+    route.fulfill({ status: 200, contentType: 'application/x-chess-pgn', body: LICHESS_PGN }),
+  );
+  await page.route('https://api.chess.com/**', route => route.fulfill({ status: 404, contentType: 'application/json', body: '{}' }));
+  await seed(page, { version: 4, profiles: { lichess: 'me', chesscom: 'nobody' }, sync: { minMoves: 3 } });
+  await open(page, 'settings');
+  await page.locator('#sync-now').click();
+  await expect.poll(async () => (await saved(page)).ledger.length, { timeout: 20000 }).toBe(1);
+  const s = await saved(page);
+  expect(s.ledger[0].k).toBe('lichess.org/sync0001');
+  expect(s.sync.ledgerAt).toBeGreaterThan(0);
+  // The lock is released: a second sync runs and finds nothing new.
+  await page.locator('#sync-now').click();
+  await expect(page.locator('.toast.show')).toContainText('No Chess.com account called nobody', { timeout: 20000 });
+});
+
 test('the ledger fills from a sync: the game lands with its ending, result and length', async ({ page }) => {
   await page.route('https://lichess.org/api/user/**', route =>
     route.fulfill({

@@ -205,6 +205,19 @@ test('the ledger merges on key, stays in time order and keeps the newest 400', (
   assert.equal(ledger.length, MAX_LEDGER);
   assert.equal(ledger[0].k, 'k10', 'the oldest rows go: a, b and k0 to k9');
   assert.equal(validateLedger(ledger), null);
+  // A row older than a full ledger is dropped at once and not counted as new.
+  assert.equal(recordLedger(ledger, [row('older', 5)]), 0);
+  assert.equal(ledger.length, MAX_LEDGER);
+  assert.ok(!ledger.some(r => r.k === 'older'));
+  // ledgerFrom skips such games before parsing them, by the end time the site gives.
+  const fetched = [
+    { pgn: pgn({ Site: 'https://lichess.org/old1' }), ended: 50, source: 'chesscom' },
+    { pgn: pgn({ Site: 'https://lichess.org/new1' }), ended: 5000, source: 'chesscom' },
+  ];
+  assert.deepEqual(
+    ledgerFrom(fetched, { usernames: ['me'], after: ledger[0].t }).map(r => r.k),
+    ['lichess.org/new1'],
+  );
 });
 
 test('main control, windows, loss runs and scores', () => {
@@ -310,6 +323,12 @@ test('the first sync after 5.0 fills the ledger: 60 days and 200 games, then 60 
   const q2 = new URL(urls[1]).searchParams;
   assert.equal(q2.get('max'), String(SYNC_MAX));
   assert.equal(q2.get('since'), String(NOW - DAY));
+  // A Lichess account linked after the first sync still gets its backfill.
+  sync.last.lichess = 0;
+  await fetchLichessNew('me', sync, { fetchImpl, now: NOW });
+  const q3 = new URL(urls[2]).searchParams;
+  assert.equal(q3.get('max'), String(LEDGER_MAX));
+  assert.ok(Number(q3.get('since')) <= NOW - 60 * DAY);
   // Ledger-only games are neither queued nor marked seen.
   const chosen = selectNew(first, { usernames: ['me'], sync, source: 'lichess', now: NOW });
   assert.deepEqual(
