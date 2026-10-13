@@ -277,8 +277,9 @@ test('a second site that fails does not stop the ledger or its backfill flag', a
   );
   await page.route('https://api.chess.com/**', route => route.fulfill({ status: 404, contentType: 'application/json', body: '{}' }));
   await seed(page, { version: 4, profiles: { lichess: 'me', chesscom: 'nobody' }, sync: { minMoves: 3 } });
-  await open(page, 'settings');
-  await page.locator('#sync-now').click();
+  await open(page, 'today');
+  await page.click('#settings');
+  await page.click('#sync-now');
   await expect.poll(async () => (await saved(page)).ledger.length, { timeout: 20000 }).toBe(1);
   const s = await saved(page);
   expect(s.ledger[0].k).toBe('lichess.org/sync0001');
