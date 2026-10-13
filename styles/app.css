@@ -3699,3 +3699,10 @@ button.big {
 .focus-prompt .chip.sprint-clock.urgent {
   color: var(--danger);
 }
+
+/* You: "Your streak" and "Your evenings" tiles carry counts ("5 of 16 · 31%"), so they sit smaller than a lone number and wrap. */
+.metrics.counts .metric strong {
+  font-size: 22px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}

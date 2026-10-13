@@ -15,7 +15,8 @@ import { formatScore } from '../evaluation.js';
 import { archiveMistake, deleteMistake } from '../mistakes.js';
 import { evalGraph, hydrateEvalGraph } from '../charts.js';
 import { moveTime, timeSummary, formatClock } from '../clocks.js';
-import { openingStats } from '../openings.js';
+import { openingStats, outcome } from '../openings.js';
+import { streakMode, diagnoseStreak, lossAnatomy, LEAKS } from '../leak.js';
 import { analyseGame as runAnalysis, MAX_PLIES, MATE_EVAL } from '../analyse.js';
 import { scheduleDeepAnalysis } from '../deep.js';
 import { enqueue, remove as dequeue, snapshot as queueSnapshot, subscribe as watchQueue, syncNow } from '../queue.js';
@@ -789,6 +790,9 @@ function drawDebriefSummary(review) {
   const top = h.total >= 4 ? h.list[0] : null;
   const replay = replayCandidates(app.state).find(c => c.reviewId === review.id && !c.record?.success);
   const inSession = !!activeBlock();
+  const anatomy = outcome(review.result, review.colour) === 0 ? lossAnatomy(review, app.state) : null;
+  const d = streakMode(app.state) ? diagnoseStreak(app.state) : null;
+  const leak = d?.leak ? d : null;
   root.innerHTML = `<div class="focus review-focus">
     <div class="focus-top"><span class="focus-progress">Debrief · ${esc(review.white)} – ${esc(review.black)}</span></div>
     <div class="panel debrief-summary">
@@ -800,10 +804,13 @@ function drawDebriefSummary(review) {
             `<li><strong>${esc(plyLabel(review, m.ply))}${SYMBOL[m.cls]}</strong> <span class="small">better ${esc(m.bestSan)}</span><br><span>${esc(reasonById(m.reason)?.label || 'No note')}</span></li>`,
         )
         .join('')}</ul>
+      ${anatomy ? `<p class="small anatomy">${esc(anatomy)}</p>` : ''}
       ${
-        top
-          ? `<p class="small">Across your last ${h.total} debriefed moments, the most common is <strong>${esc(top.label.toLowerCase())}</strong> (${top.count}). Your plan trains it.</p>`
-          : '<p class="small">After a few more debriefs your most common reason shows here, and your plan trains it.</p>'
+        leak
+          ? `<p class="small leak-note">The leak: ${esc(leak.label || LEAKS[leak.leak].label)}, ${leak.counts[leak.leak]} of ${leak.counted} losses. Habit: ${esc(leak.habit || LEAKS[leak.leak].habit)}</p>`
+          : top
+            ? `<p class="small">Across your last ${h.total} debriefed moments, the most common is <strong>${esc(top.label.toLowerCase())}</strong> (${top.count}). Your plan trains it.</p>`
+            : '<p class="small">After a few more debriefs your most common reason shows here, and your plan trains it.</p>'
       }
       <div class="actions">
         ${replay ? '<button type="button" id="debrief-replay">Play it again</button>' : ''}

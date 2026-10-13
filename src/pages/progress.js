@@ -12,6 +12,13 @@ import { pathSummary } from '../curriculum.js';
 import { evidence } from '../evidence.js';
 import { habits } from '../debrief.js';
 import { timeProfile, profileText, CLOCK_DRILLS } from '../timeprofile.js';
+import { streakMode, diagnoseStreak, LEAKS, MIN_COUNTED } from '../leak.js';
+import { tiltProfile, sinceStop, sittings, ruleLine, MIN_BUCKET } from '../tilt.js';
+import { safeStats } from '../safecheck.js';
+import { pressureStats } from '../pressure.js';
+import { thresholds } from '../clocks.js';
+
+const DAY = 86400000;
 
 let platformFilter = null;
 let ratingsOpen = false;
@@ -101,6 +108,7 @@ export function render(main) {
           ? `Candidate moves: the engine's best was among your candidates ${Math.round((s.candidates.hit / s.candidates.asked) * 100)}% of the time, over ${plural(s.candidates.asked, 'check')}.`
           : 'Turn on candidate moves in a practice game’s options to measure how often the engine’s best move is among the moves you consider.'
       }</p>
+      ${safeLineHTML()}
       <div class="actions"><button type="button" id="go-assess">Assess the position</button></div>
     </section>
     <section class="panel"><h2>Recent days</h2>${
@@ -268,7 +276,117 @@ function workingHTML() {
       }
       <h3>Your clock</h3>
       <p class="small">${esc(profileText(p))}</p>
+      ${clockLinesHTML()}
       ${p.drill ? `<div class="actions"><button type="button" id="clock-drill" data-clock="${p.drill}">${esc(CLOCK_DRILLS[p.drill].title)}</button></div>` : ''}
     </section>
-  </div>`;
+  </div>
+  ${streakHTML()}${eveningsHTML()}`;
+}
+
+const pct = x => `${Math.round(x * 100)}%`;
+/** "5 of 16": the points (wins plus half-draws) over a bucket's games. */
+const ofText = b => `${Math.round(b.score * b.n * 2) / 2} of ${b.n}`;
+/** Counts alone under 10 games; the percentage joins from 10 on. */
+const bucketText = b => (b.n >= 10 ? `${ofText(b)} · ${pct(b.score)}` : ofText(b));
+const sideText = b => (b.n >= 10 ? pct(b.score) : ofText(b));
+const tile = (value, label, small = '') =>
+  `<div class="metric"><strong>${esc(value)}</strong><span>${esc(label)}</span>${small ? `<small class="muted">${esc(small)}</small>` : ''}</div>`;
+/** A bucket against its complement, or "–" with the minimum it needs. */
+const bucketTile = (b, other, label, otherLabel) =>
+  b.n >= MIN_BUCKET
+    ? tile(bucketText(b), label, other.n ? `${otherLabel} ${sideText(other)}` : '')
+    : tile('–', label, `needs ${MIN_BUCKET} games`);
+
+/** Your streak: the last ten games, the leak's share of the losses read, and the longest loss run. Streak mode only. */
+function streakHTML() {
+  const s = app.state;
+  if (!streakMode(s)) return '';
+  const d = diagnoseStreak(s);
+  const profile = tiltProfile(s.ledger || []);
+  const points = Math.round((d.score10 || 0) * d.games10 * 2) / 2;
+  const leakTile = d.leak
+    ? tile(`${d.counts[d.leak]} of ${d.counted}`, d.label || LEAKS[d.leak].label, `${d.losses.length} losses read`)
+    : tile('–', `the leak appears at ${MIN_COUNTED} losses`, `${d.counted} of ${d.losses.length} losses classified`);
+  const notes = [d.habit ? `Habit: ${d.habit}` : '', s.streak ? `Since ${formatDate(s.streak.since)}.` : ''].filter(Boolean);
+  return `<section class="panel" aria-labelledby="streak-title">
+    <h2 id="streak-title">Your streak <span class="h2-note">last 10 games in ${esc(d.control || '')}</span></h2>
+    <div class="metrics counts">
+      ${tile(`${points} of ${d.games10}`, 'Last 10 games', `${d.lost10} lost`)}
+      ${leakTile}
+      ${tile(String(profile.runs.longest14), 'Longest loss run · 14 days', `current run ${profile.runs.current}`)}
+    </div>
+    ${notes.length ? `<p class="small">${esc(notes.join(' '))}</p>` : ''}
+  </section>`;
+}
+
+/** Your evenings: games straight after a loss and late in a sitting against the rest, the loss runs, the rule and the sittings. From 10 ledger rows. */
+function eveningsHTML() {
+  const s = app.state;
+  const ledger = s.ledger || [];
+  if (ledger.length < 10) return '';
+  const now = Date.now();
+  const profile = tiltProfile(ledger, { now });
+  const recent = sittings(ledger).filter(x => x.end >= now - 14 * DAY);
+  const games = recent.reduce((a, x) => a + x.games.length, 0);
+  const stop = sinceStop(s, now);
+  const lines = [
+    `${ruleLine(profile)} (${profile.rule.label.toLowerCase()}).`,
+    stop ? stop.text : '',
+    recent.length ? `Sittings: ${(games / recent.length).toFixed(1)} games on average, 14 days.` : 'Sittings: 0 in the last 14 days.',
+    `Lost on time: ${profile.flagged.onTime} of ${profile.flagged.losses} losses.`,
+  ].filter(Boolean);
+  return `<section class="panel" aria-labelledby="evenings-title">
+    <h2 id="evenings-title">Your evenings <span class="h2-note">${profile.games} games · last 42 days</span></h2>
+    <div class="metrics counts">
+      ${bucketTile(profile.afterLoss.quick, profile.afterLoss.rest, 'Straight after a loss', 'other games')}
+      ${bucketTile(profile.deep.late, profile.deep.early, 'Games 5+ in a sitting', 'games 1–4')}
+      ${tile(String(profile.runs.longest14), 'Longest loss run', 'last 14 days')}
+    </div>
+    <p class="small">${esc(lines.join(' '))}</p>
+  </section>`;
+}
+
+/** Safe or hanging?: accuracy and median time over the last 50 positions against the 50 before. Empty without a run. */
+function safeLineHTML() {
+  const st = safeStats(app.state);
+  if (!st.items) return '';
+  const time = st.medianMs !== null ? ` in ${(st.medianMs / 1000).toFixed(1)} s` : '';
+  const was = st.before.items ? ` (was ${st.before.accuracy}% over the ${st.before.items} before)` : '';
+  return `<p class="small">Safe or hanging: ${st.accuracy}%${time} over the last ${plural(st.items, 'position')}${was}.</p>`;
+}
+
+/** Your clock in the app: clocked practice games, replays on the real clock and Same-clock runs. Each line waits for its data. */
+function clockLinesHTML() {
+  const s = app.state;
+  const lines = [];
+  const clocked = (s.games || []).filter(g => typeof g.tc === 'string');
+  if (clocked.length) {
+    const n = clocked.length;
+    const counts = {};
+    for (const g of clocked) counts[g.tc] = (counts[g.tc] || 0) + 1;
+    const [base, inc] = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])[0][0]
+      .split('+')
+      .map(Number);
+    const rushed = Math.ceil(thresholds({ base: base || 300, inc: inc || 0 }).rushed);
+    const avg = key => (clocked.reduce((a, g) => a + (g[key] || 0), 0) / n).toFixed(1);
+    const flagged = clocked.reduce((a, g) => a + (g.fl || 0), 0);
+    lines.push(
+      `Practice on the clock: ${plural(n, 'game')}, ${avg('b')} blunders a game, ${avg('f')} in under ${rushed} seconds, flagged ${flagged}.`,
+    );
+  }
+  const replays = Object.values(s.replays || {}).filter(r => r && (r.left !== undefined || r.flagged !== undefined));
+  if (replays.length) {
+    const converted = replays.filter(r => r.success).length;
+    const onTime = replays.reduce((a, r) => a + (r.flagged || 0), 0);
+    lines.push(`Play it again on the real clock: ${converted} of ${replays.length} converted, ${onTime} lost on time.`);
+  }
+  const ps = pressureStats(s);
+  if (ps.tries > 0) {
+    const rate = ps.tries >= 10 ? ` (${ps.rate}%)` : '';
+    lines.push(
+      `Under your real clock: ${ps.inTime} of ${ps.tries} in time${rate}; first attempts ${ps.first.inTime} of ${ps.first.tries}.`,
+    );
+  }
+  return lines.map(l => `<p class="small">${esc(l)}</p>`).join('');
 }
