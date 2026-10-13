@@ -63,7 +63,7 @@ test('a version 1 backup migrates without losing progress', () => {
 });
 
 test('invalid data is rejected', () => {
-  assert.throws(() => parseState('{"version":9}'));
+  assert.throws(() => parseState(`{"version":${CURRENT_VERSION + 1}}`));
   assert.throws(() => parseState('not json'));
   const bad = defaults();
   bad.mistakes.push({ id: 'mx', fen: '8/8/8/8/8/8/8/8 w - - 0 1', line: ['e2e4'] });

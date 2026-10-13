@@ -12,6 +12,7 @@ import { createMistake } from './mistakes.js';
 import { readClocks, parseTimeControl } from './clocks.js';
 import { identifyOpening } from './openings.js';
 import { MAX_REVIEWS } from './state.js';
+import { gameKey } from './sync.js';
 
 export const MAX_PLIES = 200;
 export const MATE_EVAL = 10000;
@@ -73,6 +74,7 @@ export async function analyseGame(
   const review = {
     id: 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
     key,
+    gameKey: gameKey(pgn), // links the review to its ledger row
     created: Date.now(),
     white: d.white,
     black: d.black,
@@ -123,11 +125,13 @@ export async function analyseGame(
       const sf = await search(m.before);
       if (!sf) break;
       if (!sf.best || sf.best === moveToUci(m)) continue;
-      const mark = { ply: i, cls, loss: Math.round(loss), best: sf.best, bestSan: playUci(new Chess(m.before), sf.best).san };
+      const mark = { ply: i, cls, loss: Math.round(loss), best: sf.best, bestSan: playUci(new Chess(m.before), sf.best).san, refute: null };
       const afterGame = new Chess(m.after);
       if (isTrainableMistake(toMover(before, m.color), toMover(after, opposite(m.color)))) {
         const afterSf = afterGame.isGameOver() ? null : await search(m.after);
         if (afterSf === null && !afterGame.isGameOver()) break;
+        // The opponent's punishment, for the Safe or hanging? drill.
+        mark.refute = afterSf?.best ?? null;
         const mistake = createMistake({
           fen: m.before,
           played: m.san,
@@ -172,7 +176,14 @@ export async function analyseGame(
       const loss = winPercentLoss(before.score, after.score);
       const cls = classifyLoss(loss);
       if (cls === 'good') continue;
-      const mark = { ply: i, cls, loss: Math.round(loss), best: before.best, bestSan: playUci(new Chess(m.before), before.best).san };
+      const mark = {
+        ply: i,
+        cls,
+        loss: Math.round(loss),
+        best: before.best,
+        bestSan: playUci(new Chess(m.before), before.best).san,
+        refute: after.best ?? null, // the opponent's punishment, for the Safe or hanging? drill
+      };
       if (isTrainableMistake(before.score, after.score)) {
         const mistake = createMistake({
           fen: m.before,

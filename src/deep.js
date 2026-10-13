@@ -53,6 +53,8 @@ export function applyDeepResult({ review, mark, mistake, record, fen, before, af
     mark.loss = Math.round(loss);
     mark.cls = classifyLoss(loss);
   }
+  // The deeper search's reply is the better refutation.
+  mark.refute = after?.best ?? mark.refute ?? null;
   if (before.best && before.best !== mark.best) {
     mark.best = before.best;
     mark.bestSan = playUci(new Chess(fen), before.best).san;

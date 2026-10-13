@@ -10,10 +10,11 @@ import { BOARD_THEMES, PIECE_SETS, DEFAULT_APPEARANCE } from './appearance.js';
 import { DEFAULT_SYNC, CONTROLS } from './sync.js';
 import { RATING_PERFS } from './ratings.js';
 import { SKILLS } from '../data/curriculum.js';
+import { validateLedger } from './ledger.js';
 
 export const STORAGE_KEY = 'rankup-v1'; // Kept for continuity; the version lives inside.
 export const RECOVERY_PREFIX = 'rankup-recovery-';
-export const CURRENT_VERSION = 8;
+export const CURRENT_VERSION = 9;
 export const MAX_GAMES = 50;
 export const MAX_REVIEWS = 20;
 export const MAX_LOG = 4000;
@@ -40,8 +41,23 @@ export function defaults() {
     log: [], // one row per finished exercise: { d: date, k: kind, t: theme or drill, c: 1 clean | 0 }
     plan: null, // this week's plan; see plan.js
     endgames: {}, // drill id -> { tries, wins, best }
-    calc: { visual: emptyDrillStats(), checks: emptyDrillStats(), assess: emptyDrillStats() },
-    settings: { ...DEFAULT_APPEARANCE, sound: true, haptics: true, autoLevel: true, candidates: false, perf: 'auto', colour: 'r' },
+    calc: {
+      visual: emptyDrillStats(),
+      checks: emptyDrillStats(),
+      assess: emptyDrillStats(),
+      safe: emptyDrillStats(), // Safe or hanging? runs: last: [{ d, n, hit, miss, fa, slow, ms }]
+      real: emptyDrillStats(), // Same clock runs: last: [{ d, n, inTime, first, firstInTime }]
+    },
+    settings: {
+      ...DEFAULT_APPEARANCE,
+      sound: true,
+      haptics: true,
+      autoLevel: true,
+      candidates: false,
+      perf: 'auto',
+      colour: 'r',
+      clock: false, // a real clock in free practice games
+    },
     // Added in version 4.
     sync: DEFAULT_SYNC(), // automatic import of your online games
     games: [], // finished practice games: { d: date, level, r: 1 win | 0.5 draw | 0 loss }
@@ -58,6 +74,10 @@ export function defaults() {
     // Added in version 7.
     replays: {}, // "reviewId:ply" -> { tries, success, last }: positions played again; see replay.js
     rep: {}, // "rep:<colour>:<position>" -> spaced-repetition record for repertoire moves
+    // Added in version 9.
+    ledger: [], // every fetched online game, reviewed or not; see ledger.js
+    stop: { since: null, resets: [] }, // the stop line: when its rule first showed, and reset times (ms)
+    streak: null, // the losing streak being worked on: { since, leak, count, counted }
   };
 }
 
@@ -174,6 +194,20 @@ export const MIGRATIONS = [
     },
   },
   {
+    from: 8,
+    run(s) {
+      // 5.0: the game ledger, the stop line, the streak, two drills and the practice clock.
+      return {
+        ...s,
+        ledger: Array.isArray(s.ledger) ? s.ledger : [],
+        stop: { since: null, resets: [] },
+        streak: null,
+        calc: { ...s.calc, safe: emptyDrillStats(), real: emptyDrillStats() },
+        settings: { ...s.settings, clock: false },
+      };
+    },
+  },
+  {
     from: 4,
     run(s) {
       return {
@@ -211,6 +245,8 @@ export function migrate(input) {
 }
 
 const isDate = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
+/** The streak leaks the planner can work on; the full table lives in leak.js. */
+export const LEAK_IDS = ['rushed', 'safety', 'clock', 'tilt', 'convert', 'opening', 'calc'];
 const finite = (n, min = -Infinity, max = Infinity) => Number.isFinite(n) && n >= min && n <= max;
 
 /** Check a migrated state. Returns an error message, or null when valid. */
@@ -255,6 +291,8 @@ export function validate(s) {
     if (!r || typeof r.id !== 'string' || !/^r[a-z0-9]+$/i.test(r.id) || !Array.isArray(r.moves) || !Array.isArray(r.evals))
       return 'review';
     if (typeof r.startFen !== 'string' || !Array.isArray(r.marks) || !r.marks.every(m => Number.isInteger(m?.ply))) return 'review marks';
+    if (r.gameKey !== undefined && typeof r.gameKey !== 'string') return 'review';
+    if (!r.marks.every(m => m.refute === undefined || m.refute === null || typeof m.refute === 'string')) return 'review marks';
   }
   if (!s.vision || !finite(s.vision.best, 0)) return 'vision';
   if (!s.profiles || typeof s.profiles !== 'object') return 'profiles';
@@ -265,14 +303,14 @@ export function validate(s) {
   if (s.plan !== null && (typeof s.plan !== 'object' || !isDate(s.plan.week) || !Array.isArray(s.plan.items))) return 'plan';
   if (!s.endgames || typeof s.endgames !== 'object') return 'endgames';
   for (const e of Object.values(s.endgames)) if (!finite(e?.tries, 0) || !finite(e?.wins, 0)) return 'endgame progress';
-  for (const k of ['visual', 'checks', 'assess'])
+  for (const k of ['visual', 'checks', 'assess', 'safe', 'real'])
     if (!s.calc?.[k] || !finite(s.calc[k].best, 0) || !finite(s.calc[k].runs, 0)) return 'calc';
   const st = s.settings;
   if (!st || !BOARD_THEMES[st.board] || !PIECE_SETS[st.pieces] || typeof st.sound !== 'boolean' || typeof st.haptics !== 'boolean')
     return 'settings';
   if (typeof st.autoLevel !== 'boolean' || typeof st.candidates !== 'boolean') return 'settings';
   if (!['auto', ...RATING_PERFS].includes(st.perf)) return 'settings';
-  if (!['w', 'b', 'r'].includes(st.colour)) return 'settings';
+  if (!['w', 'b', 'r'].includes(st.colour) || typeof st.clock !== 'boolean') return 'settings';
   if (!s.candidates || !finite(s.candidates.asked, 0) || !finite(s.candidates.hit, 0) || !Array.isArray(s.candidates.last))
     return 'candidates';
   if (typeof s.onboarded !== 'boolean' || ![10, 20, 30, 45, 60].includes(s.minutes)) return 'onboarding';
@@ -299,12 +337,34 @@ export function validate(s) {
   if (!sy || typeof sy.auto !== 'boolean' || typeof sy.ratedOnly !== 'boolean' || !Array.isArray(sy.controls)) return 'sync';
   if (!sy.controls.every(c => CONTROLS.includes(c)) || !finite(sy.minMoves, 0, 60) || !finite(sy.dailyCap, 1, 50)) return 'sync';
   if (!sy.last || !finite(sy.last.lichess, 0) || !finite(sy.last.chesscom, 0) || !Array.isArray(sy.seen)) return 'sync';
+  if (!finite(sy.ledgerAt, 0)) return 'sync';
   if (!s.replays || typeof s.replays !== 'object') return 'replays';
-  for (const r of Object.values(s.replays)) if (!finite(r?.tries, 0) || typeof r.success !== 'boolean') return 'replay';
+  for (const r of Object.values(s.replays)) {
+    if (!finite(r?.tries, 0) || typeof r.success !== 'boolean') return 'replay';
+    if ((r.flagged !== undefined && !finite(r.flagged, 0)) || (r.left !== undefined && r.left !== null && !finite(r.left, 0)))
+      return 'replay';
+  }
   if (!s.rep || typeof s.rep !== 'object') return 'repertoire';
   for (const r of Object.values(s.rep)) if (!finite(r?.tries, 0) || !finite(r?.due, 0)) return 'repertoire record';
   if (!Array.isArray(s.games) || s.games.length > MAX_GAMES * 2) return 'games';
-  for (const g of s.games) if (!g || !isDate(g.d) || !LEVELS.some(l => l.id === g.level) || ![0, 0.5, 1].includes(g.r)) return 'game';
+  for (const g of s.games) {
+    if (!g || !isDate(g.d) || !LEVELS.some(l => l.id === g.level) || ![0, 0.5, 1].includes(g.r)) return 'game';
+    if (
+      g.tc !== undefined &&
+      (typeof g.tc !== 'string' || !finite(g.left, 0) || ![0, 1].includes(g.fl) || !finite(g.b, 0) || !finite(g.f, 0))
+    )
+      return 'game';
+  }
+  const ledgerProblem = validateLedger(s.ledger);
+  if (ledgerProblem) return ledgerProblem;
+  const stop = s.stop;
+  if (!stop || typeof stop !== 'object' || (stop.since !== null && !isDate(stop.since))) return 'stop';
+  if (!Array.isArray(stop.resets) || stop.resets.length > 100 || !stop.resets.every(t => finite(t, 0))) return 'stop';
+  if (s.streak !== null) {
+    const st = s.streak;
+    if (!st || typeof st !== 'object' || !isDate(st.since) || !finite(st.count, 0) || !finite(st.counted, 0)) return 'streak';
+    if (st.leak !== null && !LEAK_IDS.includes(st.leak)) return 'streak';
+  }
   return null;
 }
 
@@ -397,8 +457,12 @@ export function logCandidates(state, hit, date = dateKey()) {
   if (state.candidates.last.length > 100) state.candidates.last.splice(0, state.candidates.last.length - 100);
 }
 
-export function logGame(state, { level, result, date = dateKey() }) {
-  state.games.push({ d: date, level, r: result });
+export function logGame(state, { level, result, date = dateKey(), clock = null, left = null, flagged = false, blunders = 0, fast = 0 }) {
+  // A clocked game also records the control, the time left, a flag, blunders and fast blunders.
+  const timed = clock
+    ? { tc: `${clock.base}+${clock.inc}`, left: Math.max(0, Math.round(left ?? 0)), fl: flagged ? 1 : 0, b: blunders, f: fast }
+    : {};
+  state.games.push({ d: date, level, r: result, ...timed });
   if (state.games.length > MAX_GAMES) state.games.splice(0, state.games.length - MAX_GAMES);
 }
 

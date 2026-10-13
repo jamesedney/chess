@@ -275,7 +275,7 @@ test('planner: a clock drill for a clock habit, a game to play again, and repert
 });
 
 test('state v8: the default walnut board becomes grey, other choices stay', () => {
-  assert.equal(CURRENT_VERSION, 8);
+  assert.ok(CURRENT_VERSION >= 8);
   const v7 = s => ({ ...defaults(), version: 7, settings: { ...defaults().settings, board: s } });
   assert.equal(migrate(v7('walnut')).settings.board, 'grey');
   assert.equal(migrate(v7('ocean')).settings.board, 'ocean');

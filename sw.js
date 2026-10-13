@@ -56,6 +56,7 @@ const FILES = [
   './src/repertoire.js',
   './src/timeprofile.js',
   './src/evidence.js',
+  './src/ledger.js',
   './src/pages/today.js',
   './src/maia.js',
   './src/maia-core.js',

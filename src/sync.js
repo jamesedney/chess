@@ -14,12 +14,18 @@ export const DEFAULT_SYNC = () => ({
   last: { lichess: 0, chesscom: 0 },
   seen: [],
   today: { d: '', n: 0 },
+  ledgerAt: 0, // when the game ledger was first filled (ms); 0 until the first sync after 5.0
 });
 const FIRST_SYNC_DAYS = 7;
 const MAX_SEEN = 300;
+/** The ledger's first fill reaches back this far, this many games; later syncs fetch SYNC_MAX. */
+export const LEDGER_DAYS = 60;
+export const LEDGER_MAX = 200;
+export const SYNC_MAX = 60;
+const DAY = 86400000;
 
 /** Lichess games export for one user, newest first, filtered server-side where it can be. */
-export function lichessUrl(username, sync, since, max = 20) {
+export function lichessUrl(username, sync, since, max = SYNC_MAX) {
   const perf = sync.controls.includes('bullet') ? [...sync.controls, 'ultraBullet'] : sync.controls;
   const q = new URLSearchParams({
     since: String(since),
@@ -83,18 +89,38 @@ export function acceptGame(pgn, usernames, sync, { rated = null, control = null 
   return { ok: true, colour };
 }
 
+/** The start of a game from its UTCDate/UTCTime headers, or null. */
+function startMs(pgn) {
+  const h = readHeaders(pgn);
+  const d = /^(\d{4})\.(\d{2})\.(\d{2})$/.exec(h.UTCDate || '');
+  const t = /^(\d{1,2}):(\d{2}):(\d{2})/.exec(h.UTCTime || '');
+  return d && t ? Date.UTC(+d[1], +d[2] - 1, +d[3], +t[1], +t[2], +t[3]) : null;
+}
+
+/**
+ * Fetch games from Lichess. The first sync after 5.0 reaches back LEDGER_DAYS
+ * to fill the game ledger; games before the normal window are returned with
+ * `fresh: false` so they feed the ledger but are not queued for review.
+ */
 export async function fetchLichessNew(username, sync, { fetchImpl = fetch, now = Date.now() } = {}) {
-  const since = sync.last.lichess || now - FIRST_SYNC_DAYS * 86400000;
+  const normalSince = sync.last.lichess || now - FIRST_SYNC_DAYS * DAY;
+  const backfill = !sync.ledgerAt;
+  const since = backfill ? Math.min(normalSince, now - LEDGER_DAYS * DAY) : normalSince;
   let res;
   try {
-    res = await fetchImpl(lichessUrl(username, sync, since), { headers: { Accept: 'application/x-chess-pgn' } });
+    res = await fetchImpl(lichessUrl(username, sync, since, backfill ? LEDGER_MAX : SYNC_MAX), {
+      headers: { Accept: 'application/x-chess-pgn' },
+    });
   } catch {
     throw new Error('Could not reach lichess.org.');
   }
   if (res.status === 404) throw new Error(`No Lichess account called ${username}.`);
   if (res.status === 429) throw new Error('Lichess is rate-limiting requests. It will retry later.');
   if (!res.ok) throw new Error(`Lichess returned an error (${res.status}).`);
-  return splitPgn(await res.text()).map(pgn => ({ pgn, source: 'lichess' }));
+  return splitPgn(await res.text()).map(pgn => {
+    const start = startMs(pgn);
+    return { pgn, source: 'lichess', fresh: start === null || start >= normalSince };
+  });
 }
 
 export async function fetchChessComNew(username, sync, { fetchImpl = fetch, now = Date.now() } = {}) {
@@ -113,10 +139,21 @@ export async function fetchChessComNew(username, sync, { fetchImpl = fetch, now 
   for (const url of archives) {
     const r = await fetchImpl(url);
     if (!r.ok) continue;
+    // Every game in the two archives feeds the ledger; only games after `since` are fresh.
     for (const g of ((await r.json()).games || []).reverse()) {
-      if (!g.pgn || g.rules !== 'chess' || (g.end_time || 0) * 1000 <= since) continue;
+      if (!g.pgn || g.rules !== 'chess') continue;
       const control = g.time_class === 'daily' ? 'correspondence' : g.time_class || null;
-      out.push({ pgn: g.pgn, source: 'chesscom', rated: !!g.rated, control, ended: g.end_time * 1000 });
+      const ended = (g.end_time || 0) * 1000;
+      out.push({
+        pgn: g.pgn,
+        source: 'chesscom',
+        rated: !!g.rated,
+        control,
+        ended: ended || null,
+        fresh: ended > since,
+        results: { w: g.white?.result ?? null, b: g.black?.result ?? null },
+        ratings: { w: g.white?.rating ?? null, b: g.black?.rating ?? null },
+      });
     }
   }
   return out;
@@ -131,6 +168,8 @@ export function selectNew(fetched, { usernames, sync, source, now = Date.now() }
   if (sync.today.d !== today) sync.today = { d: today, n: 0 };
   const chosen = [];
   for (const g of fetched) {
+    // Ledger-only games (before the review window) are neither queued nor marked seen.
+    if (g.fresh === false) continue;
     const key = gameKey(g.pgn);
     if (sync.seen.includes(key)) continue;
     const verdict = acceptGame(g.pgn, usernames, sync, { rated: g.rated ?? null, control: g.control ?? null });

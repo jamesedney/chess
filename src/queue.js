@@ -11,17 +11,21 @@ import { scheduleDeepAnalysis } from './deep.js';
 import { mergeNewGames } from './session.js';
 import { syncRatings } from './rating-sync.js';
 import { needsDebrief } from './debrief.js';
+import { ledgerFrom, recordLedger } from './ledger.js';
 
 const KEY = 'rankup-queue';
 const MAX_QUEUE = 12;
 const SYNC_GAP_MS = 10 * 60000; // do not poll the sites more often than this
+const FOREGROUND_GAP_MS = 60000; // opening the app checks for a game you just finished, at most once a minute
 
 let queue = load();
 let current = null; // { item, progress }
 let running = false;
 let lastSync = 0;
+let lastSuccess = 0; // the last sync that reached every linked site
 let syncing = false;
 const listeners = new Set();
+const ledgerListeners = new Set();
 // Games reviewed since the queue last emptied: reported once, together.
 let batch = { games: 0, found: 0, last: null };
 
@@ -48,6 +52,17 @@ function notify() {
 export function subscribe(fn) {
   listeners.add(fn);
   return () => listeners.delete(fn);
+}
+
+/** Be told when a sync added games to the ledger (Today redraws the stop line). */
+export function onLedgerChange(fn) {
+  ledgerListeners.add(fn);
+  return () => ledgerListeners.delete(fn);
+}
+
+/** When the ledger was last brought up to date with every linked site, in ms; 0 if never. */
+export function lastSyncAt() {
+  return lastSuccess;
 }
 
 export function snapshot() {
@@ -156,11 +171,11 @@ function reportBatch() {
  * Fetch new games for the saved usernames and queue them.
  * Returns { added, errors } and never throws.
  */
-export async function syncNow({ force = false, fetchImpl = fetch, now = Date.now() } = {}) {
+export async function syncNow({ force = false, gap = SYNC_GAP_MS, fetchImpl = fetch, now = Date.now() } = {}) {
   const s = app.state;
   const names = [s.profiles.lichess, s.profiles.chesscom].filter(Boolean);
   if (!names.length || syncing) return { added: 0, errors: [] };
-  if (!force && now - lastSync < SYNC_GAP_MS) return { added: 0, errors: [] };
+  if (!force && now - lastSync < gap) return { added: 0, errors: [] };
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return { added: 0, errors: ['offline'] };
   syncing = true;
   lastSync = now;
@@ -171,15 +186,22 @@ export async function syncNow({ force = false, fetchImpl = fetch, now = Date.now
   const jobs = [];
   if (s.profiles.lichess) jobs.push(['lichess', () => fetchLichessNew(s.profiles.lichess, s.sync, { fetchImpl, now })]);
   if (s.profiles.chesscom) jobs.push(['chesscom', () => fetchChessComNew(s.profiles.chesscom, s.sync, { fetchImpl, now })]);
+  let ledgered = 0;
   for (const [source, run] of jobs) {
     try {
       const fetched = await run();
+      // Every finished game goes in the ledger, reviewed or not.
+      s.ledger ||= [];
+      ledgered += recordLedger(s.ledger, ledgerFrom(fetched, { usernames: names, known: new Set(s.ledger.map(r => r.k)) }));
       items.push(...selectNew(fetched, { usernames: names, sync: s.sync, source, now }));
     } catch (e) {
       errors.push(e.message);
     }
   }
+  if (!s.sync.ledgerAt && !errors.length) s.sync.ledgerAt = now;
+  if (!errors.length) lastSuccess = now;
   app.save();
+  if (ledgered) for (const fn of ledgerListeners) fn();
   const added = enqueue(items);
   // A new game means a new rating: read it now rather than at the next check.
   if (items.length) syncRatings({ force: true, fetchImpl, now }).catch(() => {});
@@ -192,7 +214,7 @@ export async function syncNow({ force = false, fetchImpl = fetch, now = Date.now
 export function startAutoSync() {
   if (!app.state.sync?.auto) return;
   const go = () => {
-    if (app.state.sync?.auto) syncNow().catch(() => {});
+    if (app.state.sync?.auto) syncNow({ gap: FOREGROUND_GAP_MS }).catch(() => {});
   };
   setTimeout(go, 2500);
   window.addEventListener('online', go);
