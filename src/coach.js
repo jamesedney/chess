@@ -6,6 +6,7 @@ import { timeSummary } from './clocks.js';
 import { dateKey } from './state.js';
 import { THEMES } from './themes.js';
 import { calibration } from './assess.js';
+import { streakMode, diagnoseStreak } from './leak.js';
 
 const DAY = 86400000;
 export const WINDOW_DAYS = 90;
@@ -79,6 +80,11 @@ export function diagnose(state, now = Date.now()) {
       );
     if (weakPhase && weakPhase[1] / total >= 0.4)
       findings.push(`${Math.round((weakPhase[1] / total) * 100)}% of your mistakes happen in the ${weakPhase[0]}.`);
+  }
+  // In a losing streak the leak that started your losses comes first.
+  if (streakMode(state, now)) {
+    const d = diagnoseStreak(state, { now });
+    if (d.leak) findings.unshift(d.line);
   }
   return {
     confidence,

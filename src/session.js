@@ -1,10 +1,11 @@
 // Runs today's session: starts each block on the right page, notices when it
 // is done, and moves on. The plan itself comes from program.js.
 import { app } from './app-context.js';
-import { planSession, baseline, blockDone } from './program.js';
+import { planSession, baseline, blockDone, resetBlock } from './program.js';
 import { refreshMastery } from './curriculum.js';
 import { dateKey } from './state.js';
 import { goalStatus } from './progress-model.js';
+import { stopState, recordReset } from './tilt.js';
 
 const listeners = new Set();
 
@@ -47,6 +48,8 @@ function route(block) {
     case 'debrief':
       return ['review', block.params];
     case 'clock':
+    case 'safe':
+    case 'reset':
       return ['train', block.params];
     case 'replay':
       return ['play', block.params];
@@ -75,6 +78,55 @@ export function mergeNewGames() {
   plan.blocks.splice(at < 0 ? plan.blocks.length : at, 0, review);
   app.save();
   changed();
+}
+
+/** The reset block still to do in a plan, or -1. */
+const openReset = plan => plan.blocks.findIndex(b => b.type === 'reset' && (b.status === 'todo' || b.status === 'active'));
+
+/**
+ * Put the four-minute reset before the next thing to do. On a `tonight` day
+ * (two losses in a row within three hours) the game block is skipped too.
+ * Returns the reset block's index.
+ */
+function insertReset(plan, stop) {
+  const block = { ...resetBlock(app.state, Date.now(), stop), status: 'todo' };
+  if (plan.blocks.some(b => b.id === block.id)) block.id = `reset-${plan.blocks.length}`;
+  const at = plan.blocks.findIndex(b => b.status === 'todo');
+  const i = at < 0 ? plan.blocks.length : at;
+  plan.blocks.splice(i, 0, block);
+  if (stop.tonight) for (const b of plan.blocks) if (b.type === 'game' && b.status === 'todo') b.status = 'skipped';
+  app.save();
+  changed();
+  return i;
+}
+
+/**
+ * The stop line reached today's plan: after two losses in a row (a sync can
+ * bring the news after the plan was made) a reset block goes before the next
+ * thing to do and the game block is skipped. Nothing changes otherwise, or
+ * when the plan already holds a reset block. Wired to the ledger by main.js.
+ */
+export function mergeStop() {
+  const s = app.state;
+  const plan = s.session;
+  if (!plan || plan.date !== dateKey()) return;
+  if (plan.blocks.some(b => b.type === 'reset')) return;
+  const stop = stopState(s);
+  if (!stop.tonight) return;
+  insertReset(plan, stop);
+}
+
+/**
+ * The STOP card's button: start the reset now. The plan's open reset block
+ * runs when it has one; otherwise one is inserted, whether or not two losses
+ * in a row have shaped tonight.
+ */
+export function startReset() {
+  const s = todaysSession();
+  const stop = stopState(app.state);
+  let i = openReset(s);
+  if (i < 0) i = insertReset(s, stop);
+  startBlock(i);
 }
 
 /** Start a block by index: remember the counters it is measured from, then open it. */
@@ -113,6 +165,7 @@ export function checkSession({ settle = false } = {}) {
   if (!block.complete && !blockDone(app.state, block)) return false;
   const fresh = !block.complete;
   block.complete = true;
+  if (fresh && block.type === 'reset') recordReset(app.state);
   if (settle) block.status = 'done';
   if (fresh || settle) {
     app.save();

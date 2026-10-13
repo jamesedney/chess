@@ -13,14 +13,23 @@ import * as progress from './pages/progress.js';
 import * as drills from './pages/drills.js';
 import * as coach from './pages/coach.js';
 import * as today from './pages/today.js';
-import { activeBlock, continueSession, pauseSession, checkSession, todaysSession, sessionProgress, onSessionChange } from './session.js';
+import {
+  activeBlock,
+  continueSession,
+  pauseSession,
+  checkSession,
+  todaysSession,
+  sessionProgress,
+  onSessionChange,
+  mergeStop,
+} from './session.js';
 import { blockDone } from './program.js';
 import { refreshMastery } from './curriculum.js';
 import { syncRatings, startRatingSync, onRatingsChange } from './rating-sync.js';
 import { RATING_PERFS } from './ratings.js';
 import { goalStatus, PUZZLE_PERF } from './progress-model.js';
 import { scheduleDeepAnalysis } from './deep.js';
-import { startAutoSync, syncNow } from './queue.js';
+import { startAutoSync, syncNow, onLedgerChange } from './queue.js';
 import { CONTROLS } from './sync.js';
 
 export const VERSION = '4.1.4';
@@ -508,6 +517,11 @@ function boot() {
   startAutoSync();
   // Ratings follow the linked accounts, so the goal tracks itself.
   onRatingsChange(() => today.refresh());
+  // A sync that adds games: the stop line may have reached today's plan.
+  onLedgerChange(() => {
+    mergeStop();
+    today.refresh();
+  });
   startRatingSync();
   // A game reviewed in the background can add to today's plan while it is on screen.
   onSessionChange(() => app.page === 'today' && today.refresh());
