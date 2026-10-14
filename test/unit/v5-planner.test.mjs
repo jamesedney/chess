@@ -348,7 +348,7 @@ test('F1 evidence: the leak row counts the losses that began with the leak, befo
   assert.equal(leak.before, 1);
   assert.equal(leak.now, 0.25);
   assert.equal(leak.verdict, 'better');
-  assert.equal(leak.text, '100% → 25%.');
+  assert.equal(leak.text, '4 of 4 → 1 of 4.');
   assert.deepEqual([ev.recent.ledger.losses, ev.before.ledger.losses], [4, 4]);
   // Without a leak the row is unknown.
   const none = evidence(stateWith({ ledger }), NOW);

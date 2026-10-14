@@ -227,7 +227,7 @@ const METRIC = {
   score: 'Score',
   afterLoss: 'After a loss',
   run: 'Loss run',
-  leak: 'Leak share',
+  leak: 'Losses that began with the leak',
   fast: 'Fast blunders',
 };
 const PERCENT = new Set(['convert', 'score', 'afterLoss', 'leak']);
@@ -244,14 +244,14 @@ function evidenceHTML(inStreak) {
   if (!known.length) return '';
   const rows = [...known, ...ordered.filter(r => r.verdict === 'unknown' && r.now !== null)].slice(0, 3);
   const was = r => `was ${metricValue(r, r.before)}${r.id === 'score' && ev.scoreSource === 'ledger' ? ' · all games' : ''}`;
+  // The leak tile counts losses and names the mistake, in no colour: fewer is the only good news.
+  const tile = r =>
+    r.id === 'leak' && r.counts
+      ? `<div class="metric count"><strong>${r.counts.now.hit} of ${r.counts.now.of}</strong><span>${esc(r.label.replace(/^Losses that /, 'losses '))}</span><small class="muted">was ${r.counts.before.hit} of ${r.counts.before.of}</small></div>`
+      : `<div class="metric ${r.verdict}"><strong>${metricValue(r, r.now)}</strong><span>${esc(METRIC[r.id])}</span><small class="muted">${esc(was(r))}</small></div>`;
   return `<section aria-labelledby="working-head">
     <div class="section-rule"><span id="working-head">Is it working?</span><span>Last 2 weeks vs 6 before · <a href="#progress">All</a></span></div>
-    <div class="metrics">${rows
-      .map(
-        r =>
-          `<div class="metric ${r.verdict}"><strong>${metricValue(r, r.now)}</strong><span>${esc(METRIC[r.id])}</span><small class="muted">${esc(was(r))}</small></div>`,
-      )
-      .join('')}</div>
+    <div class="metrics">${rows.map(tile).join('')}</div>
   </section>`;
 }
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.0.1
+
+- The leak tile says the plain thing: "6 of 13 losses began with a piece hung in one move, was 4 of 9". A count of losses, never coloured: fewer is the only good news.
+
 ## 5.0.0
 
 The losing-streak release. Rankup now reads every game you play, names the one thing that started most of your recent losses, trains it on your own positions in five seconds a go and on the clock you really had, tells you tonight when to stop, and shows you in two weeks whether the losses that leak caused went down. Every number comes with its count; nothing speaks below its minimum.

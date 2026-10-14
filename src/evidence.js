@@ -10,7 +10,7 @@ import { timeProfile } from './timeprofile.js';
 import { WINNING } from './replay.js';
 import { mainControl, rowsBetween, score, longestRun } from './ledger.js';
 import { annotate } from './tilt.js';
-import { streakMode, diagnoseStreak, classifyLoss, reviewFor } from './leak.js';
+import { streakMode, diagnoseStreak, classifyLoss, reviewFor, LEAKS } from './leak.js';
 
 const DAY = 86400000;
 export const RECENT_DAYS = 14;
@@ -45,7 +45,8 @@ function ledgerFacts(state, now) {
   const ledger = state.ledger || [];
   const control = mainControl(ledger, { now });
   const ratedOnly = !!state.sync?.ratedOnly;
-  const leak = diagnoseStreak(state, { now }).leak;
+  const d = diagnoseStreak(state, { now });
+  const leak = d.leak;
   const rows = annotate(ledger);
   const losses = rows
     .filter(r => r.r === 0 && (!control || r.tc === control))
@@ -55,6 +56,7 @@ function ledgerFacts(state, now) {
     main: rows.filter(r => r.tc === control && (!ratedOnly || r.rated)),
     quick: rows.filter(r => r.quick),
     leak,
+    leakLabel: leak ? d.label || LEAKS[leak].label : null,
     losses: losses.filter(l => l.chess || l.tilt).map(l => ({ t: l.t, hit: leak === 'tilt' ? l.tilt : !!leak && l.chess === leak })),
   };
 }
@@ -88,6 +90,7 @@ function windowStats(state, games, lf, from, to) {
     afterLoss: score(quick),
     run: rows.length ? longestRun(rows) : null,
     leak: lf.leak && losses.length ? losses.filter(l => l.hit).length / losses.length : null,
+    leakCount: { hit: losses.filter(l => l.hit).length, of: losses.length },
     ledger: { rows: rows.length, main: main.length, quick: quick.length, losses: losses.length },
     training: {
       puzzles: log.filter(e => e.k === 'p').length,
@@ -170,9 +173,21 @@ export function evidence(state, now = Date.now()) {
       verdict === 'unknown'
         ? 'Not enough games yet.'
         : `${fmt(b, m.percent)} → ${fmt(a, m.percent)}${verdict === 'steady' ? ', within normal variation' : ''}.`;
-    // The fast row names the threshold your practice clock counts with.
-    const label = m.id === 'fast' ? `Blunders played in ${rushedText(userControl(state.ledger || [], { now }))}, per game` : m.label;
-    return { id: m.id, label, now: a, before: b, verdict, text };
+    // The fast row names the threshold your practice clock counts with; the
+    // leak row names the mistake and counts losses, because a share of your
+    // losses is never good news, only smaller or larger.
+    let label = m.label;
+    let shown = text;
+    let counts = null;
+    if (m.id === 'fast') label = `Blunders played in ${rushedText(userControl(state.ledger || [], { now }))}, per game`;
+    if (m.id === 'leak') {
+      if (lf.leakLabel) label = `Losses that began with ${lf.leakLabel}`;
+      counts = { now: recent.leakCount, before: before.leakCount };
+      const of = c => `${c.hit} of ${c.of}`;
+      if (verdict !== 'unknown')
+        shown = `${of(before.leakCount)} → ${of(recent.leakCount)}${verdict === 'steady' ? ', within normal variation' : ''}.`;
+    }
+    return { id: m.id, label, now: a, before: b, verdict, text: shown, counts };
   });
   const headline = rows.find(r => r.verdict === 'better') || rows.find(r => r.verdict === 'worse') || null;
   return { recent, before, rows, headline, scoreSource, leak: lf.leak };

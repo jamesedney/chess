@@ -187,7 +187,7 @@ test('one leak: Today names the streak, its leak and the habit, and the plan dri
   // losses are reviewed and the evenings' quick losses count as tilt, so both
   // windows hold enough classified losses for the leak row to be known.
   const tiles = page.locator('section:has(#working-head) .metric');
-  await expect(tiles.first()).toContainText('Leak share');
+  await expect(tiles.first()).toContainText(/\d+ of \d+losses began with a piece hung in one move/);
   const s = await saved(page);
   // Six reviewed losses (a piece hung) and two evening losses queued straight after a loss: 6 of 8.
   // The background analysis may re-read a review meanwhile, so the counts are bounded, not exact.

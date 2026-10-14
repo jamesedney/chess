@@ -32,7 +32,7 @@ import { scheduleDeepAnalysis } from './deep.js';
 import { startAutoSync, syncNow, onLedgerChange } from './queue.js';
 import { CONTROLS } from './sync.js';
 
-export const VERSION = '5.0.0';
+export const VERSION = '5.0.1';
 const PAGES = { today, train, coach, path, play, review, progress, drills };
 // Pages without their own tab light up the tab they belong to.
 const NAV_AS = { train: 'today', drills: 'today', coach: 'progress' };

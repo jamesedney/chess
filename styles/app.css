@@ -3779,3 +3779,9 @@ button.big {
   color: var(--muted);
   margin-top: 2px;
 }
+
+/* The leak tile: a count of losses, never coloured. */
+.metric.count strong {
+  color: var(--ink);
+  font-size: 26px;
+}
