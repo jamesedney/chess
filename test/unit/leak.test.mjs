@@ -56,7 +56,7 @@ function stateFor(ledger, which = {}, extra = {}) {
 test('LEAK_ORDER, LEAKS: labels, habits and blocks', () => {
   assert.deepEqual(LEAK_ORDER, ['rushed', 'safety', 'clock', 'tilt', 'convert', 'opening', 'calc']);
   assert.deepEqual(Object.keys(LEAKS), LEAK_ORDER);
-  assert.equal(LEAKS.rushed.label, 'a move played in under 5 seconds');
+  assert.equal(LEAKS.rushed.label, 'a move played in under 4.5 seconds');
   assert.equal(LEAKS.rushed.habit, 'At every capture and check, count three before you touch the piece.');
   assert.equal(LEAKS.rushed.block, 'safe');
   assert.equal(LEAKS.safety.label, 'a piece hung in one move');
@@ -79,12 +79,12 @@ test('LEAK_ORDER, LEAKS: labels, habits and blocks', () => {
   assert.equal(LEAKS.calc.block, 'pause');
 });
 
-test('rushedLabel rounds the rushed threshold of the control to whole seconds', () => {
-  assert.equal(rushedLabel(300), 'a move played in under 5 seconds'); // 4.5 s at 5+0
+test('rushedLabel names the rushed threshold of the control exactly', () => {
+  assert.equal(rushedLabel(300), 'a move played in under 4.5 seconds'); // 4.5 s at 5+0
   assert.equal(rushedLabel(180), 'a move played in under 3 seconds'); // 3 s at 3+0
   assert.equal(rushedLabel(600), 'a move played in under 9 seconds'); // 9 s at 10+0
-  assert.equal(rushedLabel(), 'a move played in under 5 seconds');
-  assert.equal(rushedLabel(null), 'a move played in under 5 seconds');
+  assert.equal(rushedLabel(), 'a move played in under 4.5 seconds');
+  assert.equal(rushedLabel(null), 'a move played in under 4.5 seconds');
 });
 
 test('fenAt: the position before a ply', () => {
@@ -539,10 +539,10 @@ test('diagnoseStreak: the rushed label uses the main control’s most common bas
   const five = rushed(300);
   assert.equal(five.leak, 'rushed');
   assert.equal(five.base, 300);
-  assert.equal(five.label, 'a move played in under 5 seconds');
+  assert.equal(five.label, 'a move played in under 4.5 seconds');
   assert.equal(
     five.line,
-    'Losing 5 of your last 5. The leak: 5 of 5 losses began with a move played in under 5 seconds. ' +
+    'Losing 5 of your last 5. The leak: 5 of 5 losses began with a move played in under 4.5 seconds. ' +
       'Habit: At every capture and check, count three before you touch the piece.',
   );
   const three = rushed(180);

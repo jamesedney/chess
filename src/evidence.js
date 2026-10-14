@@ -1,7 +1,8 @@
 // Is it working? Your recent games against the weeks before, per measure, with
 // what you trained in each window, and the one problem the planner should push
 // hardest on next. Pure functions of the state.
-import { timeSummary, moveTime } from './clocks.js';
+import { timeSummary, moveTime, rushedText } from './clocks.js';
+import { userControl } from './gameclock.js';
 import { outcome } from './openings.js';
 import { dateKey } from './state.js';
 import { habits } from './debrief.js';
@@ -136,7 +137,7 @@ export const MEASURES = [
     percent: true,
     needs: w => w.ledger.losses >= MIN_GAMES,
   },
-  { id: 'fast', label: 'Blunders played in under 4 seconds, per game', lower: true, step: 0.2, needs: w => w.clockGames >= MIN_GAMES },
+  { id: 'fast', label: 'Blunders played fast, per game', lower: true, step: 0.2, needs: w => w.clockGames >= MIN_GAMES },
 ];
 
 const fmt = (v, percent) => (v === null ? '–' : percent ? `${Math.round(v * 100)}%` : v.toFixed(1));
@@ -169,7 +170,9 @@ export function evidence(state, now = Date.now()) {
       verdict === 'unknown'
         ? 'Not enough games yet.'
         : `${fmt(b, m.percent)} → ${fmt(a, m.percent)}${verdict === 'steady' ? ', within normal variation' : ''}.`;
-    return { id: m.id, label: m.label, now: a, before: b, verdict, text };
+    // The fast row names the threshold your practice clock counts with.
+    const label = m.id === 'fast' ? `Blunders played in ${rushedText(userControl(state.ledger || [], { now }))}, per game` : m.label;
+    return { id: m.id, label, now: a, before: b, verdict, text };
   });
   const headline = rows.find(r => r.verdict === 'better') || rows.find(r => r.verdict === 'worse') || null;
   return { recent, before, rows, headline, scoreSource, leak: lf.leak };

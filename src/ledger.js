@@ -220,10 +220,10 @@ export function recordLedger(ledger, rows) {
   return pushed.filter(row => ledger.includes(row)).length;
 }
 
-/** The time-control class you play most over the last `days`, or null. */
+/** The time-control class you play most at a board over the last `days`, or null; daily games do not count. */
 export function mainControl(ledger, { now = Date.now(), days = 42 } = {}) {
   const counts = {};
-  for (const r of ledger) if (r.tc && r.t >= now - days * DAY) counts[r.tc] = (counts[r.tc] || 0) + 1;
+  for (const r of ledger) if (r.tc && r.tc !== 'correspondence' && r.t >= now - days * DAY) counts[r.tc] = (counts[r.tc] || 0) + 1;
   const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
   return best ? best[0] : null;
 }

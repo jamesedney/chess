@@ -16,7 +16,7 @@ import { streakMode, diagnoseStreak, LEAKS, MIN_COUNTED } from '../leak.js';
 import { tiltProfile, sinceStop, sittings, ruleLine, MIN_BUCKET } from '../tilt.js';
 import { safeStats } from '../safecheck.js';
 import { pressureStats } from '../pressure.js';
-import { thresholds } from '../clocks.js';
+import { rushedText } from '../clocks.js';
 
 const DAY = 86400000;
 
@@ -370,12 +370,10 @@ function clockLinesHTML() {
       .sort((a, b) => b[1] - a[1])[0][0]
       .split('+')
       .map(Number);
-    const rushed = Math.ceil(thresholds({ base: base || 300, inc: inc || 0 }).rushed);
+    const rushed = rushedText({ base: base || 300, inc: inc || 0 });
     const avg = key => (clocked.reduce((a, g) => a + (g[key] || 0), 0) / n).toFixed(1);
     const flagged = clocked.reduce((a, g) => a + (g.fl || 0), 0);
-    lines.push(
-      `Practice on the clock: ${plural(n, 'game')}, ${avg('b')} blunders a game, ${avg('f')} in under ${rushed} seconds, flagged ${flagged}.`,
-    );
+    lines.push(`Practice on the clock: ${plural(n, 'game')}, ${avg('b')} blunders a game, ${avg('f')} in ${rushed}, flagged ${flagged}.`);
   }
   const replays = Object.values(s.replays || {}).filter(r => r && (r.left !== undefined || r.flagged !== undefined));
   if (replays.length) {

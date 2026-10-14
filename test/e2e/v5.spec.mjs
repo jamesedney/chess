@@ -178,12 +178,11 @@ test('one leak: Today names the streak, its leak and the habit, and the plan dri
   await expect(streak).toContainText('Losing 7 of your last 10');
   await expect(streak).toContainText('piece hung in one move');
   await expect(streak).toContainText('Habit:');
-  // After the warm-up (Safe or hanging? too, since the games keep hanging pieces): the debrief of the newest game, then the leak's block.
+  // The debrief of the newest game, then the leak's block, which is the day's warm-up too.
   const items = page.locator('.agenda-item');
-  await expect(items.nth(0)).toContainText('Safe or hanging?');
-  await expect(items.nth(1)).toContainText('Debrief: your game against rival');
-  await expect(items.nth(2)).toContainText('Safe or hanging?');
-  await expect(items.nth(2)).toContainText('of your positions');
+  await expect(items.nth(0)).toContainText('Debrief: your game against rival');
+  await expect(items.nth(1)).toContainText('Safe or hanging?');
+  await expect(items.nth(1)).toContainText('of your positions');
   // The tiles: the leak's share leads in streak mode. Six of the seven streak
   // losses are reviewed and the evenings' quick losses count as tilt, so both
   // windows hold enough classified losses for the leak row to be known.

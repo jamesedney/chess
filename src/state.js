@@ -39,6 +39,7 @@ export function defaults() {
     profiles: { lichess: '', chesscom: '' },
     // Added in version 3.
     log: [], // one row per finished exercise: { d: date, k: kind, t: theme or drill, c: 1 clean | 0 }
+    logTotal: 0, // rows ever logged, including the ones the cap dropped
     plan: null, // this week's plan; see plan.js
     endgames: {}, // drill id -> { tries, wins, best }
     calc: {
@@ -61,6 +62,7 @@ export function defaults() {
     // Added in version 4.
     sync: DEFAULT_SYNC(), // automatic import of your online games
     games: [], // finished practice games: { d: date, level, r: 1 win | 0.5 draw | 0 loss }
+    gamesTotal: 0, // practice games ever logged
     // Added in version 5.
     candidates: { asked: 0, hit: 0, last: [] }, // candidate-move checks in practice games: { d, h: 1 | 0 }
     // Added in version 6.
@@ -200,6 +202,8 @@ export const MIGRATIONS = [
       return {
         ...s,
         ledger: Array.isArray(s.ledger) ? s.ledger : [],
+        logTotal: Array.isArray(s.log) ? s.log.length : 0,
+        gamesTotal: Array.isArray(s.games) ? s.games.length : 0,
         stop: { since: null, resets: [] },
         streak: null,
         calc: { ...s.calc, safe: emptyDrillStats(), real: emptyDrillStats() },
@@ -298,6 +302,8 @@ export function validate(s) {
   if (!s.profiles || typeof s.profiles !== 'object') return 'profiles';
   for (const m of s.mistakes) if (m.kind !== undefined && !KIND_IDS.includes(m.kind)) return 'mistake kind';
   if (!Array.isArray(s.log) || s.log.length > MAX_LOG * 2) return 'log';
+  if (s.logTotal !== undefined && !finite(s.logTotal, 0)) return 'logTotal';
+  if (s.gamesTotal !== undefined && !finite(s.gamesTotal, 0)) return 'gamesTotal';
   for (const e of s.log)
     if (!e || !isDate(e.d) || !LOG_KINDS.includes(e.k) || typeof e.t !== 'string' || ![0, 1].includes(e.c)) return 'log entry';
   if (s.plan !== null && (typeof s.plan !== 'object' || !isDate(s.plan.week) || !Array.isArray(s.plan.items))) return 'plan';
@@ -442,8 +448,14 @@ export function loadState(storage, now = Date.now()) {
   return { state, storageOK: true, recovered, restored: false };
 }
 
+/** Rows ever logged, counting the ones the cap dropped: a block's progress is measured against it. */
+export const logCount = state => Math.max(Number(state.logTotal) || 0, state.log.length);
+/** Practice games ever logged, the same way. */
+export const gameCount = state => Math.max(Number(state.gamesTotal) || 0, state.games.length);
+
 /** Append a finished exercise to the log, keeping it bounded. */
 export function logAttempt(state, { kind, theme, clean, date = dateKey() }) {
+  state.logTotal = logCount(state) + 1;
   state.log.push({ d: date, k: kind, t: String(theme || ''), c: clean ? 1 : 0 });
   if (state.log.length > MAX_LOG) state.log.splice(0, state.log.length - MAX_LOG);
 }
@@ -462,6 +474,7 @@ export function logGame(state, { level, result, date = dateKey(), clock = null, 
   const timed = clock
     ? { tc: `${clock.base}+${clock.inc}`, left: Math.max(0, Math.round(left ?? 0)), fl: flagged ? 1 : 0, b: blunders, f: fast }
     : {};
+  state.gamesTotal = gameCount(state) + 1;
   state.games.push({ d: date, level, r: result, ...timed });
   if (state.games.length > MAX_GAMES) state.games.splice(0, state.games.length - MAX_GAMES);
 }

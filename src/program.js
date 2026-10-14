@@ -5,7 +5,7 @@ import { UNITS, BANDS, OBJECTIVES } from '../data/curriculum.js';
 import { chooseUnit, currentBand, unitStatus, refresher, drillDone } from './curriculum.js';
 import { skillMap, leaks } from './skills.js';
 import { isDue } from './srs.js';
-import { dateKey } from './state.js';
+import { dateKey, logCount, gameCount } from './state.js';
 import { needsDebrief, pickMoments } from './debrief.js';
 import { nextReplay } from './replay.js';
 import { dueCards } from './repertoire.js';
@@ -155,8 +155,19 @@ export function planSession(state, { now = Date.now(), puzzles = [], goalStatus 
   const stop = stopState(state, now);
   if (stop.tonight) add(resetBlock(state, now, stop));
 
-  // 1. Warm up the eyes: Safe or hanging? when your games keep hanging pieces, else the vision sprint.
-  if (lk.perGame.safety >= SAFETY_WARMUP && safeBank) {
+  // The streak: when you are losing, the leak that started most of your losses
+  // and its habit rebuild the day; the stop line alone trains tilt.
+  const d = streakMode(state, now) ? diagnoseStreak(state, { now }) : null;
+  const leak = d?.leak || null;
+  const habit = leak ? LEAKS[leak].habit : null;
+  const rebuilt = !!leak && leak !== 'tilt';
+  const leakIsSafe = rebuilt && (leak === 'rushed' || leak === 'safety');
+
+  // 1. Warm up the eyes: Safe or hanging? when your games keep hanging pieces, else the vision
+  // sprint. When the leak block is that drill it is the warm-up: one run of the bank, not two.
+  if (leakIsSafe) {
+    // nothing: the leak block follows the debrief
+  } else if (lk.perGame.safety >= SAFETY_WARMUP && safeBank) {
     const n = safeItems(state, { limit: 10, Chess, now }).length;
     add(safeBlock('warmup', n, [], LEAKS.safety.habit, { est: 2, optional: true }));
   } else
@@ -198,13 +209,6 @@ export function planSession(state, { now = Date.now(), puzzles = [], goalStatus 
       count: game.open,
     });
   }
-
-  // The streak: when you are losing, the leak that started most of your losses
-  // and its habit rebuild the day; the stop line alone trains tilt.
-  const d = streakMode(state, now) ? diagnoseStreak(state, { now }) : null;
-  const leak = d?.leak || null;
-  const habit = leak ? LEAKS[leak].habit : null;
-  const rebuilt = !!leak && leak !== 'tilt';
 
   // 3. Spaced recall.
   const due = puzzles.filter(p => !p.archived && isDue(state.records[p.id], now)).length;
@@ -430,8 +434,8 @@ export function planSession(state, { now = Date.now(), puzzles = [], goalStatus 
 /** Counters a block's completion is measured against, taken when it starts. */
 export function baseline(state) {
   return {
-    log: state.log.length,
-    games: state.games.length,
+    log: logCount(state),
+    games: gameCount(state),
     vision: state.vision.runs,
     visual: state.calc.visual.runs,
     checks: state.calc.checks.runs,
@@ -445,7 +449,8 @@ export function baseline(state) {
 export function blockDone(state, block) {
   const base = block.base;
   if (!base) return false;
-  const since = state.log.slice(base.log);
+  // Rows logged since the block started, counted past the log's cap.
+  const since = state.log.slice(Math.max(0, state.log.length - (logCount(state) - base.log)));
   switch (block.type) {
     case 'sprint':
       return state.vision.runs > base.vision;
@@ -463,7 +468,7 @@ export function blockDone(state, block) {
       return state.calc[d.type].runs > base[d.type];
     }
     case 'game':
-      return state.games.length > base.games;
+      return gameCount(state) > base.games;
     case 'debrief':
       return !!state.reviews.find(r => r.id === block.params.review)?.debriefed;
     case 'clock':

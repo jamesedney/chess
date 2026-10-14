@@ -12,7 +12,7 @@ import { createMistake, deleteMistake } from '../mistakes.js';
 import { dateKey, logGame, logCandidates, logAttempt } from '../state.js';
 import { replayCandidates, nextReplay, opponentLevel, judgeReplay, recordReplay, goalText, MAX_MOVES } from '../replay.js';
 import { makeClock, startTurn, endTurn, timeLeft, flagged, userControl, controlText, clockText } from '../gameclock.js';
-import { thresholds } from '../clocks.js';
+import { thresholds, rushedText } from '../clocks.js';
 
 const SAVE_KEY = 'rankup-practice';
 /** Under this many seconds the clock chip turns urgent. */
@@ -199,11 +199,10 @@ function flagOut(now = Date.now()) {
   draw();
 }
 
-/** "Blunders 2, in under 5 seconds 1, 0:41 left." */
+/** "Blunders 2, in under 4.5 seconds 1, 0:41 left." */
 function clockLine() {
   const c = play.clock;
-  const rushed = Math.ceil(thresholds(c).rushed);
-  return `Blunders ${play.blunders}, in under ${rushed} seconds ${play.fast}, ${clockText(timeLeft(c))} left.`;
+  return `Blunders ${play.blunders}, in ${rushedText(c)} ${play.fast}, ${clockText(timeLeft(c))} left.`;
 }
 
 /** The line above the board: "Maia 1500 · you play White · 5+0". */

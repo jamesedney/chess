@@ -50,7 +50,11 @@ export function diagnose(state, now = Date.now()) {
     },
     { known: 0, rushed: 0, trouble: 0 },
   );
-  const confidence = total < 3 && reviews.length < 2 ? 'none' : total < 10 || reviews.length < 3 ? 'early' : 'solid';
+  // In a losing streak the leak that started your losses comes first, and speaks before the saved mistakes do.
+  const streak = streakMode(state, now) ? diagnoseStreak(state, { now }) : null;
+  const leakLine = streak?.leak ? streak.line : null;
+  const enough = total < 3 && reviews.length < 2 ? 'none' : total < 10 || reviews.length < 3 ? 'early' : 'solid';
+  const confidence = enough === 'none' && leakLine ? 'early' : enough;
   const focus = kinds[0]?.kind || null;
   const timeIssue =
     time.known >= 3 && time.rushed / time.known >= 0.4 ? 'rushed' : time.known >= 3 && time.trouble / time.known >= 0.4 ? 'trouble' : null;
@@ -81,11 +85,7 @@ export function diagnose(state, now = Date.now()) {
     if (weakPhase && weakPhase[1] / total >= 0.4)
       findings.push(`${Math.round((weakPhase[1] / total) * 100)}% of your mistakes happen in the ${weakPhase[0]}.`);
   }
-  // In a losing streak the leak that started your losses comes first.
-  if (streakMode(state, now)) {
-    const d = diagnoseStreak(state, { now });
-    if (d.leak) findings.unshift(d.line);
-  }
+  if (leakLine) findings.unshift(leakLine);
   return {
     confidence,
     mistakes: total,

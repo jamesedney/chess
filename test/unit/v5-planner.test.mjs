@@ -200,8 +200,8 @@ test('F1 planner: without a bank of safe positions the leak block is the vision 
   assert.deepEqual(leak.params, { mode: 'vision' });
   assert.equal(byId(plan, 'support').params.clock, 'pause');
   assert.ok(!ids(plan).includes('unit'));
-  // A plain warm-up: the safe bank is missing, so the vision sprint stays.
-  assert.equal(byId(plan, 'warmup').type, 'sprint');
+  // The leak block is the day's sprint: no separate warm-up doubles it.
+  assert.ok(!ids(plan).includes('warmup'));
 });
 
 test('F1 planner: a clock leak trains the pace drill, with Same clock as support at 6 positions and the pause drill at 5', () => {
@@ -359,7 +359,7 @@ test('F1 evidence: the leak row counts the losses that began with the leak, befo
   assert.equal(evidence(thin, NOW).rows.find(r => r.id === 'leak').verdict, 'unknown');
 });
 
-test('F1 evidence: the fast row counts blunders played in under 4 seconds per clocked game', () => {
+test('F1 evidence: the fast row counts blunders played in under 4.5 seconds per clocked game', () => {
   const rushed = created => lostGame({ created, tc: TC, clocks: clocksWith(280, 278) });
   const calm = created => lostGame({ created, tc: TC, clocks: CLOCKS });
   const state = stateWith({
@@ -378,7 +378,7 @@ test('F1 evidence: the fast row counts blunders played in under 4 seconds per cl
   assert.equal(fast.now, 0);
   assert.equal(fast.verdict, 'better');
   assert.equal(fast.text, '1.0 → 0.0.');
-  assert.equal(fast.label, 'Blunders played in under 4 seconds, per game');
+  assert.equal(fast.label, 'Blunders played in under 4.5 seconds, per game');
   // Two clocked games in a window are not enough, however many games were reviewed.
   const two = stateWith({ reviews: [...state.reviews.slice(0, 2), lostGame({ created: NOW - DAY }), ...state.reviews.slice(3)] });
   assert.equal(evidence(two, NOW).rows.find(r => r.id === 'fast').verdict, 'unknown');

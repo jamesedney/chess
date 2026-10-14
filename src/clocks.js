@@ -32,6 +32,12 @@ export function thresholds(tc) {
   return { rushed: Math.max(3, tc.base * 0.015), trouble: Math.max(20, tc.base * 0.1) };
 }
 
+/** "under 4.5 seconds": the control's rushed threshold, the one number every line and tile uses. */
+export function rushedText(tc) {
+  const t = thresholds(tc || { base: 300, inc: 0 });
+  return `under ${Math.round(t.rushed * 10) / 10} seconds`;
+}
+
 /**
  * Time facts for one move: { spent, left, rushed, trouble } where left is the
  * clock before the move. Null when the game has no clock data.

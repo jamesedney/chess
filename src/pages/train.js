@@ -52,6 +52,7 @@ function newSession(
   stopClock();
   // Same clock: your own decisive positions, one pass, with the seconds you had.
   const set = clock === 'real' ? pressurePositions(app.state, { limit: limit || 6 }) : null;
+  if (set) fitBlock(b => b.type === 'clock' && b.params?.clock === 'real', set.length);
   session = {
     mode,
     theme,
@@ -291,9 +292,22 @@ function startSession(mode, theme, { redraw = true, first = [], ...options } = {
   if (mode === 'vision') vision = { phase: 'ready', score: 0, misses: 0 };
   else if (mode === 'safe') {
     const items = safeItems(app.state, { limit: options.limit || 10, first, Chess });
+    fitBlock(b => b.type === 'safe' || (b.type === 'reset' && b.params?.mode === 'safe'), items.length);
     safe = { phase: 'ready', items, i: 0, answers: [], deadline: null, timer: null };
   } else loadNext();
   if (redraw) draw();
+}
+
+/**
+ * A session block planned over a bank that has since shrunk (a mark cleared by
+ * the deep pass, a review rotated out) asks for what is there now, so one run
+ * completes it.
+ */
+function fitBlock(matches, available) {
+  const block = activeBlock();
+  if (!block || !matches(block) || !available || available >= (block.count || 0)) return;
+  block.count = available;
+  app.save();
 }
 
 /** How many positions this session runs to: the daily goal, one pass over a mistakes pool, or more if you chose to keep going. */

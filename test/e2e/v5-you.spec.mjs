@@ -213,7 +213,7 @@ test('the You page shows your streak, your evenings and your clock in streak mod
   );
   // Your clock: practice games, replays and Same-clock runs.
   const habits = page.locator('section:has(#habits-title)');
-  await expect(habits).toContainText('Practice on the clock: 5 games, 0.8 blunders a game, 0.2 in under 5 seconds, flagged 1.');
+  await expect(habits).toContainText('Practice on the clock: 5 games, 0.8 blunders a game, 0.2 in under 4.5 seconds, flagged 1.');
   await expect(habits).toContainText('Play it again on the real clock: 3 of 5 converted, 1 lost on time.');
   await expect(habits).toContainText('Under your real clock: 9 of 14 in time (64%); first attempts 4 of 10.');
 });

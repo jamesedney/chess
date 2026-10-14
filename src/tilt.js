@@ -48,6 +48,9 @@ const percent = s => Math.round(s * 100) + '%';
 const ofText = b => `${Math.round(b.score * b.n * 2) / 2} of ${b.n}`;
 const word = n => WORDS[n] || String(n);
 
+/** Rows played at a board: daily (correspondence) games are not sittings and never stop you. */
+const sittingRows = ledger => (ledger || []).filter(r => r.tc !== 'correspondence');
+
 /** Every row in time order with its place in a sitting and whether it came straight after a loss. */
 /** @returns {AnnotatedRow[]} */
 export function annotate(ledger) {
@@ -55,7 +58,7 @@ export function annotate(ledger) {
   let prev = null;
   let sitting = -1;
   let idx = 0;
-  for (const row of byTime(ledger || [])) {
+  for (const row of byTime(sittingRows(ledger))) {
     const gap = prev ? begins(row) - ends(prev) : Infinity;
     if (!prev || gap > SITTING_MS) {
       sitting++;
@@ -145,7 +148,7 @@ const agoText = minutes => (minutes === 0 ? 'just now' : minutes === 1 ? '1 minu
  * page adds the sync time after it.
  */
 export function stopState(state, now = Date.now()) {
-  const ledger = state.ledger || [];
+  const ledger = sittingRows(state.ledger);
   const newest = newestOf(ledger);
   const run = lossRun(ledger).length;
   if (!newest) return { live: false, tonight: false, minutesAgo: null, run, resetDone: null, text: '' };

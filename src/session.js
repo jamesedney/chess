@@ -74,7 +74,8 @@ export function mergeNewGames() {
   const review = fresh.blocks.find(isGame);
   if (!review || plan.blocks.some(b => isGame(b) && b.params.review === review.params.review)) return;
   if (plan.blocks.some(b => b.id === review.id)) review.id = `review-${plan.blocks.length}`;
-  const at = plan.blocks.findIndex(b => b.status === 'todo');
+  // The debrief goes before the first block still to do, but never ahead of a reset the stop line put first.
+  const at = plan.blocks.findIndex(b => b.status === 'todo' && b.type !== 'reset');
   plan.blocks.splice(at < 0 ? plan.blocks.length : at, 0, review);
   app.save();
   changed();

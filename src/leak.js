@@ -6,7 +6,7 @@
 // read the diagnosis.
 import { Chess } from '../vendor/chess.js';
 import { WINNING, LOST } from './replay.js';
-import { moveTime, thresholds, formatClock } from './clocks.js';
+import { moveTime, thresholds, formatClock, rushedText } from './clocks.js';
 import { KINDS, phaseOf } from './mistake-kinds.js';
 import { mainControl, rowsBetween, lossRun, keyFromSite, score } from './ledger.js';
 import { annotate } from './tilt.js';
@@ -37,12 +37,10 @@ const EPS = 1e-9;
 export const LEAK_ORDER = ['rushed', 'safety', 'clock', 'tilt', 'convert', 'opening', 'calc'];
 
 /**
- * The "rushed" label names the main control's rushed threshold in whole
- * seconds: Math.round(thresholds({ base }).rushed), so "under 5 seconds" at
- * 5+0 (4.5 s) and "under 3 seconds" at 3+0 (3 s).
+ * The "rushed" label names the main control's rushed threshold exactly as
+ * the clock counts it: "under 4.5 seconds" at 5+0, "under 3 seconds" at 3+0.
  */
-export const rushedLabel = (base = DEFAULT_BASE) =>
-  `a move played in under ${Math.round(thresholds({ base: base ?? DEFAULT_BASE, inc: 0 }).rushed)} seconds`;
+export const rushedLabel = (base = DEFAULT_BASE) => `a move played in ${rushedText({ base: base ?? DEFAULT_BASE, inc: 0 })}`;
 
 /** Each leak: how the line names it, the habit for it, and the planner's block type. */
 export const LEAKS = {
@@ -142,16 +140,17 @@ export function classifyLoss(review, row, state) {
 /** The review of a ledger row, by the game key or the Site header; null when the game was not reviewed. */
 export function reviewFor(state, row) {
   if (!row || !Array.isArray(state?.reviews)) return null;
-  return state.reviews.find(r => r.gameKey === row.k || (r.site && keyFromSite(r.site) === row.k)) || null;
+  // A review stopped early has no evals past the stop: the loss counts as unreviewed.
+  return state.reviews.find(r => r.complete && (r.gameKey === row.k || (r.site && keyFromSite(r.site) === row.k))) || null;
 }
 
 /** The ledger in time order (recordLedger keeps it so; a hand-built one may not be). */
 const byTime = ledger => [...(ledger || [])].sort((a, b) => a.t - b.t);
 
-/** The newest `n` rows of one control, newest first. */
-const lastGames = (ledger, control, n) =>
+/** The newest `n` rows of one control within the last LOSS_DAYS, newest first: old games never start a streak. */
+const lastGames = (ledger, control, n, now) =>
   ledger
-    .filter(r => r.tc === control)
+    .filter(r => r.tc === control && r.t >= now - LOSS_DAYS * DAY)
     .sort((a, b) => b.t - a.t)
     .slice(0, n);
 
@@ -168,7 +167,7 @@ export function streakMode(state, now = Date.now()) {
   const ledger = byTime(state?.ledger);
   const control = mainControl(ledger, { now });
   if (!control) return false;
-  const last = lastGames(ledger, control, LOSSES);
+  const last = lastGames(ledger, control, LOSSES, now);
   if (last.length >= MIN_GAMES && score(last) <= MAX_SCORE + EPS) return true;
   const run = lossRun(ledger, { control });
   return run.length >= RUN && run.endedAt !== null && run.endedAt >= now - RUN_DAYS * DAY;
@@ -203,7 +202,7 @@ export function diagnoseStreak(state, { now = Date.now(), losses = LOSSES } = {}
     examples: [],
   };
   if (!control) return empty;
-  const last = lastGames(ledger, control, LOSSES);
+  const last = lastGames(ledger, control, LOSSES, now);
   const run = lossRun(ledger, { control }).length;
   const rows = annotate(ledger);
   const recent = rowsBetween(rows, now - LOSS_DAYS * DAY, Infinity, { control })
