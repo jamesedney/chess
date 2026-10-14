@@ -697,8 +697,8 @@ function drawRepertoire() {
       ${c.line.length ? `<p class="focus-meta">${lineHTML(c.line)}</p>` : ''}
     </div>
     <div class="focus-prompt"><strong id="board-title">${esc(v.answered ? numbered(c, c.answer) : question)}</strong><span class="chip" id="board-chip">${v.answered ? '' : esc(`${side} to move`)}</span></div>
-    <div id="feedback" class="status ${v.tone}" role="status" aria-live="polite" ${v.resultHtml || v.message ? '' : 'hidden'}>${v.resultHtml || esc(v.message)}</div>
     <div class="focus-board"><div id="board"></div></div>
+    <div id="feedback" class="status ${v.tone}" role="status" aria-live="polite" ${v.resultHtml || v.message ? '' : 'hidden'}>${v.resultHtml || esc(v.message)}</div>
     <div class="focus-actions">${
       v.answered
         ? '<button type="button" class="primary" id="rep-next">Next</button>'

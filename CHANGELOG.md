@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.0.2
+
+- The repertoire drill no longer jumps: the answer's feedback appears under the board instead of pushing it down.
+
 ## 5.0.1
 
 - The leak tile says the plain thing: "6 of 13 losses began with a piece hung in one move, was 4 of 9". A count of losses, never coloured: fewer is the only good news.
