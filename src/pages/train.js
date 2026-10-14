@@ -1155,10 +1155,20 @@ async function answerSafe(answer) {
     const m = tryUci(g, item.refute);
     board.set({ game: g, lastMove: m ? [m.from, m.to] : [] });
   }
-  await wait(item.answer === 'hanging' ? 1200 : 700);
-  if (safe !== v || v.phase !== 'running') return;
-  v.i++;
-  showSafeItem();
+  // The answer stays until you have read it: Next moves on.
+  const actions = $('.safe-actions');
+  if (!actions) return;
+  actions.innerHTML = '<button type="button" id="safe-next" class="primary">Next</button>';
+  const next = $('#safe-next', actions);
+  next.onclick = () => {
+    if (safe !== v || v.phase !== 'running') return;
+    actions.innerHTML = '<button type="button" id="safe-yes">Safe</button><button type="button" id="safe-no">Hanging</button>';
+    $('#safe-yes', actions).onclick = () => answerSafe('safe');
+    $('#safe-no', actions).onclick = () => answerSafe('hanging');
+    v.i++;
+    showSafeItem();
+  };
+  next.focus({ preventScroll: true });
 }
 
 function endSafe() {

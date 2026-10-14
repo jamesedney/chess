@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.1.1
+
+- Safe or hanging? keeps the answer on screen until you tap Next; nothing moves on by itself any more.
+
 ## 5.1.0
 
 - Today is one screen, one message: the rating, the streak paragraph and the session. The "Is it working?" tiles live on the You page only.

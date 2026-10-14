@@ -139,11 +139,16 @@ test('safe or hanging: five seconds per position, the refutation on every miss, 
   await expect(page.locator('#feedback')).toContainText('Nxf7 lost 60% winning chances: Qxg2');
   await expect(page.locator('#feedback')).toHaveClass(/success/);
   await expect(sq(page, 'g2')).toHaveClass(/last/);
+  // The answer stays until Next.
+  await page.waitForTimeout(1500);
+  await expect(page.locator('#feedback')).toContainText('Qxg2');
+  await page.click('#safe-next');
   // Item 2 is safe.
   await expect(page.locator('#focus-progress')).toContainText('2 of 4');
   await expect(page.locator('#safe-yes')).toBeEnabled();
   await page.click('#safe-yes');
   await expect(page.locator('#feedback')).toContainText('Safe.');
+  await page.click('#safe-next');
   // Item 3: the clock runs out.
   await expect(page.locator('#focus-progress')).toContainText('3 of 4');
   await expect(page.locator('#safe-no')).toBeEnabled();
@@ -151,10 +156,12 @@ test('safe or hanging: five seconds per position, the refutation on every miss, 
   await page.clock.fastForward('00:06');
   await expect(page.locator('#feedback')).toContainText('Too slow');
   await expect(page.locator('#feedback')).toHaveClass(/error/);
+  await page.click('#safe-next');
   // Item 4: answered, then the run is summed up.
   await expect(page.locator('#focus-progress')).toContainText('4 of 4');
   await expect(page.locator('#safe-yes')).toBeEnabled();
   await page.click('#safe-yes');
+  await page.click('#safe-next');
   await expect(page.locator('.dark-panel')).toContainText(/[23] of 4 right/);
   await expect(page.locator('.dark-panel')).toContainText('1 too slow');
   await expect(page.locator('.dark-panel')).toContainText(/Best \d+% · 1 run/);
