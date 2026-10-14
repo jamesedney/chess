@@ -77,17 +77,13 @@ async function seed(page) {
   );
 }
 
-test('Today leads with the rating, its trend and whether training is working', async ({ page }) => {
+test('Today leads with the rating and its trend; the evidence lives on You', async ({ page }) => {
   await seed(page);
   await open(page, 'today');
   await expect(page.locator('.goal-numbers')).toHaveText('1402');
   await expect(page.locator('.hero-delta')).toHaveText('+14');
   await expect(page.locator('.goal-card svg.spark')).toBeVisible();
-  const metrics = page.locator('.metrics .metric');
-  await expect(metrics).toHaveCount(3);
-  await expect(metrics.first()).toHaveClass(/better/);
-  await expect(metrics.first()).toContainText('1.0');
-  await expect(metrics.first()).toContainText('was 2.0');
+  await expect(page.locator('.metrics .metric')).toHaveCount(0);
   // The next block stands out, numbered like the rest.
   await expect(page.locator('.agenda-item.current .agenda-mark')).toHaveText('01');
   await expect(page.locator('.agenda-item.current')).toHaveCount(1);

@@ -7,7 +7,6 @@ import { goalStatus, goalSeries, updateGoal, PUZZLE_PERF } from '../progress-mod
 import { pathSummary, place, unitById, unitStatus } from '../curriculum.js';
 import { syncRatings } from '../rating-sync.js';
 import { RATING_PERFS } from '../ratings.js';
-import { evidence } from '../evidence.js';
 import { sparkline } from '../charts.js';
 import { syncNow, lastSyncAt } from '../queue.js';
 import { dateKey, streaks } from '../state.js';
@@ -219,42 +218,6 @@ function goalHTML() {
   </section>`;
 }
 
-const METRIC = {
-  blunders: 'Blunders a game',
-  threats: 'Missed threats',
-  rushed: 'Rushed moves',
-  convert: 'Wins converted',
-  score: 'Score',
-  afterLoss: 'After a loss',
-  run: 'Loss run',
-  leak: 'Losses that began with the leak',
-  fast: 'Fast blunders',
-};
-const PERCENT = new Set(['convert', 'score', 'afterLoss', 'leak']);
-const metricValue = (row, v) =>
-  v === null ? '–' : PERCENT.has(row.id) ? `${Math.round(v * 100)}%` : row.id === 'run' ? String(Math.round(v)) : v.toFixed(1);
-/** In streak mode the tiles that measure the streak come first. */
-const STREAK_ORDER = ['leak', 'fast', 'afterLoss', 'score', 'run', 'blunders', 'threats', 'rushed', 'convert'];
-
-/** Is it working: three numbers, last two weeks against the six before. Empty until comparisons exist. */
-function evidenceHTML(inStreak) {
-  const ev = evidence(app.state);
-  const ordered = inStreak ? STREAK_ORDER.map(id => ev.rows.find(r => r.id === id)).filter(Boolean) : ev.rows;
-  const known = ordered.filter(r => r.verdict !== 'unknown');
-  if (!known.length) return '';
-  const rows = [...known, ...ordered.filter(r => r.verdict === 'unknown' && r.now !== null)].slice(0, 3);
-  const was = r => `was ${metricValue(r, r.before)}${r.id === 'score' && ev.scoreSource === 'ledger' ? ' · all games' : ''}`;
-  // The leak tile counts losses and names the mistake, in no colour: fewer is the only good news.
-  const tile = r =>
-    r.id === 'leak' && r.counts
-      ? `<div class="metric count"><strong>${r.counts.now.hit} of ${r.counts.now.of}</strong><span>${esc(r.label.replace(/^Losses that /, 'losses '))}</span><small class="muted">was ${r.counts.before.hit} of ${r.counts.before.of}</small></div>`
-      : `<div class="metric ${r.verdict}"><strong>${metricValue(r, r.now)}</strong><span>${esc(METRIC[r.id])}</span><small class="muted">${esc(was(r))}</small></div>`;
-  return `<section aria-labelledby="working-head">
-    <div class="section-rule"><span id="working-head">Is it working?</span><span>Last 2 weeks vs 6 before · <a href="#progress">All</a></span></div>
-    <div class="metrics">${rows.map(tile).join('')}</div>
-  </section>`;
-}
-
 // ---------- The stop line and the streak ----------
 
 /** "21:42", the local time of a timestamp. */
@@ -328,7 +291,7 @@ function leakHTML(d) {
   let body;
   if (d.leak)
     body =
-      ` The leak: ${d.counts[d.leak]} of ${d.counted} losses began with ${esc(d.label || LEAKS[d.leak].label)}. ` +
+      ` ${d.counts[d.leak]} of them began with ${esc(d.label || LEAKS[d.leak].label)}. ` +
       `<span class="small">Habit: ${esc(d.habit || LEAKS[d.leak].habit)}</span>`;
   else if (d.counted < MIN_COUNTED) body = ` ${d.counted} of them read so far: the leak appears at ${MIN_COUNTED}.`;
   else body = ` ${d.counted} of them read: no one leak started enough of them yet.`;
@@ -388,7 +351,6 @@ function draw() {
     ${stop.live ? stopHTML(stop) : ''}
     ${goalHTML()}
     ${inStreak ? leakHTML(diagnosis) : ''}
-    ${evidenceHTML(inStreak)}
     <section aria-labelledby="today-head">
       <div class="section-rule"><span id="today-head">Today</span><span>${prog.complete ? 'All done' : `${prog.done} of ${session.blocks.length} done · ${prog.minutesLeft ?? session.minutes} min`}</span></div>
       ${ruleHTML(stop)}

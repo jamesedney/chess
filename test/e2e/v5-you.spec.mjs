@@ -184,8 +184,8 @@ test('the You page shows your streak, your evenings and your clock in streak mod
   await expect(streakTiles).toHaveCount(3);
   await expect(streakTiles.nth(0)).toContainText('3 of 10');
   await expect(streakTiles.nth(0)).toContainText('Last 10 games');
-  // Seven losses read from the streak, six reviewed (a piece hung) and two unreviewed evening losses queued straight after a loss.
-  await expect(streakTiles.nth(1).locator('strong')).toHaveText('6 of 8');
+  // The losses among the last ten games: six reviewed, each with a piece hung.
+  await expect(streakTiles.nth(1).locator('strong')).toHaveText('6 of 6');
   await expect(streakTiles.nth(1)).toContainText('a piece hung in one move');
   await expect(streakTiles.nth(2).locator('strong')).toHaveText('3');
   await expect(streakTiles.nth(2)).toContainText('Longest loss run · 14 days');

@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.1.0
+
+- Today is one screen, one message: the rating, the streak paragraph and the session. The "Is it working?" tiles live on the You page only.
+- The streak reads one window. "Losing 6 of your last 10. 2 of them began with a game started within two minutes of a loss." Every number on the line is about those ten games.
+- "Score" is now "Points per game, all games" (or "reviewed games") on the You page: wins 1, draws ½, losses 0, over the games played.
+
 ## 5.0.2
 
 - The repertoire drill no longer jumps: the answer's feedback appears under the board instead of pushing it down.

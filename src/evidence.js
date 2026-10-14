@@ -122,7 +122,7 @@ export const MEASURES = [
     percent: true,
     needs: w => w.games >= MIN_GAMES && w.winningGames >= 2,
   },
-  { id: 'score', label: 'Score', lower: false, step: 0.1, percent: true, needs: w => w.games >= MIN_GAMES },
+  { id: 'score', label: 'Points per game', lower: false, step: 0.1, percent: true, needs: w => w.games >= MIN_GAMES },
   {
     id: 'afterLoss',
     label: 'Score straight after a loss',
@@ -179,6 +179,7 @@ export function evidence(state, now = Date.now()) {
     let label = m.label;
     let shown = text;
     let counts = null;
+    if (m.id === 'score') label = fromLedger ? 'Points per game, all games' : 'Points per game, reviewed games';
     if (m.id === 'fast') label = `Blunders played in ${rushedText(userControl(state.ledger || [], { now }))}, per game`;
     if (m.id === 'leak') {
       if (lf.leakLabel) label = `Losses that began with ${lf.leakLabel}`;

@@ -149,7 +149,7 @@ test('F1 planner: a safety leak rebuilds the day around Safe or hanging? and the
     share: 1,
     count: 5,
     counted: 5,
-    line: `Losing 7 of your last 10. The leak: 5 of 5 losses began with a piece hung in one move. Habit: ${KINDS['hung-piece'].habit}`,
+    line: `Losing 7 of your last 10. 5 of them began with a piece hung in one move. Habit: ${KINDS['hung-piece'].habit}`,
   });
   for (const id of ['lesson', 'unit', 'weak', 'drill', 'clock']) assert.ok(!list.includes(id), `${id} is skipped: ${list.join()}`);
   // The debrief of the freshest game stays first among the required blocks; recall stays.
@@ -412,7 +412,7 @@ test('F1 coach: the leak line is the first finding in streak mode', () => {
   const state = safetyStreak();
   const d = diagnose(state, NOW);
   assert.equal(d.findings[0], diagnoseStreak(state, { now: NOW }).line);
-  assert.match(d.findings[0], /^Losing 7 of your last 10\. The leak: 5 of 5 losses began with a piece hung in one move\./);
+  assert.match(d.findings[0], /^Losing 7 of your last 10\. 5 of them began with a piece hung in one move\./);
   assert.ok(d.findings.length > 1, 'the usual findings follow');
   const calm = diagnose({ ...state, ledger: [] }, NOW);
   assert.ok(!calm.findings.some(f => f.startsWith('Losing')));

@@ -65,7 +65,7 @@ test('LEAK_ORDER, LEAKS: labels, habits and blocks', () => {
   assert.equal(LEAKS.clock.label, 'the clock');
   assert.equal(LEAKS.clock.habit, 'Under 30 seconds, play the simple move at once.');
   assert.equal(LEAKS.clock.block, 'pace');
-  assert.equal(LEAKS.tilt.label, 'a game queued straight after a loss');
+  assert.equal(LEAKS.tilt.label, 'a game started within two minutes of a loss');
   assert.equal(LEAKS.tilt.habit, 'One loss: two minutes away from the board. Two losses in a row: stop for tonight.');
   assert.equal(LEAKS.tilt.block, null);
   assert.equal(LEAKS.convert.label, 'a won position thrown away');
@@ -435,7 +435,7 @@ test('diagnoseStreak: ledger-only losses count for clock and for tilt', () => {
   assert.equal(clock.habit, 'Under 30 seconds, play the simple move at once.');
   assert.equal(
     clock.line,
-    'Losing 5 of your last 5. The leak: 5 of 5 losses began with the clock. Habit: Under 30 seconds, play the simple move at once.',
+    'Losing 5 of your last 5. 5 of them began with the clock. Habit: Under 30 seconds, play the simple move at once.',
   );
   assert.deepEqual(clock.examples, []);
   // Six losses a minute apart: five queued straight after a loss.
@@ -446,7 +446,7 @@ test('diagnoseStreak: ledger-only losses count for clock and for tilt', () => {
   assert.equal(tilt.share, 1);
   assert.equal(
     tilt.line,
-    'Losing 6 of your last 6. The leak: 5 of 5 losses began with a game queued straight after a loss. ' +
+    'Losing 6 of your last 6. 5 of them began with a game started within two minutes of a loss. ' +
       'Habit: One loss: two minutes away from the board. Two losses in a row: stop for tonight.',
   );
   // Tilt is counted on top of the chess category: a reviewed quick loss counts for both.
@@ -485,27 +485,27 @@ test('diagnoseStreak: examples are the leak’s decisive positions, newest first
 });
 
 test('diagnoseStreak: the line text is exact', () => {
-  // The last 10 games: 7 losses and 3 wins; 3 older losses within 30 days make 10 losses, 8 of them counted.
+  // The last 10 games: 7 losses and 3 wins; the 3 older losses on time are outside the window and not read.
   const ledger = games('LLLWLLLLWWLLL');
   for (const i of [0, 1, 2]) ledger[i].term = 'time';
   const s = stateFor(ledger, { 12: {}, 11: {}, 10: {}, 7: {}, 6: {} });
   const d = diagnoseStreak(s, { now: NOW });
   assert.equal(d.games10, 10);
   assert.equal(d.lost10, 7);
-  assert.equal(d.losses.length, 10);
-  assert.equal(d.counted, 8);
+  assert.equal(d.losses.length, 7);
+  assert.equal(d.counted, 5);
   assert.equal(d.counts.safety, 5);
-  assert.equal(d.counts.clock, 3);
+  assert.equal(d.counts.clock, 0);
   assert.equal(d.leak, 'safety');
-  assert.equal(d.share, 5 / 8);
+  assert.equal(d.share, 1);
   assert.equal(d.habit, HABIT);
-  assert.equal(d.line, `Losing 7 of your last 10. The leak: 5 of 8 losses began with a piece hung in one move. Habit: ${HABIT}`);
+  assert.equal(d.line, `Losing 7 of your last 10. 5 of them began with a piece hung in one move. Habit: ${HABIT}`);
   assert.equal(leakLine(d), d.line);
   assert.equal(streakMode(s, NOW), true);
 });
 
-test('diagnoseStreak: only the main control, only losses within 30 days, at most 10 of them', () => {
-  // Fourteen blitz losses two days apart: the oldest four are past 30 days, and only ten are read anyway.
+test('diagnoseStreak: only the main control, only the last ten games within 30 days', () => {
+  // Fourteen blitz losses two days apart: the oldest four are past 30 days, and only the last ten games are read anyway.
   const ledger = games('LLLLLLLLLLLLLL', { gap: 2 * DAY });
   const d = diagnoseStreak(stateFor(ledger, Object.fromEntries(ledger.map((_, i) => [i, {}]))), { now: NOW });
   assert.equal(d.losses.length, 10);
@@ -542,7 +542,7 @@ test('diagnoseStreak: the rushed label uses the main control’s most common bas
   assert.equal(five.label, 'a move played in under 4.5 seconds');
   assert.equal(
     five.line,
-    'Losing 5 of your last 5. The leak: 5 of 5 losses began with a move played in under 4.5 seconds. ' +
+    'Losing 5 of your last 5. 5 of them began with a move played in under 4.5 seconds. ' +
       'Habit: At every capture and check, count three before you touch the piece.',
   );
   const three = rushed(180);
@@ -595,7 +595,7 @@ test('leakLine is null without a leak', () => {
   const d = { leak: 'clock', lost10: 6, games10: 9, counted: 4, counts: { clock: 2 } };
   assert.equal(
     leakLine(d),
-    'Losing 6 of your last 9. The leak: 2 of 4 losses began with the clock. Habit: Under 30 seconds, play the simple move at once.',
+    'Losing 6 of your last 9. 2 of them began with the clock. Habit: Under 30 seconds, play the simple move at once.',
   );
 });
 

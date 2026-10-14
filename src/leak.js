@@ -48,7 +48,7 @@ export const LEAKS = {
   safety: { label: 'a piece hung in one move', habit: KINDS['hung-piece'].habit, block: 'safe' },
   clock: { label: 'the clock', habit: 'Under 30 seconds, play the simple move at once.', block: 'pace' },
   tilt: {
-    label: 'a game queued straight after a loss',
+    label: 'a game started within two minutes of a loss',
     habit: 'One loss: two minutes away from the board. Two losses in a row: stop for tonight.',
     block: null,
   },
@@ -205,8 +205,10 @@ export function diagnoseStreak(state, { now = Date.now(), losses = LOSSES } = {}
   const last = lastGames(ledger, control, LOSSES, now);
   const run = lossRun(ledger, { control }).length;
   const rows = annotate(ledger);
-  const recent = rowsBetween(rows, now - LOSS_DAYS * DAY, Infinity, { control })
-    .filter(r => r.r === 0)
+  // The losses among those last games, newest first: one window for every number on the line.
+  const keys = new Set(last.map(r => r.k));
+  const recent = rows
+    .filter(r => r.r === 0 && r.tc === control && keys.has(r.k))
     .sort((a, b) => b.t - a.t)
     .slice(0, losses);
   const classified = recent.map(row => {
@@ -251,15 +253,11 @@ export function diagnoseStreak(state, { now = Date.now(), losses = LOSSES } = {}
   return d;
 }
 
-/** "Losing 7 of your last 10. The leak: 5 of 8 losses began with a piece hung in one move. Habit: …", or null without a leak. */
+/** "Losing 7 of your last 10. 5 of them began with a piece hung in one move. Habit: …", or null without a leak. */
 export function leakLine(d) {
   if (!d || !d.leak) return null;
   const label = d.label || LEAKS[d.leak].label;
-  return (
-    `Losing ${d.lost10} of your last ${d.games10}. ` +
-    `The leak: ${d.counts[d.leak]} of ${d.counted} losses began with ${label}. ` +
-    `Habit: ${LEAKS[d.leak].habit}`
-  );
+  return `Losing ${d.lost10} of your last ${d.games10}. ${d.counts[d.leak]} of them began with ${label}. Habit: ${LEAKS[d.leak].habit}`;
 }
 
 /** The move number of a ply, counted from the review's start position (which may not be move 1). */

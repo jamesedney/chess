@@ -183,20 +183,19 @@ test('one leak: Today names the streak, its leak and the habit, and the plan dri
   await expect(items.nth(0)).toContainText('Debrief: your game against rival');
   await expect(items.nth(1)).toContainText('Safe or hanging?');
   await expect(items.nth(1)).toContainText('of your positions');
-  // The tiles: the leak's share leads in streak mode. Six of the seven streak
-  // losses are reviewed and the evenings' quick losses count as tilt, so both
-  // windows hold enough classified losses for the leak row to be known.
-  const tiles = page.locator('section:has(#working-head) .metric');
-  await expect(tiles.first()).toContainText(/\d+ of \d+losses began with a piece hung in one move/);
+  // No tiles on Today: the streak paragraph is the one message.
+  await expect(page.locator('section:has(#working-head)')).toHaveCount(0);
   const s = await saved(page);
-  // Six reviewed losses (a piece hung) and two evening losses queued straight after a loss: 6 of 8.
-  // The background analysis may re-read a review meanwhile, so the counts are bounded, not exact.
+  // The losses among the last ten games, read against their reviews. The background
+  // analysis may re-read a review meanwhile, so the counts are bounded, not exact.
   expect(s.streak).toMatchObject({ since: dateKey(new Date()), leak: 'safety' });
-  expect(s.streak.count).toBeGreaterThanOrEqual(5);
-  expect(s.streak.counted).toBeGreaterThanOrEqual(7);
+  expect(s.streak.count).toBeGreaterThanOrEqual(4);
+  expect(s.streak.counted).toBeGreaterThanOrEqual(4);
   // The coach leads with the leak.
   await open(page, 'coach');
-  await expect(page.locator('.findings li').first()).toContainText('The leak');
+  await expect(page.locator('.findings li').first()).toContainText(
+    /^Losing 7 of your last 10\. \d of them began with a piece hung in one move\./,
+  );
 });
 
 test('the stop line: a loss five minutes ago shows STOP, the reset runs the pause drill, and the card goes after twenty minutes', async ({
