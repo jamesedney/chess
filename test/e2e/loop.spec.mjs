@@ -1,13 +1,16 @@
 import { test, expect, move, open } from './helpers.mjs';
 
+// Yesterday in UTC as a PGN date: the fixture games stay inside the first sync's 7-day window whatever today is.
+const GAME_DAY = new Date(Date.now() - 86400000).toISOString().slice(0, 10).replace(/-/g, '.');
+
 // A Lichess export with evaluations: a rated blitz game the user (me) lost to the Scholar's-mate pattern after a blunder.
 const LICHESS_PGN = `[Event "Rated blitz game"]
 [Site "https://lichess.org/sync0001"]
-[Date "2026.10.08"]
+[Date "${GAME_DAY}"]
 [White "me"]
 [Black "rival"]
 [Result "0-1"]
-[UTCDate "2026.10.08"]
+[UTCDate "${GAME_DAY}"]
 [UTCTime "09:00:00"]
 [Variant "Standard"]
 [TimeControl "300+0"]
@@ -98,11 +101,11 @@ test('several games reviewed in the background give one dismissable message and 
   // A different game: White walks into a queen mate on f2.
   const second = `[Event "Rated blitz game"]
 [Site "https://lichess.org/sync0002"]
-[Date "2026.10.08"]
+[Date "${GAME_DAY}"]
 [White "me"]
 [Black "rival2"]
 [Result "0-1"]
-[UTCDate "2026.10.08"]
+[UTCDate "${GAME_DAY}"]
 [UTCTime "10:00:00"]
 [Variant "Standard"]
 [TimeControl "300+0"]

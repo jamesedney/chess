@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.1.2
+
+- The visualisation drill says what to do: "Play these moves in your head. The board stays still. Where does the black king on f6 end up?" The piece to follow is ringed, the moves are numbered from 1, and after you answer the line plays out on the board move by move.
+
 ## 5.1.1
 
 - Safe or hanging? keeps the answer on screen until you tap Next; nothing moves on by itself any more.

@@ -70,7 +70,7 @@ export function makeVisualisation(seedFens, plies, rng = Math.random, attempts =
 }
 
 export function visualisationQuestion(v) {
-  return `Where is the ${COLOR[v.piece.color]} ${NAMES[v.piece.type]} that started on ${v.piece.from} now?`;
+  return `Where does the ${COLOR[v.piece.color]} ${NAMES[v.piece.type]} on ${v.piece.from} end up?`;
 }
 
 /** Next line length: one longer after a correct answer, one shorter after a miss. */

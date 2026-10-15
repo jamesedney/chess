@@ -285,9 +285,10 @@ async function endgameHint() {
 
 // ---------- Visualisation ----------
 
+/** "1. Kd1 Kf5 2. Nd5": the line numbered from 1, not from the game's move number. */
 function lineText(fen, sans) {
-  const [, turn, , , , full] = fen.split(' ');
-  let no = Number(full) || 1;
+  const [, turn] = fen.split(' ');
+  let no = 1;
   let white = turn === 'w';
   const parts = [];
   sans.forEach((san, i) => {
@@ -332,18 +333,39 @@ function drawVisualise() {
   }
   const q = v.q;
   root.innerHTML = `<div class="focus">${top(`Round ${v.round} of ${VISUAL_ROUNDS} · ${v.score} points`)}
-    <div class="focus-prompt"><strong id="board-title">${plural(q.sans.length, 'half-move')}</strong><span class="chip" id="board-chip">${q.fen.split(' ')[1] === 'w' ? 'White' : 'Black'} starts</span></div>
-    <div class="focus-board"><div id="board"></div></div>
+    <div class="focus-prompt"><strong id="board-title">Play these moves in your head</strong><span class="chip" id="board-chip">${plural(q.sans.length, 'move')}</span></div>
     <p class="calc-line" id="calc-line">${esc(lineText(q.fen, q.sans))}</p>
-    <div id="feedback" class="status ${v.tone || ''}" role="status" aria-live="polite">${esc(v.message || visualisationQuestion(q) + ' Tap the square.')}</div>
+    <div class="focus-board"><div id="board"></div></div>
+    <div id="feedback" class="status ${v.tone || ''}" role="status" aria-live="polite">${esc(
+      v.message || `The board stays still. ${visualisationQuestion(q)} Tap the square.`,
+    )}</div>
     <div class="focus-actions">${v.answered !== null ? '<button type="button" class="primary" id="vis-next">Next</button>' : ''}</div>
   </div>`;
-  const shown = v.answered !== null ? q.finalFen : q.fen;
+  const orientation = q.fen.split(' ')[1];
   board = new BoardView($('#board', root), { label: 'Visualisation board', onSquare: v.answered === null ? visualAnswer : null });
-  const marks = v.answered === null ? {} : { [q.answer]: 'good', ...(v.answered !== q.answer ? { [v.answered]: 'answer' } : {}) };
-  board.set({ game: new Chess(shown), orientation: q.fen.split(' ')[1], interactive: false, marks });
   $('#vis-next', root)?.addEventListener('click', nextVisual);
   $('#vis-next', root)?.focus({ preventScroll: true });
+  if (v.answered === null) {
+    // The piece to follow is ringed where it starts.
+    board.set({ game: new Chess(q.fen), orientation, interactive: false, marks: { [q.piece.from]: 'hint' } });
+    return;
+  }
+  // After the answer the line plays out on the board, one move at a time, so you see where it went.
+  const marks = { [q.answer]: 'good', ...(v.answered !== q.answer ? { [v.answered]: 'answer' } : {}) };
+  const token = (v.replay = (v.replay || 0) + 1);
+  const g = new Chess(q.fen);
+  board.set({ game: new Chess(q.fen), orientation, interactive: false, marks: { [q.piece.from]: 'hint' } });
+  (async () => {
+    for (const san of q.sans) {
+      await wait(650);
+      if (view !== v || v.replay !== token) return;
+      const m = g.move(san);
+      board.set({ game: new Chess(g.fen()), orientation, interactive: false, lastMove: [m.from, m.to] });
+    }
+    await wait(350);
+    if (view !== v || v.replay !== token) return;
+    board.set({ game: new Chess(q.finalFen), orientation, interactive: false, marks });
+  })();
 }
 
 function nextVisual() {
@@ -368,10 +390,10 @@ function visualAnswer(sq) {
     v.score += len;
     v.correct++;
     v.longest = Math.max(v.longest, len);
-    v.message = `Yes, ${v.q.answer}. The board now shows the final position.`;
+    v.message = `Yes, ${v.q.answer}.`;
     v.tone = 'success';
   } else {
-    v.message = `It ended on ${v.q.answer}. The board now shows the final position: replay the line from there to see where it went.`;
+    v.message = `It ends on ${v.q.answer}. Watch the line play out.`;
     v.tone = 'error';
   }
   cue(correct ? 'success' : 'error');

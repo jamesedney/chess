@@ -34,11 +34,18 @@ test('a drill that is lost is recorded and offers a retry', async ({ page }) => 
 test('visualisation asks where a piece ended up and scores taps', async ({ page }) => {
   await open(page, 'drills?drill=visualise');
   await page.click('#vis-start');
-  await expect(page.locator('#calc-line')).not.toBeEmpty();
-  await expect(page.locator('#feedback')).toContainText('Where is the');
+  // The moves are numbered from 1, the board stays still and the piece to follow is ringed.
+  await expect(page.locator('#calc-line')).toHaveText(/^1(\.|…) /);
+  await expect(page.locator('#board-title')).toHaveText('Play these moves in your head');
+  await expect(page.locator('#feedback')).toContainText(
+    /The board stays still\. Where does the (white|black) \w+ on [a-h][1-8] end up\? Tap the square\./,
+  );
+  await expect(page.locator('#board .square.mark-hint')).toHaveCount(1);
   await sq(page, 'a1').click();
   await expect(page.locator('#vis-next')).toBeVisible();
-  await expect(page.locator('#feedback')).toContainText(/Yes|It ended on/);
+  await expect(page.locator('#feedback')).toContainText(/Yes|It ends on/);
+  // The line plays out, then the answer square is marked.
+  await expect(page.locator('#board .square.mark-good')).toHaveCount(1, { timeout: 10000 });
 });
 
 test('find every check counts checks and false alarms', async ({ page }) => {
