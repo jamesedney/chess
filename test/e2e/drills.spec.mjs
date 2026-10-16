@@ -46,6 +46,19 @@ test('visualisation asks where a piece ended up and scores taps', async ({ page 
   await expect(page.locator('#feedback')).toContainText(/Yes|It ends on/);
   // The line plays out, then the answer square is marked.
   await expect(page.locator('#board .square.mark-good')).toHaveCount(1, { timeout: 10000 });
+  // Round 2: answer, then Next at once, while the line is still playing out.
+  // The old line must not keep moving pieces on the new round's board.
+  await page.click('#vis-next');
+  await expect(page.locator('#feedback')).toContainText('The board stays still.');
+  await sq(page, 'a1').click();
+  await expect(page.locator('#vis-next')).toBeVisible();
+  await page.click('#vis-next');
+  await expect(page.locator('#feedback')).toContainText('The board stays still.');
+  const before = await page.locator('#board').innerHTML();
+  await page.waitForTimeout(7000);
+  expect(await page.locator('#board').innerHTML()).toBe(before);
+  await expect(page.locator('#board .square.mark-good')).toHaveCount(0);
+  await expect(page.locator('#board .square.mark-hint')).toHaveCount(1);
 });
 
 test('find every check counts checks and false alarms', async ({ page }) => {

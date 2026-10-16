@@ -342,6 +342,8 @@ function drawVisualise() {
     <div class="focus-actions">${v.answered !== null ? '<button type="button" class="primary" id="vis-next">Next</button>' : ''}</div>
   </div>`;
   const orientation = q.fen.split(' ')[1];
+  // A new draw cancels any replay still running from the round before.
+  v.replay = (v.replay || 0) + 1;
   board = new BoardView($('#board', root), { label: 'Visualisation board', onSquare: v.answered === null ? visualAnswer : null });
   $('#vis-next', root)?.addEventListener('click', nextVisual);
   $('#vis-next', root)?.focus({ preventScroll: true });
@@ -352,18 +354,18 @@ function drawVisualise() {
   }
   // After the answer the line plays out on the board, one move at a time, so you see where it went.
   const marks = { [q.answer]: 'good', ...(v.answered !== q.answer ? { [v.answered]: 'answer' } : {}) };
-  const token = (v.replay = (v.replay || 0) + 1);
+  const token = v.replay;
   const g = new Chess(q.fen);
   board.set({ game: new Chess(q.fen), orientation, interactive: false, marks: { [q.piece.from]: 'hint' } });
   (async () => {
     for (const san of q.sans) {
       await wait(650);
-      if (view !== v || v.replay !== token) return;
+      if (view !== v || v.q !== q || v.replay !== token) return;
       const m = g.move(san);
       board.set({ game: new Chess(g.fen()), orientation, interactive: false, lastMove: [m.from, m.to] });
     }
     await wait(350);
-    if (view !== v || v.replay !== token) return;
+    if (view !== v || v.q !== q || v.replay !== token) return;
     board.set({ game: new Chess(q.finalFen), orientation, interactive: false, marks });
   })();
 }

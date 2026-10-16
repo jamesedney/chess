@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.1.3
+
+- Visualisation drill: pressing Next while the last line was still playing out no longer lets it keep moving pieces on the new round's board.
+
 ## 5.1.2
 
 - The visualisation drill says what to do: "Play these moves in your head. The board stays still. Where does the black king on f6 end up?" The piece to follow is ringed, the moves are numbered from 1, and after you answer the line plays out on the board move by move.
