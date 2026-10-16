@@ -6,7 +6,8 @@ import { dateKey } from './state.js';
 import { toast } from './ui.js';
 
 // Ratings move after every game, so check often but not on every focus.
-const GAP_MS = 30 * 60000;
+// A sync that finds a new game also forces a check at once.
+const GAP_MS = 10 * 60000;
 let running = false;
 const listeners = new Set();
 

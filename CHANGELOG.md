@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.1.6
+
+- Your rating updates as soon as the app finds a new game, not only when that game is queued for review. The regular rating check now runs every 10 minutes instead of every 30.
+
 ## 5.1.5
 
 - The visualisation drill is no longer part of the daily plan. The two calculation units that required it ("See it before you play it" and "Long lines") are now mastered on their long-line puzzles alone. The drill stays in the Training menu.

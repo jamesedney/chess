@@ -290,6 +290,36 @@ test('a second site that fails does not stop the ledger or its backfill flag', a
   await expect(page.locator('.toast.show')).toContainText('No Chess.com account called nobody', { timeout: 20000 });
 });
 
+test('a new game refreshes the rating at once, even when it is not queued for review', async ({ page }) => {
+  let ratingCalls = 0;
+  await page.route('https://lichess.org/api/user/**', route => {
+    const history = route.request().url().endsWith('/rating-history');
+    if (!history) ratingCalls++;
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(history ? [] : { perfs: { blitz: { rating: 1188, games: 61 } } }),
+    });
+  });
+  await page.route('https://lichess.org/api/games/user/**', route =>
+    route.fulfill({ status: 200, contentType: 'application/x-chess-pgn', body: LICHESS_PGN }),
+  );
+  // The game was already seen, so it is not queued for review, and the ratings were read a minute ago:
+  // only the new ledger row can trigger a rating check.
+  await seed(page, {
+    version: 9,
+    onboarded: true,
+    profiles: { lichess: 'me', chesscom: '' },
+    sync: { minMoves: 3, auto: true, seen: ['lichess.org/sync0001'], ratingsAt: Date.now() - 60000 },
+  });
+  await open(page, 'today');
+  await expect.poll(async () => (await saved(page)).ledger.length, { timeout: 20000 }).toBe(1);
+  await expect.poll(() => ratingCalls, { timeout: 20000 }).toBeGreaterThan(0);
+  await expect
+    .poll(async () => (await saved(page)).ratings.some(r => r.platform === 'Lichess blitz' && r.rating === 1188), { timeout: 20000 })
+    .toBe(true);
+});
+
 test('the ledger fills from a sync: the game lands with its ending, result and length', async ({ page }) => {
   await page.route('https://lichess.org/api/user/**', route =>
     route.fulfill({
