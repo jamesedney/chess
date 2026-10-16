@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.1.5
+
+- The visualisation drill is no longer part of the daily plan. The two calculation units that required it ("See it before you play it" and "Long lines") are now mastered on their long-line puzzles alone. The drill stays in the Training menu.
+
 ## 5.1.4
 
 - Visualisation drill: the board always has White at the bottom instead of flipping between rounds, and the ring on the piece to follow clears once the line starts playing out.

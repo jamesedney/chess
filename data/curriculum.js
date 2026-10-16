@@ -224,8 +224,7 @@ export const UNITS = [
     skill: 'calculation',
     title: 'See it before you play it',
     concept:
-      'Calculation is holding the position in your head while the moves change it. Train it directly: follow lines without moving the pieces.',
-    drill: { type: 'visual', score: 18 },
+      'Calculation is holding the position in your head while the moves change it. Before you touch a piece, play the whole line through in your head, then check it.',
     tags: ['long'],
     gate: { puzzles: 6, accuracy: 0.65 },
   },
@@ -391,7 +390,6 @@ export const UNITS = [
     skill: 'calculation',
     title: 'Long lines',
     concept: 'Combinations of four moves and more. Calculate forcing moves first and stop where the position is quiet and clear.',
-    drill: { type: 'visual', score: 26 },
     tags: ['veryLong'],
     gate: { puzzles: 8, accuracy: 0.55 },
   },

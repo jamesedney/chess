@@ -1,6 +1,6 @@
 {
   "name": "rankup-chess",
-  "version": "5.1.4",
+  "version": "5.1.5",
   "private": true,
   "type": "module",
   "description": "Adaptive chess training: puzzles, spaced recall, game review and a Stockfish coach. Runs entirely in the browser.",
