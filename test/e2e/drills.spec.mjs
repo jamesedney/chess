@@ -41,7 +41,11 @@ test('visualisation asks where a piece ended up and scores taps', async ({ page 
     /The board stays still\. Where does the (white|black) \w+ on [a-h][1-8] end up\? Tap the square\./,
   );
   await expect(page.locator('#board .square.mark-hint')).toHaveCount(1);
+  // White is always at the bottom, so the board never flips between rounds.
+  await expect(page.locator('#board .square').first()).toHaveAttribute('data-square', 'a8');
   await sq(page, 'a1').click();
+  // Once the line starts playing out the ring leaves the start square.
+  await expect(page.locator('#board .square.mark-hint')).toHaveCount(0, { timeout: 3000 });
   await expect(page.locator('#vis-next')).toBeVisible();
   await expect(page.locator('#feedback')).toContainText(/Yes|It ends on/);
   // The line plays out, then the answer square is marked.

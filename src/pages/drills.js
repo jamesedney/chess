@@ -341,7 +341,8 @@ function drawVisualise() {
     )}</div>
     <div class="focus-actions">${v.answered !== null ? '<button type="button" class="primary" id="vis-next">Next</button>' : ''}</div>
   </div>`;
-  const orientation = q.fen.split(' ')[1];
+  // Always White at the bottom: the board does not flip between rounds.
+  const orientation = 'w';
   // A new draw cancels any replay still running from the round before.
   v.replay = (v.replay || 0) + 1;
   board = new BoardView($('#board', root), { label: 'Visualisation board', onSquare: v.answered === null ? visualAnswer : null });
@@ -362,7 +363,7 @@ function drawVisualise() {
       await wait(650);
       if (view !== v || v.q !== q || v.replay !== token) return;
       const m = g.move(san);
-      board.set({ game: new Chess(g.fen()), orientation, interactive: false, lastMove: [m.from, m.to] });
+      board.set({ game: new Chess(g.fen()), orientation, interactive: false, lastMove: [m.from, m.to], marks: {} });
     }
     await wait(350);
     if (view !== v || v.q !== q || v.replay !== token) return;

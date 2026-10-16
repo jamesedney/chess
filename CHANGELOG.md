@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.1.4
+
+- Visualisation drill: the board always has White at the bottom instead of flipping between rounds, and the ring on the piece to follow clears once the line starts playing out.
+
 ## 5.1.3
 
 - Visualisation drill: pressing Next while the last line was still playing out no longer lets it keep moving pieces on the new round's board.
