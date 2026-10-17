@@ -1,5 +1,15 @@
 # Changelog
 
+## 5.1.7
+
+- Lessons fact-checked against the positions with chess.js and Stockfish. Twenty claims that were false or overstated are corrected, among them:
+  - The outpost lessons no longer say a knight on c5 can never be removed: a bishop can take it, and in one lesson ...b6 chases it.
+  - "Answer the check" now starts from a position that really is check, and Nd2 is accepted too.
+  - A pinned knight is described as unable to move, not "can still move".
+  - Squares said to be defended once are defended twice; "wins a pawn" where the opponent simply takes back is now called a trade.
+  - In the king-and-pawn ending, Kd5 and Kf5 are accepted along with Kf6.
+- Lesson move steps no longer name the move twice ("Nc5. Nc5.").
+
 ## 5.1.6
 
 - Your rating updates as soon as the app finds a new game, not only when that game is queued for review. The regular rating check now runs every 10 minutes instead of every 30.

@@ -29,7 +29,7 @@ export const STRATEGY_LESSONS = [
         kind: 'read',
         fen: STRUCTURE,
         highlight: ['d4', 'c6', 'c5'],
-        text: 'Three pawn facts. White’s d-pawn has no neighbour on the c- or e-file: it is isolated, and only pieces can ever defend it. Black’s c-pawns stand on the same file: doubled, so the back one can never be defended by a pawn either. Weak pawns are targets for the rest of the game.',
+        text: 'Three pawn facts. White’s d-pawn has no neighbour on the c- or e-file: it is isolated, and only pieces can ever defend it. Black’s c-pawns stand on the same file: doubled, so the front one, c5, has no pawn that can ever defend it. Weak pawns are targets for the rest of the game.',
       },
       {
         kind: 'tap',
@@ -55,7 +55,7 @@ export const STRATEGY_LESSONS = [
         targets: ['b5'],
         text: 'Now a strong pawn. Tap White’s passed pawn: no enemy pawn can stop it on its file or the files beside it.',
         explain:
-          'Nothing on the a-, b- or c-file can ever block or capture the b-pawn. Passed pawns tie the opponent down and win endgames.',
+          'No black pawn on the a-, b- or c-file can ever block or capture the b-pawn. Passed pawns tie the opponent down and win endgames.',
       },
       {
         kind: 'choice',
@@ -212,7 +212,7 @@ export const STRATEGY_LESSONS = [
         kind: 'read',
         fen: BISHOPS,
         highlight: ['c1', 'c6'],
-        text: 'White’s pawns on c3, d4, e5, f2 and g3 all stand on dark squares, the colour of White’s bishop. It has nowhere to go: a bad bishop. Black’s pawns mostly sit on dark squares too, the opposite colour of Black’s light-squared bishop, which roams freely: a good bishop.',
+        text: 'White’s pawns on c3, d4, e5, f2 and g3 all stand on dark squares, the colour of White’s bishop. It can move, but its own pawns block its best diagonals and everything it could attack sits on the other colour: a bad bishop. Black’s pawns mostly sit on dark squares too, the opposite colour of Black’s light-squared bishop, which roams freely: a good bishop.',
       },
       {
         kind: 'tap',
@@ -220,7 +220,7 @@ export const STRATEGY_LESSONS = [
         verify: 'bad-bishop:w',
         targets: ['c1'],
         text: 'Tap the bad bishop.',
-        explain: 'The bishop on c1 is boxed in by its own dark-squared pawns. Count the pawns on its colour: five out of five.',
+        explain: 'The bishop on c1 is hemmed in by its own dark-squared pawns. Count the pawns on its colour: five out of five.',
       },
       {
         kind: 'choice',
@@ -364,7 +364,7 @@ export const STRATEGY_LESSONS = [
           {
             label: 'The rook on d1',
             correct: false,
-            why: 'It already stands on a half-open file, exactly where a rook belongs.',
+            why: 'It backs up the d4-pawn, and the other rook already holds the open c-file.',
           },
         ],
       },
@@ -374,9 +374,9 @@ export const STRATEGY_LESSONS = [
         text: 'Where should the knight go?',
         options: [
           {
-            label: 'c5: protected by the d4-pawn, and no black pawn can ever chase it away',
+            label: 'c5: protected by the d4-pawn and twice as active',
             correct: true,
-            why: 'Nc5 turns the worst piece into the best one. From c5 it hits b7 and e6 and sits on an outpost.',
+            why: 'Nc5 turns the worst piece into an active one. From c5 it hits b7 and e6. It is not a true outpost: Black can challenge it with ...b6 or ...Bxc5.',
           },
           {
             label: 'b6, attacking the rook on c8',
@@ -469,7 +469,7 @@ export const STRATEGY_LESSONS = [
         kind: 'read',
         fen: WEAK_KING,
         highlight: ['h7', 'g7', 'h8'],
-        text: 'Black has pushed ...g6 and the h-pawn is gone. The squares h7, g7 and h8 are defended by nothing but the king. That is where a white queen and bishop or rook would like to land.',
+        text: 'Black has pushed ...g6 and the h-pawn is gone. The squares h7, g7 and h8 are defended by nothing but the king. That is where White’s rooks, bishop and knight would like to land.',
       },
       {
         kind: 'tap',

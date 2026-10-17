@@ -57,7 +57,7 @@ export const lessons = [
         fen: 'rnbqkb1r/pppp1ppp/5n2/4p3/3PP3/8/PPP2PPP/RNBQKBNR b KQkq - 0 3',
         answers: ['f6e4', 'e5d4'],
         text: 'Win a pawn.',
-        explain: 'Nxe4 takes the undefended pawn. Taking on d4 with the e-pawn also wins one. Either way, you saw what was free.',
+        explain: 'Nxe4 takes the undefended pawn. Taking on d4 with the e-pawn is only a trade: Qxd4 takes back.',
       },
       {
         kind: 'choice',
@@ -130,7 +130,8 @@ export const lessons = [
         targets: ['f2'],
         verify: 'attacked-twice',
         text: 'Threats last, and their threats before yours. Tap the square Black is attacking twice.',
-        explain: 'The bishop on c5 and the knight on g4 both aim at f2, which only the king defends. Black threatens Bxf2+ or Nxf2.',
+        explain:
+          'The bishop on c5 and the knight on g4 both aim at f2, which only the king and the f1 rook defend. Black threatens Bxf2+ or Nxf2.',
       },
       {
         kind: 'move',
@@ -138,7 +139,7 @@ export const lessons = [
         answers: ['d2d4', 'd1e2', 'c2c3'],
         text: 'Meet the threat against f2.',
         explain:
-          'd4 blocks the bishop’s diagonal and attacks it at the same time; c3 prepares the same push; Qe2 adds a second defender of f2. The point is that you looked at their threat before making your own plan.',
+          'd4 blocks the bishop’s diagonal and attacks it at the same time; c3 prepares the same push; Qe2 adds a third defender of f2. The point is that you looked at their threat before making your own plan.',
       },
     ],
   },
@@ -178,7 +179,7 @@ export const lessons = [
         mate: true,
         text: 'Queen and king against king. Mate in one, but one tempting move is stalemate.',
         explain:
-          'Qg7#, protected by the king on f6. Qf7 or Qg6 would leave Black with no legal move and no check: stalemate, a draw from a won position.',
+          'Qg7#, protected by the king on f6. Qf7, or a careless king move such as Kf7, would leave Black with no legal move and no check: stalemate, a draw from a won position.',
       },
       {
         kind: 'move',
@@ -224,11 +225,11 @@ export const lessons = [
       },
       {
         kind: 'move',
-        fen: 'rnbqk1nr/pppp1ppp/8/4p3/1b2P3/8/PPPP1PPP/RNBQKBNR w KQkq - 2 3',
-        answers: ['c2c3', 'b1c3'],
+        fen: 'rnbqk1nr/pppp1ppp/8/4p3/1b1PP3/8/PPP2PPP/RNBQKBNR w KQkq - 1 3',
+        answers: ['c2c3', 'b1c3', 'b1d2', 'c1d2'],
         text: 'The bishop checks from b4. Answer the check without losing anything.',
         explain:
-          'c3 blocks and attacks the bishop, gaining time. Nc3 and Bd2 also block safely. Moving the king would give up castling for nothing.',
+          'c3 blocks and attacks the bishop, gaining time. Nc3, Nd2 and Bd2 also block safely. Moving the king would give up castling for nothing.',
       },
       {
         kind: 'move',
@@ -350,7 +351,8 @@ export const lessons = [
         fen: '4k3/pp6/2n5/1B6/3P4/8/8/4K3 w - - 0 1',
         line: ['d4d5', 'a7a6', 'd5c6'],
         text: 'Attack the pinned knight with a pawn, then take it.',
-        explain: 'd5 attacks a knight that cannot run. Black can only attack the bishop; dxc6 wins the knight for a pawn.',
+        explain:
+          'd5 attacks a knight that cannot run. Black can only attack the bishop; dxc6 wins the knight, and if Black grabs the bishop with ...axb5, cxb7 and the pawn queens.',
       },
       {
         kind: 'line',
@@ -366,7 +368,7 @@ export const lessons = [
         verify: 'pinned',
         text: 'Tap the white piece that is pinned.',
         explain:
-          'The knight on c3 is pinned by the bishop on b4 against the king on e1. It can still move, because the king is not in check, but moving it would be illegal.',
+          'The knight on c3 is pinned by the bishop on b4 against the king on e1. It cannot legally move: that would expose the king to check.',
       },
       {
         kind: 'choice',
@@ -536,7 +538,7 @@ export const lessons = [
           {
             label: 'Qxe5 winning a pawn',
             correct: false,
-            why: 'Qxe5+ is a threat too, but the big one is Qxf7#. Always find the worst threat first.',
+            why: 'Qxe5+ is no threat: the knight on c6 would take the queen. The threat is Qxf7#. Always find the worst threat first.',
           },
           { label: 'Nothing serious', correct: false, why: 'Qxf7 is mate next move. Thousands of games end this way.' },
         ],
@@ -602,7 +604,7 @@ export const lessons = [
           {
             label: 'Qxe6+, trading queens',
             correct: false,
-            why: 'Qxe6 is not even possible safely, and trading would throw away a mate in two.',
+            why: 'Qxe6+ fxe6 is only an even trade, and it throws away a mate in two.',
           },
         ],
       },
@@ -619,14 +621,14 @@ export const lessons = [
         text: 'Count before you take. The e5 pawn: how many attackers and defenders?',
         options: [
           {
-            label: 'One attacker (Nf3), no defenders: Nxe5 wins a pawn',
+            label: 'One attacker (Nf3), no defenders: Nxe5 takes the pawn',
             correct: true,
             why: 'Nothing guards e5. Taking is safe. Counting attackers and defenders is the fastest calculation there is.',
           },
           {
             label: 'One attacker, one defender: taking loses the knight',
             correct: false,
-            why: 'Look again: the d5 pawn defends e4, not e5, and no black piece covers e5.',
+            why: 'Look again: the d5 pawn attacks e4, it does not guard e5, and no black piece covers e5.',
           },
           { label: 'Two attackers, two defenders: even trade', correct: false, why: 'Only the knight attacks e5, and nothing defends it.' },
         ],
@@ -636,7 +638,8 @@ export const lessons = [
         fen: 'rnbqkbnr/ppp2ppp/8/3pp3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 3',
         answers: ['f3e5', 'e4d5'],
         text: 'Win a pawn.',
-        explain: 'Nxe5 takes the undefended pawn. exd5 also wins one. Either way, you counted first.',
+        explain:
+          'Nxe5 takes the undefended pawn; Black can take back on e4 with the d-pawn. exd5 is also good: after ...Qxd5, Nc3 hits the queen and gains time. Either way, you counted first.',
       },
     ],
   },
@@ -728,10 +731,10 @@ export const lessons = [
       {
         kind: 'move',
         fen: '8/3k4/8/4K3/4P3/8/8/8 w - - 0 1',
-        answers: ['e5f6'],
+        answers: ['e5f6', 'e5d5', 'e5f5'],
         text: 'Black has stepped aside to d7. Go around the pawn with your king.',
         explain:
-          'Kf6! The king takes the square in front of the pawn’s path and keeps the opposition. Pushing the pawn or going to d5 lets Black hold the draw.',
+          'Kf6! The king reaches a key square ahead of the pawn. Kd5 and Kf5 also win; pushing the pawn or retreating lets Black draw.',
       },
       {
         kind: 'move',
