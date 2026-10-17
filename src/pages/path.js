@@ -362,7 +362,8 @@ async function handleMove(move) {
     say(`${reply.san}. Your move again.`);
     return;
   }
-  solved(`${m.san}. ${step.explain}`);
+  // Most explanations already open with the move; do not say it twice.
+  solved(step.explain.startsWith(m.san) ? step.explain : `${m.san}. ${step.explain}`);
 }
 
 function choose(i) {

@@ -100,7 +100,7 @@ export const STRATEGY_LESSONS = [
         kind: 'read',
         fen: OUTPOST,
         highlight: ['c5'],
-        text: 'Look at c5. The d4-pawn defends it. Black’s b- and d-pawns have already passed it, so no black pawn can ever attack it. That makes c5 an outpost: a piece placed there stays for good.',
+        text: 'Look at c5. The d4-pawn defends it. Black’s b- and d-pawns have already passed it, so no black pawn can ever attack it. That makes c5 an outpost: a piece placed there can never be chased away by a pawn.',
       },
       {
         kind: 'tap',
@@ -116,7 +116,8 @@ export const STRATEGY_LESSONS = [
         fen: TO_OUTPOST,
         answers: ['d3c5'],
         text: 'Put the knight on the outpost.',
-        explain: 'Nc5. From there it hits b7, e6 and a6, and nothing can remove it. A knight on an outpost is worth more than a bishop.',
+        explain:
+          'Nc5. From there it hits b7, e6 and a6, and no pawn can ever chase it away. To get rid of it Black must trade a piece for it, as in ...Bxc5 dxc5.',
       },
       {
         kind: 'choice',

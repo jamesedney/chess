@@ -75,3 +75,19 @@ test('a strategy lesson verifies a tapped structure square', async ({ page }) =>
   await sq(page, 'd4').click();
   await expect(page.locator('#lesson-feedback')).toContainText('No white pawn');
 });
+
+test('a lesson move step names the move once and does not overclaim', async ({ page }) => {
+  await open(page, 'path?lesson=outposts');
+  // Step 1 reads, step 2 taps c5, step 3 is the move.
+  await page.click('#lesson-next');
+  await sq(page, 'c5').click();
+  await page.click('#lesson-next');
+  await expect(page.locator('#lesson-prompt')).toContainText('Put the knight on the outpost');
+  await sq(page, 'd3').click();
+  await sq(page, 'c5').click();
+  const feedback = page.locator('#lesson-feedback');
+  await expect(feedback).toContainText('no pawn can ever chase it away');
+  await expect(feedback).toContainText('...Bxc5 dxc5');
+  await expect(feedback).not.toContainText('Nc5. Nc5.');
+  await expect(feedback).not.toContainText('nothing can remove it');
+});
