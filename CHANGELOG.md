@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.1.9
+
+- The last move is marked with a thin ink frame instead of a coloured square: no colour, in keeping with the black-and-white design, and green still only means a good move.
+
 ## 5.1.8
 
 - The last move is highlighted in a neutral yellow instead of green, so green on the board only ever means a good move.
