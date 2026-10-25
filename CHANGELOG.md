@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.1.8
+
+- The last move is highlighted in a neutral yellow instead of green, so green on the board only ever means a good move.
+
 ## 5.1.7
 
 - Lessons fact-checked against the positions with chess.js and Stockfish. Twenty claims that were false or overstated are corrected, among them:
