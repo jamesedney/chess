@@ -128,7 +128,7 @@ test('one button runs the session block by block', async ({ page }) => {
   await expect(page.locator('.agenda-item.skipped')).toHaveCount(1);
   // Changing the daily time rebuilds the plan.
   await page.selectOption('#minutes', '60');
-  await expect(page.locator('#start-session')).toContainText('60 min');
+  await expect(page.locator('#minutes')).toHaveValue('60');
 });
 
 test('a unit on the path opens with its gate and can become today’s focus', async ({ page }) => {

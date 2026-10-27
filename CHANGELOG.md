@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.3.0
+
+- A new look, in the style of a chess game app: a charcoal background (or warm light, in light mode), rounded raised cards, a rounded heavy typeface (Nunito, replacing Archivo), and buttons that press down. Buttons are blue, and the next thing to do is gold, so green still only means a good move.
+- On phones the pages are in a tab bar along the bottom, with an icon for each.
+- Today opens with the session as a card: the next block, a progress bar and one button. Then your goal rating with its trend, tiles for your other ratings (each time control on the same site, and puzzles), the day's plan as cards, shortcuts to drills, and a large Play button that stays in reach.
+- A ratings sync now keeps your current rating in every time control you play, for the tiles.
+
 ## 5.2.0
 
 - Openings you struggle with, in Training: the lines from your reviewed games where you scored under 40% in at least three games, with your record in each. Play starts a practice game from the point the line goes wrong. Your opponent answers with the moves your real opponents played there, then plays on at your level.

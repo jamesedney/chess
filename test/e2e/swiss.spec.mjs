@@ -29,7 +29,7 @@ function game(id, created, extra = {}) {
 }
 
 /** Two weeks of better games after six weeks of worse ones, debrief notes and a rating history. */
-async function seed(page) {
+async function seed(page, extra = {}) {
   const now = Date.now();
   const older = (id, days, reason) =>
     game(id, now - days * DAY, {
@@ -73,7 +73,7 @@ async function seed(page) {
     state => {
       if (!localStorage.getItem('rankup-v1')) localStorage.setItem('rankup-v1', JSON.stringify(state));
     },
-    { version: 7, onboarded: true, reviews, mistakes, ratings },
+    { version: 7, onboarded: true, reviews, mistakes, ratings, ...extra },
   );
 }
 
@@ -85,8 +85,23 @@ test('Today leads with the rating and its trend; the evidence lives on You', asy
   await expect(page.locator('.goal-card svg.spark')).toBeVisible();
   await expect(page.locator('.metrics .metric')).toHaveCount(0);
   // The next block stands out, numbered like the rest.
-  await expect(page.locator('.agenda-item.current .agenda-mark')).toHaveText('01');
+  await expect(page.locator('.agenda-item.current .agenda-mark')).toHaveText('1');
   await expect(page.locator('.agenda-item.current')).toHaveCount(1);
+});
+
+test('Today: the session card, your other ratings as tiles, the drills and a Play button', async ({ page }) => {
+  await seed(page, {
+    sync: { perfs: { 'Chess.com blitz': 1402, 'Chess.com bullet': 943, 'Chess.com rapid': 897, 'Lichess blitz': 1500 } },
+  });
+  await open(page, 'today');
+  await expect(page.locator('.session-hero h2')).toHaveText(await page.locator('.agenda-item.current strong').innerText());
+  await expect(page.locator('#start-session')).toHaveText('Start today’s session');
+  // The goal's own rating is the big number, so the tiles are the others on that site, then puzzles.
+  await expect(page.locator('.rating-tile span')).toHaveText(['Bullet', 'Rapid', 'Puzzles']);
+  await expect(page.locator('.rating-tile strong').first()).toHaveText('943');
+  await expect(page.locator('.drill-card').first()).toContainText('Weak openings');
+  await page.click('#play-now');
+  await expect(page).toHaveURL(/#play/);
 });
 
 test('a debrief lists the reasons likeliest first, with how often each came up before', async ({ page }) => {

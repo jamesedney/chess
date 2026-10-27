@@ -19,7 +19,8 @@ export function mainPerf(counts, prefer = 'auto') {
 
 /**
  * Lichess: current ratings and up to 180 days of history for the main time
- * control. Returns { perf: 'Lichess rapid', rating, history: [{ date, rating }] }.
+ * control. Returns { perf: 'Lichess rapid', rating, history: [{ date, rating }], all: { 'Lichess blitz': 1500, … } },
+ * where `all` has the current rating in every time control played.
  */
 export async function lichessRatings(username, fetchImpl = fetch, now = Date.now(), prefer = 'auto') {
   const res = await fetchImpl(`https://lichess.org/api/user/${encodeURIComponent(username)}`, { headers: { Accept: 'application/json' } });
@@ -30,7 +31,8 @@ export async function lichessRatings(username, fetchImpl = fetch, now = Date.now
   const counts = Object.fromEntries(RATING_PERFS.map(p => [p, perfs[p]?.games || 0]));
   const perf = mainPerf(counts, prefer);
   if (!perf) return null;
-  const out = { perf: `Lichess ${perf}`, rating: perfs[perf].rating, history: [] };
+  const all = Object.fromEntries(RATING_PERFS.filter(p => counts[p]).map(p => [`Lichess ${p}`, perfs[p].rating]));
+  const out = { perf: `Lichess ${perf}`, rating: perfs[perf].rating, history: [], all };
   try {
     const h = await fetchImpl(`https://lichess.org/api/user/${encodeURIComponent(username)}/rating-history`, {
       headers: { Accept: 'application/json' },
@@ -55,7 +57,8 @@ export async function lichessRatings(username, fetchImpl = fetch, now = Date.now
  * Chess.com: the rating for the main time control and up to two months of
  * history, read from the stats endpoint and from your recent games. Whichever
  * is newer gives the current rating, so a lagging stats page cannot hold it
- * back. Returns { perf: 'Chess.com blitz', rating, history: [{ date, rating }] }.
+ * back. Returns { perf: 'Chess.com blitz', rating, history: [{ date, rating }], all },
+ * where `all` has the current rating in every time control played.
  */
 export async function chessComRatings(username, fetchImpl = fetch, prefer = 'auto', now = Date.now()) {
   const user = encodeURIComponent(username.toLowerCase());
@@ -103,7 +106,13 @@ export async function chessComRatings(username, fetchImpl = fetch, prefer = 'aut
       for (const [date, v] of [...byDay].sort((a, b) => a[0].localeCompare(b[0]))) history.push({ date, rating: v.rating });
     }
   } catch {}
-  return { perf: `Chess.com ${perf}`, rating: current.rating, history };
+  const all = Object.fromEntries(
+    Object.keys(counts)
+      .filter(p => counts[p] && stats[key(p)]?.last?.rating)
+      .map(p => [`Chess.com ${p}`, stats[key(p)].last.rating]),
+  );
+  all[`Chess.com ${perf}`] = current.rating;
+  return { perf: `Chess.com ${perf}`, rating: current.rating, history, all };
 }
 
 /**

@@ -148,6 +148,8 @@ test('ratings: main time control, merging and platform readers', async () => {
   assert.equal(b.rating, 1050);
   assert.equal(r.rating, 1180);
   assert.deepEqual(r.history, [{ date: '2026-09-01', rating: 1160 }]);
+  // Every time control played, for the tiles on Today.
+  assert.deepEqual(r.all, { 'Lichess blitz': 1050, 'Lichess rapid': 1180 });
   await assert.rejects(
     lichessRatings('nobody', async () => json({}, 404)),
     /No Lichess account/,
@@ -202,7 +204,12 @@ test('ratings: Chess.com reads the newest rating from stats or games, with histo
     'auto',
     NOW.getTime(),
   );
-  assert.deepEqual(noGames, { perf: 'Chess.com blitz', rating: 980, history: [] });
+  assert.deepEqual(noGames, {
+    perf: 'Chess.com blitz',
+    rating: 980,
+    history: [],
+    all: { 'Chess.com blitz': 980, 'Chess.com rapid': 1200 },
+  });
   await assert.rejects(
     chessComRatings('ghost', async () => json({}, 404)),
     /No Chess.com account/,

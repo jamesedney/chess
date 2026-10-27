@@ -14,6 +14,8 @@ import { STAGES } from '../themes.js';
 import { streakMode, diagnoseStreak, LEAKS, MIN_COUNTED } from '../leak.js';
 import { stopState, tiltProfile, ruleLine } from '../tilt.js';
 import { mainControl, rowsBetween } from '../ledger.js';
+import { strugglingLines } from '../opening-practice.js';
+import { dueCards } from '../repertoire.js';
 
 let root = null;
 let setup = { step: 'account', site: 'lichess', name: '', busy: false, error: '' };
@@ -205,7 +207,7 @@ function goalHTML() {
           ? `${plural(g.weeksBehind, 'week')} behind`
           : 'Behind';
   return `<section class="goal-card" aria-label="Your goal">
-    <div class="goal-top"><span class="small">${esc(label)}${t.perf !== PUZZLE_PERF && s.sync.ratingsAt ? ` · updated ${esc(ago(s.sync.ratingsAt))}` : ''}</span></div>
+    <div class="goal-top">${perfIcon(t.perf)}<span class="small">${esc(label)}${t.perf !== PUZZLE_PERF && s.sync.ratingsAt ? ` · updated ${esc(ago(s.sync.ratingsAt))}` : ''}</span></div>
     <div class="hero">
       <div class="goal-numbers"><strong>${g.current}</strong></div>
       <div class="hero-side">
@@ -328,6 +330,70 @@ function trackStreak(on, d) {
   toast(text, { duration: 9000 });
 }
 
+// ---------- Ratings and drills ----------
+
+/** Flat icons for each time control and for puzzles; colours come from the stylesheet. */
+const ICONS = {
+  bullet:
+    '<path class="fill-gold" d="M5.5 18.5 15 9l3.6-1.1-1.1 3.6-9.5 9.5z"/><path class="stroke-muted" d="M3.5 15.5l-1.5 1.5M6.5 20.5 5 22"/>',
+  blitz: '<path class="fill-gold" d="M13.5 2 4.5 13.5h6.5l-1.5 8.5 9-11.5h-6.5z"/>',
+  rapid:
+    '<circle class="fill-green" cx="12" cy="13.5" r="8"/><circle class="fill-face" cx="12" cy="13.5" r="5.6"/><path class="stroke-dark" d="M12 13.5V10"/><rect class="fill-green" x="10" y="2.5" width="4" height="3" rx="1"/>',
+  classical:
+    '<path class="fill-blue" d="M6.5 3h11v3.5l-4 5.5 4 5.5V21h-11v-3.5l4-5.5-4-5.5z"/><path class="fill-face" d="M9 18.5h6L12 15z"/>',
+  puzzle: '<path class="fill-blue" d="M4 7h4a2.5 2.5 0 1 1 5 0h4v4a2.5 2.5 0 1 1 0 5v4H4v-4.5a2.5 2.5 0 1 0 0-4.5z"/>',
+};
+
+/** The icon for a rating label such as "Lichess blitz", or the puzzle icon. */
+function perfIcon(perf) {
+  const kind = Object.keys(ICONS).find(k => perf.toLowerCase().endsWith(k)) || 'puzzle';
+  return `<svg class="perf-icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[kind]}</svg>`;
+}
+
+/**
+ * Your other ratings beside the goal's: every time control on the same site,
+ * from the last sync, then your Rankup puzzle rating.
+ */
+function ratingTiles() {
+  const s = app.state;
+  const followed = s.target?.perf || '';
+  const site = followed.split(' ')[0];
+  const known = { ...Object.fromEntries(s.ratings.map(r => [r.platform, r.rating])), ...(s.sync.perfs || {}) };
+  const order = ['bullet', 'blitz', 'rapid', 'classical'];
+  const tiles = Object.entries(known)
+    .filter(([perf]) => perf !== followed && perf.startsWith(`${site} `) && order.includes(perf.split(' ')[1]))
+    .sort((a, b) => order.indexOf(a[0].split(' ')[1]) - order.indexOf(b[0].split(' ')[1]))
+    .map(([perf, rating]) => ({ perf, label: PERF_LABEL(perf.split(' ')[1]), rating }));
+  if (followed !== PUZZLE_PERF) tiles.push({ perf: 'puzzle', label: 'Puzzles', rating: s.puzzle.rating });
+  if (!tiles.length) return '';
+  return `<section aria-label="Your other ratings" class="rating-tiles">${tiles
+    .map(t => `<div class="rating-tile">${perfIcon(t.perf)}<strong>${t.rating}</strong><span>${esc(t.label)}</span></div>`)
+    .join('')}</section>`;
+}
+
+/** Shortcuts to the drills, with what is waiting in each. */
+function drillsHTML() {
+  const s = app.state;
+  const weak = strugglingLines(s.reviews);
+  const due = dueCards(s).length;
+  const cards = [
+    weak.length && { go: 'openings', title: 'Weak openings', detail: `${plural(weak.length, 'line')} to practise` },
+    due && { go: 'repertoire', title: 'Your repertoire', detail: `${due} due` },
+    { go: 'endgames', title: 'Endgames', detail: 'vs Stockfish' },
+    { go: 'checks', title: 'Find every check', detail: 'Calculation' },
+  ].filter(Boolean);
+  return `<section aria-labelledby="drills-head">
+    <div class="section-head"><h2 id="drills-head">Drills</h2><a href="#train">All training</a></div>
+    <div class="drill-cards">${cards
+      .slice(0, 4)
+      .map(
+        c =>
+          `<button type="button" class="drill-card" data-drill="${c.go}"><strong>${esc(c.title)}</strong><span>${esc(c.detail)}</span></button>`,
+      )
+      .join('')}</div>
+  </section>`;
+}
+
 function draw() {
   if (!root || app.page !== 'today') return;
   const s = app.state;
@@ -338,43 +404,52 @@ function draw() {
   const unitPct = unit ? Math.round(unitStatus(s, unit).progress * 100) : 0;
   const streak = streaks(s.days);
   const firstTodo = session.blocks.findIndex(b => b.status === 'todo' || b.status === 'active');
-  const label = prog.complete
-    ? 'Done for today'
-    : prog.done
-      ? `Continue · ${prog.minutesLeft} min left`
-      : `Start today’s session · ${session.minutes} min`;
+  const label = prog.complete ? 'Done for today' : prog.done ? 'Continue' : 'Start today’s session';
   const stop = stopState(s);
   const inStreak = streakMode(s);
   const diagnosis = inStreak || s.streak ? diagnoseStreak(s) : null;
   trackStreak(inStreak, diagnosis);
+  const current = session.blocks[firstTodo];
+  const pct = Math.round((prog.done / Math.max(1, session.blocks.length)) * 100);
   root.innerHTML = `<div class="focus today">
     ${stop.live ? stopHTML(stop) : ''}
-    ${goalHTML()}
+    <section class="session-hero" aria-labelledby="today-head">
+      <span class="eyebrow" id="today-head">Today’s session · ${prog.complete ? 'all done' : `${prog.done} of ${session.blocks.length} done · ${prog.minutesLeft ?? session.minutes} min`}</span>
+      <h2>${esc(prog.complete ? 'Done for today' : current?.title || 'Today’s session')}</h2>
+      <div class="hero-track" role="img" aria-label="${pct}% done"><span style="width:${pct}%"></span></div>
+      <button type="button" id="start-session" class="gold" ${prog.complete ? 'disabled' : ''}><span>${esc(label)}</span></button>
+      <svg class="hero-knight" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21h11l-1-3c2-1 3-4 3-7 0-5-4-8-8-8l-1 2-3 1-3 5 2 1 2-1 1 2-4 5z"/></svg>
+    </section>
     ${inStreak ? leakHTML(diagnosis) : ''}
-    <section aria-labelledby="today-head">
-      <div class="section-rule"><span id="today-head">Today</span><span>${prog.complete ? 'All done' : `${prog.done} of ${session.blocks.length} done · ${prog.minutesLeft ?? session.minutes} min`}</span></div>
+    ${goalHTML()}
+    ${ratingTiles()}
+    <section aria-labelledby="plan-head">
+      <div class="section-head"><h2 id="plan-head">Today’s plan</h2><span>${plural(session.blocks.length, 'block')}</span></div>
       ${ruleHTML(stop)}
       <ol class="agenda">${session.blocks
         .map(
           (b, i) =>
             `<li class="agenda-item ${b.status}${i === firstTodo && !prog.complete ? ' current' : ''}"><button type="button" data-block="${i}" ${b.status === 'done' ? 'aria-label="' + esc(b.title) + ', done"' : ''}>
-              <span class="agenda-mark" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span>
+              <span class="agenda-mark" aria-hidden="true">${b.status === 'done' ? '✓' : i + 1}</span>
               <span class="agenda-text"><strong>${esc(b.title)}</strong><span class="small">${esc(b.detail)}</span></span>
-              <span class="small agenda-time">${Math.max(1, Math.round(b.est))}′</span>
+              <span class="small agenda-time">${Math.max(1, Math.round(b.est))} min</span>
             </button></li>`,
         )
         .join('')}</ol>
     </section>
-    <button type="button" id="start-session" class="primary big" ${prog.complete ? 'disabled' : ''}><span>${esc(label)}</span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></button>
     <p class="level-line"><strong>${esc(path.band.label)}</strong> · ${path.bandDone} of ${path.bandTotal} units${unit ? ` · now: ${esc(unit.title)} (${unitPct}%)` : ''}</p>
     ${prog.complete ? `<p class="status success">Session complete. ${streak.current > 1 ? `${streak.current}-day streak. ` : ''}Tomorrow’s plan builds on today.</p><div class="actions center"><button type="button" id="more">Train more</button></div>` : ''}
+    ${drillsHTML()}
     <div class="today-foot small">
       <label for="minutes">Daily time</label>
       <select id="minutes">${[10, 20, 30, 45, 60].map(m => `<option value="${m}" ${s.minutes === m ? 'selected' : ''}>${m} min</option>`).join('')}</select>
       ${s.profiles.lichess || s.profiles.chesscom ? `<span>·</span><label for="follow-perf">Rating</label><select id="follow-perf">${perfOptions(s.settings.perf)}</select>` : ''}
       <span>·</span><a href="#path">Your path</a><span>·</span><a href="#coach">Coach</a>
     </div>
+    <button type="button" id="play-now" class="play-cta">Play</button>
   </div>`;
+  $('#play-now', root).onclick = () => app.navigate('play');
+  root.querySelectorAll('[data-drill]').forEach(b => (b.onclick = () => app.navigate('drills', { drill: b.dataset.drill })));
   $('#start-session', root).onclick = () => startBlock(firstTodo);
   $('#stop-reset', root)?.addEventListener('click', () => startReset());
   root.querySelectorAll('[data-block]').forEach(b => (b.onclick = () => startBlock(Number(b.dataset.block))));

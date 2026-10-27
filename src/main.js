@@ -32,7 +32,7 @@ import { scheduleDeepAnalysis } from './deep.js';
 import { startAutoSync, syncNow, onLedgerChange } from './queue.js';
 import { CONTROLS } from './sync.js';
 
-export const VERSION = '5.2.0';
+export const VERSION = '5.3.0';
 const PAGES = { today, train, coach, path, play, review, progress, drills };
 // Pages without their own tab light up the tab they belong to.
 const NAV_AS = { train: 'today', drills: 'today', coach: 'progress' };
@@ -205,7 +205,8 @@ function applyTheme(choice) {
   if (choice === 'light' || choice === 'dark') document.documentElement.dataset.theme = choice;
   else delete document.documentElement.dataset.theme;
   const dark = choice === 'dark' || (choice !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
-  $('meta[name="theme-color"]')?.setAttribute('content', dark ? '#0a0a0a' : '#ffffff');
+  // The status bar matches the page: both tags take the chosen theme's colour.
+  document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', dark ? '#262421' : '#efede8'));
   applyBoardTheme(app.state.settings.board, dark);
 }
 

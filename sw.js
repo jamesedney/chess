@@ -1,13 +1,13 @@
 // Rankup service worker: precache the app for offline use.
 // Bump VERSION (and package.json) for every release; tests check they match.
-const VERSION = '5.2.0';
+const VERSION = '5.3.0';
 const CACHE = 'rankup-v' + VERSION;
 const FILES = [
   './',
   './index.html',
   './manifest.webmanifest',
   './styles/app.css',
-  './fonts/archivo.woff2',
+  './fonts/nunito.woff2',
   './src/main.js',
   './src/app-context.js',
   './src/board.js',

@@ -63,7 +63,7 @@ test('progress set aside by the 4.0 log bug comes back on the next load', async 
   });
   await open(page, 'today');
   await expect(page.locator('.toast.show')).toContainText('Your progress is back');
-  await expect(page.locator('#start-session')).toContainText('45 min');
+  await expect(page.locator('#minutes')).toHaveValue('45');
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')));
   expect(saved.log).toHaveLength(30);
 });

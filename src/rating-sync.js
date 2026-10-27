@@ -31,11 +31,14 @@ export async function syncRatings({ force = false, fetchImpl = fetch, now = Date
   const prefer = s.settings.perf || 'auto';
   if (names.lichess) results.push(lichessRatings(names.lichess, fetchImpl, now, prefer).catch(e => errors.push(e.message)));
   if (names.chesscom) results.push(chessComRatings(names.chesscom, fetchImpl, prefer, now).catch(e => errors.push(e.message)));
-  const fetched = /** @type {{ perf: string, rating: number, history: { date: string, rating: number }[] }[]} */ (
-    (await Promise.all(results)).filter(r => r && typeof r === 'object')
-  );
+  const fetched =
+    /** @type {{ perf: string, rating: number, history: { date: string, rating: number }[], all?: Record<string, number> }[]} */ (
+      (await Promise.all(results)).filter(r => r && typeof r === 'object')
+    );
   for (const r of fetched) changed += mergeRatings(s.ratings, r, dateKey(new Date(now)));
   if (fetched.length) s.sync.followed = fetched.map(r => r.perf);
+  // Every time control's current rating, for the tiles on Today.
+  for (const r of fetched) if (r.all) s.sync.perfs = { ...(s.sync.perfs || {}), ...r.all };
   s.sync.ratingsAt = now;
   const milestone = updateGoal(s, new Date(now));
   app.save();
