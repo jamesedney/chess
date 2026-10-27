@@ -14,7 +14,7 @@ import { validateLedger } from './ledger.js';
 
 export const STORAGE_KEY = 'rankup-v1'; // Kept for continuity; the version lives inside.
 export const RECOVERY_PREFIX = 'rankup-recovery-';
-export const CURRENT_VERSION = 9;
+export const CURRENT_VERSION = 10;
 export const MAX_GAMES = 50;
 export const MAX_REVIEWS = 20;
 export const MAX_LOG = 4000;
@@ -185,6 +185,14 @@ export const MIGRATIONS = [
       // Games reviewed before debriefs existed are not asked about again.
       const reviews = (s.reviews || []).map(r => ({ ...r, debriefed: true }));
       return { ...s, reviews, replays: {}, rep: {} };
+    },
+  },
+  {
+    from: 9,
+    run(s) {
+      // 5.3 game look: the default board became tournament green. Other choices stay.
+      if (s.settings?.board !== 'grey') return s;
+      return { ...s, settings: { ...s.settings, board: 'green' } };
     },
   },
   {

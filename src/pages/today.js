@@ -297,7 +297,7 @@ function leakHTML(d) {
       `<span class="small">Habit: ${esc(d.habit || LEAKS[d.leak].habit)}</span>`;
   else if (d.counted < MIN_COUNTED) body = ` ${d.counted} of them read so far: the leak appears at ${MIN_COUNTED}.`;
   else body = ` ${d.counted} of them read: no one leak started enough of them yet.`;
-  return `<section aria-labelledby="streak-head">
+  return `<section aria-labelledby="streak-head" class="streak-card">
     <div class="section-rule"><span id="streak-head">The streak</span><span>last 10 games</span></div>
     <p class="leak-line">${lead}${body}</p>
   </section>`;
@@ -365,7 +365,8 @@ function ratingTiles() {
     .sort((a, b) => order.indexOf(a[0].split(' ')[1]) - order.indexOf(b[0].split(' ')[1]))
     .map(([perf, rating]) => ({ perf, label: PERF_LABEL(perf.split(' ')[1]), rating }));
   if (followed !== PUZZLE_PERF) tiles.push({ perf: 'puzzle', label: 'Puzzles', rating: s.puzzle.rating });
-  if (!tiles.length) return '';
+  // One tile on its own looks like a mistake: the row waits for a sync that brings the rest.
+  if (tiles.length < 2) return '';
   return `<section aria-label="Your other ratings" class="rating-tiles">${tiles
     .map(t => `<div class="rating-tile">${perfIcon(t.perf)}<strong>${t.rating}</strong><span>${esc(t.label)}</span></div>`)
     .join('')}</section>`;

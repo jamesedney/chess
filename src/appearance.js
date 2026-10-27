@@ -20,7 +20,7 @@ export const PIECE_SETS = {
   mpchess: { label: 'MPChess' },
 };
 
-export const DEFAULT_APPEARANCE = { board: 'grey', pieces: 'cburnett' };
+export const DEFAULT_APPEARANCE = { board: 'green', pieces: 'cburnett' };
 
 let pieceSet = DEFAULT_APPEARANCE.pieces;
 
@@ -47,8 +47,8 @@ export function applyBoardTheme(id, dark = false, root = document.documentElemen
     return;
   }
   const t = BOARD_THEMES[key];
-  const light = dark ? shade(t.light, -0.1) : t.light;
-  const darkSq = dark ? shade(t.dark, -0.23) : t.dark;
+  const light = dark ? shade(t.light, -0.06) : t.light;
+  const darkSq = dark ? shade(t.dark, -0.12) : t.dark;
   const values = [light, darkSq, shade(light, -0.05), shade(darkSq, -0.07), darkSq, light];
   PROPS.forEach((p, i) => root.style.setProperty(p, values[i]));
 }

@@ -12,11 +12,11 @@
 
 :root {
   color-scheme: light;
-  --ink: #262421;
+  --ink: #2d2a26;
   --muted: #6f6a62;
-  --paper: #efede8;
-  --surface: #ffffff;
-  --surface-2: #f6f4f0;
+  --paper: #ebe8e2;
+  --surface: #f8f6f1;
+  --surface-2: #f0ede7;
   --line: #e3e0d9;
   --line-strong: #c9c4ba;
   --accent: #2f6fe0;
@@ -37,14 +37,14 @@
   --chip-ink: #4a463f;
   --status: #f6f4f0;
   --status-line: #c9c4ba;
-  --success: #e6f4ee;
+  --success: #f8f6f1;
   --success-line: #00805a;
-  --error: #fdecea;
+  --error: #f8f6f1;
   --error-line: #c4291c;
-  --warning: #fdf3dc;
+  --warning: #f8f6f1;
   --warning-line: #8f6100;
-  --raise: #d8d4cb;
-  --bar: #ffffff;
+  --raise: #dcd8cf;
+  --bar: #ebe8e2;
   --hero-1: #3a6fd8;
   --hero-2: #24489a;
   --hero-deep: #1a3577;
@@ -86,11 +86,11 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --ink: #f2f0ec;
+    --ink: #e9e5dd;
     --muted: #a8a49d;
     --paper: #262421;
-    --surface: #312e2b;
-    --surface-2: #3a3733;
+    --surface: #2f2c29;
+    --surface-2: #38342f;
     --line: #403c38;
     --line-strong: #5a554e;
     --accent: #4f8df7;
@@ -106,14 +106,14 @@
     --chip-ink: #d9d5ce;
     --status: #312e2b;
     --status-line: #5a554e;
-    --success: #1d2e25;
+    --success: #2f2c29;
     --success-line: #3ddc97;
-    --error: #3a1f1b;
+    --error: #2f2c29;
     --error-line: #ff7a6b;
-    --warning: #3a3020;
+    --warning: #2f2c29;
     --warning-line: #e0b04a;
-    --raise: #1c1a18;
-    --bar: #1f1d1b;
+    --raise: #1d1b19;
+    --bar: #262421;
     --hero-1: #2f5bb5;
     --hero-2: #1d2f63;
     --hero-deep: #14214a;
@@ -143,11 +143,11 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --ink: #f2f0ec;
+  --ink: #e9e5dd;
   --muted: #a8a49d;
   --paper: #262421;
-  --surface: #312e2b;
-  --surface-2: #3a3733;
+  --surface: #2f2c29;
+  --surface-2: #38342f;
   --line: #403c38;
   --line-strong: #5a554e;
   --accent: #4f8df7;
@@ -163,14 +163,14 @@
   --chip-ink: #d9d5ce;
   --status: #312e2b;
   --status-line: #5a554e;
-  --success: #1d2e25;
+  --success: #2f2c29;
   --success-line: #3ddc97;
-  --error: #3a1f1b;
+  --error: #2f2c29;
   --error-line: #ff7a6b;
-  --warning: #3a3020;
+  --warning: #2f2c29;
   --warning-line: #e0b04a;
-  --raise: #1c1a18;
-  --bar: #1f1d1b;
+  --raise: #1d1b19;
+  --bar: #262421;
   --hero-1: #2f5bb5;
   --hero-2: #1d2f63;
   --hero-deep: #14214a;
@@ -4411,4 +4411,85 @@ dialog .panel,
 .focus-board .board,
 .board-card .board {
   box-shadow: 0 3px 0 var(--raise);
+}
+
+/* One ground colour from the header to the tab bar; cards are the only
+   raised thing. Feedback is a card with a coloured edge, not a tinted box. */
+:root {
+  --tabbar: 58px;
+}
+header,
+.session-bar,
+.focus-actions {
+  background: var(--paper);
+}
+.session-bar {
+  border-bottom: 0;
+}
+.status {
+  background: var(--surface);
+  box-shadow: inset 4px 0 0 var(--line-strong);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+.status.success {
+  box-shadow: inset 4px 0 0 var(--good);
+}
+.status.error {
+  box-shadow: inset 4px 0 0 var(--error-line);
+}
+.status.warning {
+  box-shadow: inset 4px 0 0 var(--warning-line);
+}
+.tag {
+  border: 0;
+  border-radius: 99px;
+  background: var(--surface-2);
+  color: var(--muted);
+  padding: 3px 9px;
+  font-weight: 700;
+}
+.focus-meta {
+  font-weight: 700;
+}
+.streak-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 10px 14px 12px;
+  box-shadow: 0 3px 0 var(--raise);
+}
+.streak-card .section-rule {
+  padding-top: 0;
+}
+.agenda-item.done strong,
+.agenda-item.skipped strong {
+  text-decoration: none;
+  color: var(--muted);
+}
+.agenda-item.done .agenda-text .small {
+  display: none;
+}
+@media (max-width: 850px) {
+  /* The action bar and the Play button sit above the tab bar, not under it. */
+  .focus-actions {
+    bottom: calc(var(--tabbar) + env(safe-area-inset-bottom));
+    border-top: 0;
+    padding-bottom: 10px;
+  }
+  main:has(.focus) {
+    padding-bottom: calc(var(--tabbar) + 84px + env(safe-area-inset-bottom));
+  }
+  .play-cta {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: calc(var(--tabbar) + 10px + env(safe-area-inset-bottom));
+    margin: 0;
+  }
+  .today {
+    padding-bottom: 72px;
+  }
+  .sidebar {
+    border-top: 1px solid var(--line);
+  }
 }

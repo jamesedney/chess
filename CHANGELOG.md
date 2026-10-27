@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.3.1
+
+- Training on a phone: the Next, Hint and Solution buttons were hidden under the new tab bar. They sit above it now, and so does the Play button on Today.
+- One ground colour from the header to the tab bar, softer text and card colours in both themes, and feedback shown as a card with a coloured edge instead of a tinted box.
+- The default board is tournament green, which suits the new look; a grey board chosen before changes with it, any other choice stays. Boards keep more of their colour in dark mode.
+- Today: the streak sits in a card, the rating tiles wait until there are at least two, and finished blocks are greyed rather than struck through.
+
 ## 5.3.0
 
 - A new look, in the style of a chess game app: a charcoal background (or warm light, in light mode), rounded raised cards, a rounded heavy typeface (Nunito, replacing Archivo), and buttons that press down. Buttons are blue, and the next thing to do is gold, so green still only means a good move.

@@ -298,15 +298,18 @@ test('planner: a clock drill for a clock habit, a game to play again, and repert
   assert.equal(blockDone(state, repStarted), true);
 });
 
-test('state v8: the default walnut board becomes grey, other choices stay', () => {
-  assert.ok(CURRENT_VERSION >= 8);
+test('state v8 and v10: the default board follows the design (walnut, then grey, then green); other choices stay', () => {
+  assert.ok(CURRENT_VERSION >= 10);
   const v7 = s => ({ ...defaults(), version: 7, settings: { ...defaults().settings, board: s } });
-  assert.equal(migrate(v7('walnut')).settings.board, 'grey');
+  assert.equal(migrate(v7('walnut')).settings.board, 'green');
   assert.equal(migrate(v7('ocean')).settings.board, 'ocean');
-  assert.equal(defaults().settings.board, 'grey');
+  const v9 = s => ({ ...defaults(), version: 9, settings: { ...defaults().settings, board: s } });
+  assert.equal(migrate(v9('grey')).settings.board, 'green');
+  assert.equal(migrate(v9('slate')).settings.board, 'slate');
+  assert.equal(defaults().settings.board, 'green');
   assert.equal(validate(migrate(v7('walnut'))), null);
   // A backup without settings is left for the defaults to fill.
   const bare = { ...defaults(), version: 7 };
   delete bare.settings;
-  assert.equal(migrate(bare).settings?.board ?? 'grey', 'grey');
+  assert.equal(migrate(bare).settings?.board ?? 'green', 'green');
 });

@@ -122,7 +122,7 @@ test('a version 2 state gains kinds, a log, drills and settings', () => {
     ['allowed-mate', 'hung-piece'],
   );
   assert.deepEqual(s.log, []);
-  assert.equal(s.settings.board, 'grey');
+  assert.equal(s.settings.board, 'green');
   assert.equal(s.settings.sound, true);
   assert.deepEqual(s.calc.visual, { best: 0, runs: 0, last: [] });
 });

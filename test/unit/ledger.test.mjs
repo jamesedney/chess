@@ -382,7 +382,7 @@ test('Chess.com returns every game in the archives, with results and ratings, fr
 });
 
 test('state v9: ledger, stop line, streak, two drills and the practice clock', () => {
-  assert.equal(CURRENT_VERSION, 9);
+  assert.ok(CURRENT_VERSION >= 9);
   const v8 = { ...defaults(), version: 8 };
   delete v8.ledger;
   delete v8.stop;
@@ -392,7 +392,7 @@ test('state v9: ledger, stop line, streak, two drills and the practice clock', (
   delete v8.settings.clock;
   delete v8.sync.ledgerAt;
   const m = migrate(v8);
-  assert.equal(m.version, 9);
+  assert.equal(m.version, CURRENT_VERSION);
   assert.deepEqual(m.ledger, []);
   assert.deepEqual(m.stop, { since: null, resets: [] });
   assert.equal(m.streak, null);
