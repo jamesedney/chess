@@ -194,9 +194,12 @@ test('same clock, better move: your own position with the seconds you had, out o
   await expect(page.locator('#feedback')).toContainText('You had 0:41 here and played Nxf7 in 2 s. Find the better move.');
   await expect(page.locator('#drill-clock')).toHaveText(/^4[01]s$/);
   await expect(page.locator('#board')).toHaveAttribute('data-fen', FEN_BEFORE_NXF7);
-  await page.clock.fastForward('00:42');
-  await expect(page.locator('#feedback')).toContainText('Out of time, as in the game');
+  // Under five seconds the clock turns urgent; checked before it runs out, since the
+  // solution then replays on the same fake clock and takes the chip with it.
+  await page.clock.fastForward('00:37');
   await expect(page.locator('#drill-clock')).toHaveClass(/urgent/);
+  await page.clock.fastForward('00:05');
+  await expect(page.locator('#feedback')).toContainText('Out of time, as in the game');
   // The solution plays, then the run ends: one position, not in time, a first attempt.
   await expect(page.locator('#feedback')).toContainText('Bxf7+');
   await page.click('#next');
