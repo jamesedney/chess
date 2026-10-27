@@ -367,7 +367,7 @@ function ratingTiles() {
   if (followed !== PUZZLE_PERF) tiles.push({ perf: 'puzzle', label: 'Puzzles', rating: s.puzzle.rating });
   // One tile on its own looks like a mistake: the row waits for a sync that brings the rest.
   if (tiles.length < 2) return '';
-  return `<section aria-label="Your other ratings" class="rating-tiles">${tiles
+  return `<section aria-label="Your other ratings" class="rating-tiles tiles-${tiles.length}">${tiles
     .map(t => `<div class="rating-tile">${perfIcon(t.perf)}<strong>${t.rating}</strong><span>${esc(t.label)}</span></div>`)
     .join('')}</section>`;
 }

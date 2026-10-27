@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.3.3
+
+- Colour audit. Blue marks what you can tap and what is current; gold is the Practice button and nothing else; green only ever means better; red only ever means stop or wrong. The rating icons are one muted colour, the session card's progress bar is white, and the tonight line is a plain card rather than a gold-edged one.
+- On phones the Practice button and the training action bar sit above the tab bar by its measured height, so they no longer overlap it or the list.
+- Four rating tiles lay out two by two.
+
 ## 5.3.2
 
 - The big button on Today is Practice: it runs today's training, block by block, and reads Continue once you have begun. The session card shows what is next instead of carrying a second button. A game is a tap away on the Play tab.

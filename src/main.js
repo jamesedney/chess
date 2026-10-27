@@ -32,7 +32,7 @@ import { scheduleDeepAnalysis } from './deep.js';
 import { startAutoSync, syncNow, onLedgerChange } from './queue.js';
 import { CONTROLS } from './sync.js';
 
-export const VERSION = '5.3.2';
+export const VERSION = '5.3.3';
 const PAGES = { today, train, coach, path, play, review, progress, drills };
 // Pages without their own tab light up the tab they belong to.
 const NAV_AS = { train: 'today', drills: 'today', coach: 'progress' };
@@ -132,6 +132,17 @@ document.querySelector('nav')?.addEventListener('click', e => {
   e.preventDefault();
   show(/** @type {HTMLElement} */ (link).dataset.page, { list: true });
 });
+
+/** The tab bar's real height (phones), so the action bar and Practice button sit just above it. */
+function measureTabBar() {
+  const nav = document.querySelector('.sidebar');
+  if (!nav || !matchMedia('(max-width: 850px)').matches) return document.documentElement.style.removeProperty('--tabbar');
+  const h = nav.getBoundingClientRect().height - (parseFloat(getComputedStyle(nav).paddingBottom) || 0) + 6;
+  document.documentElement.style.setProperty('--tabbar', `${Math.round(h)}px`);
+}
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(measureTabBar).observe(document.querySelector('.sidebar'));
+addEventListener('resize', measureTabBar);
+measureTabBar();
 
 function updateSidebar() {
   const s = app.state;
