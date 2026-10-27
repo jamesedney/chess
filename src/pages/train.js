@@ -410,6 +410,7 @@ function openMenu() {
       <button type="button" data-drill="checks">Find every check</button>
       <button type="button" data-drill="assess">Assess the position</button>
       <button type="button" data-drill="repertoire">Your repertoire</button>
+      <button type="button" data-drill="openings">Openings you struggle with</button>
       <button type="button" data-clock="pace">Pace drill</button>
       <button type="button" data-clock="pause">Pause drill</button>
       ${pressurePositions(s, { limit: MIN_POSITIONS }).length >= MIN_POSITIONS ? '<button type="button" data-clock="real">Same clock</button>' : ''}

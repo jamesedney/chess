@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { defaults, migrate, validate, CURRENT_VERSION } from '../../src/state.js';
 import { pickMoments, needsDebrief, suggestReason, tagMoment, habits, REASONS } from '../../src/debrief.js';
 import { replayCandidates, opponentLevel, judgeReplay, recordReplay, nextReplay, goalText } from '../../src/replay.js';
-import { buildRepertoire, repertoireCards, dueCards, weakLines, lineText } from '../../src/repertoire.js';
+import { buildRepertoire, repertoireCards, dueCards, lineText } from '../../src/repertoire.js';
+import { strugglingLines, opponentMove, recordText } from '../../src/opening-practice.js';
 import { timeProfile, profileText } from '../../src/timeprofile.js';
 import { evidence, headlineText, focus } from '../../src/evidence.js';
 import { schedule } from '../../src/srs.js';
@@ -154,8 +155,31 @@ test('repertoire: your moves, better moves where you lost ground, due cards and 
   assert.equal(due[0].id, bc4.id);
   state.rep[bc4.id] = schedule(undefined, true, NOW);
   assert.ok(!dueCards(state, NOW).some(c => c.id === bc4.id));
-  // You score 1/6 after 1. e4 e5 2. Nf3 Nc6: a weak line.
-  assert.ok(weakLines(games).some(l => l.line === '1. e4 e5 2. Nf3 Nc6' && l.games === 3));
+});
+
+test("openings you struggle with: the first position of a weak line, and your opponents' moves there", () => {
+  const games = [
+    review({ result: '0-1' }),
+    review({ result: '0-1' }),
+    review({ result: '1/2-1/2' }),
+    review({ moves: ['e4', 'c5', 'Nf3', 'd6'], result: '1-0' }),
+    review({ colour: 'b', moves: ['d4', 'd5', 'c4', 'e6'], result: '1-0' }),
+  ];
+  const lines = strugglingLines(games);
+  // 1. e4 e5 is where it goes wrong: three games, half a point. The deeper
+  // positions in the same three games are left out, and 1. e4 alone scores 40%.
+  assert.equal(lines.length, 1);
+  const [l] = lines;
+  assert.equal(l.text, '1. e4 e5');
+  assert.equal(l.colour, 'w');
+  assert.equal(l.fen, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2');
+  assert.equal(recordText(l), '3 games: 0 won, 1 drawn, 2 lost');
+  // Two games are not enough; a White line does not count your Black games.
+  assert.deepEqual(strugglingLines(games.slice(0, 2)), []);
+  // The opponent plays what yours played: 1... e5 three times to 1... c5 once.
+  assert.equal(opponentMove(games, 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1', 'w'), 'e5');
+  assert.equal(opponentMove(games, l.fen.replace(' w ', ' b '), 'w'), null);
+  assert.equal(opponentMove(games, 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1', 'b'), null);
 });
 
 test('clock profile: rushing critical moves, running short, or balanced', () => {

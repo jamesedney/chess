@@ -95,11 +95,3 @@ export function dueCards(state, now = Date.now()) {
     .filter(c => !state.rep?.[c.id] || isDue(state.rep[c.id], now))
     .sort((a, b) => Number(b.fix) - Number(a.fix) || a.ply - b.ply);
 }
-
-/** Lines you score badly in (at least three games, under 40%), worst first. */
-export function weakLines(reviews) {
-  return [...buildRepertoire(reviews).values()]
-    .filter(n => n.games >= 3 && n.points / n.games < 0.4 && n.line.length)
-    .sort((a, b) => a.points / a.games - b.points / b.games || b.games - a.games)
-    .map(n => ({ colour: n.colour, line: lineText(n.line), games: n.games, score: n.points / n.games }));
-}

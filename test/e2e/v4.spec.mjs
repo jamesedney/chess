@@ -138,6 +138,28 @@ test('the repertoire drill asks for your move, or the better one where you lost 
   expect(s.log.filter(e => e.k === 'o').map(e => e.c)).toEqual([0, 0]);
 });
 
+test('openings you struggle with: play on from the line, against the moves your opponents played', async ({ page }) => {
+  await seed(page, {
+    reviews: [lostGame('ra', Date.now() - 60000), lostGame('rb', Date.now() - 3600000), lostGame('rc', Date.now() - 7200000)],
+  });
+  await open(page, 'train');
+  await page.click('#train-menu');
+  await page.click('[data-drill="openings"]');
+  await expect(page.locator('#main h2')).toHaveText('Openings you struggle with');
+  // All three games go 1. e4 e5 and are lost: one line, not one per move.
+  await expect(page.locator('.weak-lines li')).toHaveCount(1);
+  await expect(page.locator('.weak-lines li')).toContainText('As White · 3 games: 0 won, 0 drawn, 3 lost');
+  await expect(page.locator('.weak-lines li strong')).toHaveText('1. e4 e5');
+  await page.click('[data-line="0"]');
+  await expect(page.locator('#board-title')).toHaveText('From: 1. e4 e5');
+  await expect(page.locator('#board [data-square="e5"] img')).toBeVisible();
+  // Your opponents answered 2. Nf3 with Nc6, and 3. Bc4 with Nd4: so does this one.
+  await move(page, 'g1', 'f3');
+  await expect(page.locator('#board [data-square="c6"] img')).toBeVisible();
+  await move(page, 'f1', 'c4');
+  await expect(page.locator('#board [data-square="d4"] img')).toBeVisible();
+});
+
 test('the pace drill times each position and the pause drill locks the board first', async ({ page }) => {
   await page.clock.install();
   await open(page, 'train?mode=daily&clock=pace&limit=2');

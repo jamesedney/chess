@@ -13,6 +13,7 @@ import { dateKey, logGame, logCandidates, logAttempt } from '../state.js';
 import { replayCandidates, nextReplay, opponentLevel, judgeReplay, recordReplay, goalText, MAX_MOVES } from '../replay.js';
 import { makeClock, startTurn, endTurn, timeLeft, flagged, userControl, controlText, clockText } from '../gameclock.js';
 import { thresholds, rushedText } from '../clocks.js';
+import { opponentMove } from '../opening-practice.js';
 
 const SAVE_KEY = 'rankup-practice';
 /** Under this many seconds the clock chip turns urgent. */
@@ -39,6 +40,7 @@ const play = {
   blunders: 0, // coach mistakes saved this game
   fast: 0, // of those, played in under the control's rushed threshold
   flagged: false, // the game ended because the clock ran out
+  book: false, // opening practice: the opponent plays your real opponents' moves while they have one
 };
 
 (function restore() {
@@ -62,6 +64,7 @@ const play = {
     play.blunders = saved.blunders || 0;
     play.fast = saved.fast || 0;
     play.flagged = !!saved.flagged;
+    play.book = !!saved.book;
   } catch {}
 })();
 
@@ -87,6 +90,7 @@ function persist() {
         blunders: play.blunders,
         fast: play.fast,
         flagged: play.flagged,
+        book: play.book,
       }),
     );
   } catch {}
@@ -109,7 +113,13 @@ export function render(main, params = {}) {
   stopClockTimer();
   if (params.replay) startReplay(params.replay);
   // The user keeps the side they solved the puzzle with; Stockfish replies first.
-  if (params.fen) newGame({ fen: params.fen, from: params.from || 'a puzzle', color: params.colour || new Chess(params.fen).turn() });
+  if (params.fen) {
+    newGame({ fen: params.fen, from: params.from || 'a puzzle', color: params.colour || new Chess(params.fen).turn() });
+    if (params.book) {
+      play.book = true;
+      persist();
+    }
+  }
   // A session game: a fresh game unless one is under way, with one thing to practise, on a clock when asked.
   const control = clockParam(params.clock);
   if (params.objective || control) {
@@ -561,6 +571,7 @@ function newGame({ fen = null, color = 'w', from = null, clock = null }) {
   play.blunders = 0;
   play.fast = 0;
   play.flagged = false;
+  play.book = false;
   engine.newGame();
   persist();
 }
@@ -742,7 +753,10 @@ async function engineMove(token, after, level) {
   const g = play.game;
   const fen = g.fen();
   let uci = null;
-  if (level.mode === 'full') {
+  const book = play.book ? opponentMove(app.state.reviews, fen, play.color) : null;
+  const booked = book && g.moves({ verbose: true }).find(m => m.san === book);
+  if (booked) uci = moveToUci(booked);
+  else if (level.mode === 'full') {
     uci = after?.best || (await engine.analyse(fen, { nodes: BUDGET.coach })).best;
   } else if (level.mode === 'noise') {
     const lines = after?.lines?.length

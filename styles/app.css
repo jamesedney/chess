@@ -3113,8 +3113,28 @@ button.big {
 }
 
 .weak-lines {
-  padding-left: 20px;
-  line-height: 1.6;
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.weak-lines li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.weak-lines li div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.weak-lines li button {
+  flex: none;
 }
 
 .debrief-list {

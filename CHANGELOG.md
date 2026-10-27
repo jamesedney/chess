@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.2.0
+
+- Openings you struggle with, in Training: the lines from your reviewed games where you scored under 40% in at least three games, with your record in each. Play starts a practice game from the point the line goes wrong. Your opponent answers with the moves your real opponents played there, then plays on at your level.
+- The same list replaces "Lines that go badly" on the repertoire drill, with one entry per line rather than one per move of it.
+
 ## 5.1.9
 
 - The last move is marked with a thin ink frame instead of a coloured square: no colour, in keeping with the black-and-white design, and green still only means a good move.

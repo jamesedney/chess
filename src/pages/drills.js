@@ -21,7 +21,8 @@ import { logAttempt, dateKey } from '../state.js';
 import { pickPositions, BUCKETS, ROUNDS as ASSESS_ROUNDS, scoreGuess, evalText, playerBias, calibration } from '../assess.js';
 import { explainPosition } from '../structure.js';
 import { cue } from '../sound.js';
-import { dueCards, repertoireCards, weakLines, lineText as repLine } from '../repertoire.js';
+import { dueCards, repertoireCards, lineText as repLine } from '../repertoire.js';
+import { strugglingLines, recordText, MIN_GAMES } from '../opening-practice.js';
 import { schedule } from '../srs.js';
 
 const ENDGAME_NODES = 400000;
@@ -39,6 +40,7 @@ export function render(main, params = {}) {
   else if (kind === 'visualise') view = { kind: 'visualise', phase: 'intro' };
   else if (kind === 'checks') view = { kind: 'checks', phase: 'intro' };
   else if (kind === 'assess') view = { kind: 'assess', phase: 'intro' };
+  else if (kind === 'openings') view = { kind: 'openings', phase: 'list' };
   else if (kind === 'repertoire') {
     view = { kind: 'repertoire', phase: 'intro' };
     // From today's plan: start straight away on the positions due.
@@ -78,6 +80,7 @@ function draw() {
   if (view.kind === 'endgames') view.phase === 'list' ? drawEndgameList() : drawEndgame();
   else if (view.kind === 'visualise') drawVisualise();
   else if (view.kind === 'assess') drawAssess();
+  else if (view.kind === 'openings') drawOpenings();
   else if (view.kind === 'repertoire') drawRepertoire();
   else drawChecks();
   $('#drill-exit', root)?.addEventListener('click', () =>
@@ -670,7 +673,7 @@ function drawRepertoire() {
   if (v.phase !== 'play') {
     const all = repertoireCards(app.state.reviews);
     const due = dueCards(app.state).length;
-    const weak = weakLines(app.state.reviews).slice(0, 3);
+    const weak = strugglingLines(app.state.reviews, 3);
     root.innerHTML = `<div class="focus">${top('Your repertoire')}
       <div class="panel">
         <h2>${v.phase === 'done' ? `${v.clean} of ${v.cards.length} from memory` : 'Your openings, from your games'}</h2>
@@ -679,16 +682,7 @@ function drawRepertoire() {
             ? `${plural(all.length, 'position')} you reach in your games, with your move there, or the engine’s better move where you lost ground. ${due ? `${due} due now.` : 'All caught up.'}`
             : 'Review a few of your games and the positions you keep reaching appear here, with the moves to play.'
         }</p>
-        ${
-          weak.length
-            ? `<h3>Lines that go badly</h3><ul class="weak-lines">${weak
-                .map(
-                  l =>
-                    `<li>As ${l.colour === 'w' ? 'White' : 'Black'}: <strong>${esc(l.line)}</strong> <span class="small">${Math.round(l.score * 100)}% in ${l.games} games</span></li>`,
-                )
-                .join('')}</ul>`
-            : ''
-        }
+        ${weak.length ? `<h3>Openings you struggle with</h3>${openingList(weak)}` : ''}
         ${all.length ? `<div class="actions"><button type="button" class="primary" id="rep-start">${due ? `Practise ${Math.min(due, 10)} positions` : 'Practise anyway'}</button></div>` : '<div class="actions"><button type="button" class="primary" id="rep-review">Your games</button></div>'}
       </div></div>`;
     $('#rep-start', root)?.addEventListener('click', () => {
@@ -696,6 +690,7 @@ function drawRepertoire() {
       draw();
     });
     $('#rep-review', root)?.addEventListener('click', () => app.navigate('review'));
+    bindOpenings(weak);
     return;
   }
   const c = v.cards[v.i];
@@ -811,4 +806,40 @@ function answerRepertoire(clean, shown) {
     tone: clean ? 'success' : '',
   });
   draw();
+}
+
+/** Your weak lines, each with a button to play a practice game from there. */
+function openingList(lines) {
+  return `<ul class="weak-lines">${lines
+    .map(
+      (l, i) => `<li><div><span class="small">As ${l.colour === 'w' ? 'White' : 'Black'} · ${esc(recordText(l))}</span>
+        <strong>${esc(l.text)}</strong></div><button type="button" data-line="${i}">Play</button></li>`,
+    )
+    .join('')}</ul>`;
+}
+
+/** A practice game from the line, where your opponents' moves from your games come first. */
+function bindOpenings(lines) {
+  root.querySelectorAll('[data-line]').forEach(b =>
+    b.addEventListener('click', () => {
+      const l = lines[Number(b.dataset.line)];
+      app.navigate('play', { fen: l.fen, from: l.text, colour: l.colour, book: 1 });
+    }),
+  );
+}
+
+function drawOpenings() {
+  const lines = strugglingLines(app.state.reviews);
+  root.innerHTML = `<div class="focus">${top('Openings')}
+    <div class="panel">
+      <h2>Openings you struggle with</h2>
+      <p>${
+        lines.length
+          ? 'Play on from where these lines go wrong. Your opponent answers with the moves your real opponents played, then plays on at your level.'
+          : `None yet. A line shows here once you have scored under 40% in at least ${MIN_GAMES} reviewed games through it.`
+      }</p>
+      ${lines.length ? openingList(lines) : '<div class="actions"><button type="button" class="primary" id="rep-review">Your games</button></div>'}
+    </div></div>`;
+  $('#rep-review', root)?.addEventListener('click', () => app.navigate('review'));
+  bindOpenings(lines);
 }
