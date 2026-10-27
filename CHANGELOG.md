@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.3.4
+
+- The last-move frame is dark on light squares and light on dark squares, so it shows on every board colour. Before, it vanished on the cream squares of the green board.
+- The repertoire drill draws an arrow for the answer as well as framing its squares.
+
 ## 5.3.3
 
 - Colour audit. Blue marks what you can tap and what is current; gold is the Practice button and nothing else; green only ever means better; red only ever means stop or wrong. The rating icons are one muted colour, the session card's progress bar is white, and the tonight line is a plain card rather than a gold-edged one.

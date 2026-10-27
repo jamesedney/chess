@@ -821,7 +821,10 @@ p {
   box-shadow: inset 0 0 0 100px var(--sq-selected);
 }
 .square.last {
-  box-shadow: inset 0 0 0 var(--sq-last) var(--ink);
+  box-shadow: inset 0 0 0 var(--sq-last) rgba(255, 255, 255, 0.9);
+}
+.square[data-shade='light'].last {
+  box-shadow: inset 0 0 0 var(--sq-last) rgba(0, 0, 0, 0.5);
 }
 .square.check {
   background-image: var(--sq-check);

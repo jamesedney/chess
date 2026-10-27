@@ -696,11 +696,13 @@ function drawRepertoire() {
   const c = v.cards[v.i];
   const game = new Chess(c.fen);
   const side = c.colour === 'w' ? 'White' : 'Black';
-  // Once answered, the board shows the move played, highlighted.
+  // Once answered, the board shows the move played: framed, and with an arrow.
   let lastMove = [];
+  const arrows = [];
   if (v.answered) {
     const m = game.move(c.answer);
     lastMove = [m.from, m.to];
+    arrows.push({ from: m.from, to: m.to, kind: 'best' });
   }
   const record =
     c.games === 1
@@ -730,7 +732,7 @@ function drawRepertoire() {
     askPromotion: choosePromotion,
     onMove: v.answered ? null : repertoireMove,
   });
-  board.set({ game, orientation: c.colour, interactive: !v.answered, movable: c.colour, lastMove });
+  board.set({ game, orientation: c.colour, interactive: !v.answered, movable: c.colour, lastMove, arrows });
   $('#rep-show', root)?.addEventListener('click', () => answerRepertoire(false, true));
   $('#rep-next', root)?.addEventListener('click', () => {
     v.i++;

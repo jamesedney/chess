@@ -123,6 +123,9 @@ test('the repertoire drill asks for your move, or the better one where you lost 
   await expect(page.locator('#feedback')).toContainText('Yes: 5. Bxf7+, on your second try.');
   await expect(page.locator('#feedback')).toContainText('In your game you played 5. Nxf7, which cost you 60% winning chances.');
   await expect(page.locator('#board-title')).toHaveText('5. Bxf7+');
+  // The answer is on the board: both squares framed and an arrow between them.
+  await expect(page.locator('#board [data-square="f7"]')).toHaveClass(/last/);
+  await expect(page.locator('#board .arrow-best')).toHaveCount(1);
   await page.click('#rep-next');
   // Then your own moves, from the first.
   await expect(page.locator('.rep-line')).toContainText('The first move');
