@@ -4527,3 +4527,39 @@ header,
     padding-bottom: 84px;
   }
 }
+
+/* You: where your points go. Flagged lines lead, in ink; the rest are muted. */
+.points-lead {
+  font-weight: 800;
+  margin: 4px 0 8px;
+}
+.points-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+  display: grid;
+  gap: 8px;
+}
+.points-list li {
+  color: var(--muted);
+  padding-left: 14px;
+  position: relative;
+  line-height: 1.4;
+}
+.points-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--line-strong);
+}
+.points-list li.flag {
+  color: var(--ink);
+  font-weight: 700;
+}
+.points-list li.flag::before {
+  background: var(--danger);
+}

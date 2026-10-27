@@ -1,6 +1,6 @@
 // Rankup service worker: precache the app for offline use.
 // Bump VERSION (and package.json) for every release; tests check they match.
-const VERSION = '5.3.5';
+const VERSION = '5.4.0';
 const CACHE = 'rankup-v' + VERSION;
 const FILES = [
   './',
@@ -55,6 +55,7 @@ const FILES = [
   './src/replay.js',
   './src/repertoire.js',
   './src/opening-practice.js',
+  './src/profile.js',
   './src/timeprofile.js',
   './src/evidence.js',
   './src/ledger.js',

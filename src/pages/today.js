@@ -11,10 +11,11 @@ import { sparkline } from '../charts.js';
 import { syncNow, lastSyncAt } from '../queue.js';
 import { dateKey, streaks } from '../state.js';
 import { STAGES } from '../themes.js';
-import { streakMode, diagnoseStreak, LEAKS, MIN_COUNTED } from '../leak.js';
+import { streakMode, diagnoseStreak, diagnose, LEAKS, MIN_COUNTED } from '../leak.js';
 import { stopState, tiltProfile, ruleLine } from '../tilt.js';
 import { mainControl, rowsBetween } from '../ledger.js';
 import { strugglingLines } from '../opening-practice.js';
+import { pointsProfile, adaptRule } from '../profile.js';
 import { dueCards } from '../repertoire.js';
 
 let root = null;
@@ -264,7 +265,7 @@ function tonightScore(ledger, games) {
 function ruleHTML(stop) {
   const s = app.state;
   const ledger = s.ledger || [];
-  const profile = tiltProfile(ledger);
+  const profile = adaptRule(tiltProfile(ledger), pointsProfile(s));
   const parts = [];
   const tonight = stop.tonight && !stop.live;
   if (tonight) {
@@ -300,6 +301,14 @@ function leakHTML(d) {
   return `<section aria-labelledby="streak-head" class="streak-card">
     <div class="section-rule"><span id="streak-head">The streak</span><span>last 10 games</span></div>
     <p class="leak-line">${lead}${body}</p>
+  </section>`;
+}
+
+/** Outside a streak: the leak of the last 30 days, when your losses name one. */
+function windowLeakHTML(d) {
+  return `<section aria-labelledby="leak-head" class="streak-card">
+    <div class="section-rule"><span id="leak-head">Where your points go</span><span>last ${d.days} days</span></div>
+    <p class="leak-line">${esc(d.line.split(' Habit: ')[0])}<span class="small">Habit: ${esc(d.habit)}</span></p>
   </section>`;
 }
 
@@ -409,6 +418,7 @@ function draw() {
   const stop = stopState(s);
   const inStreak = streakMode(s);
   const diagnosis = inStreak || s.streak ? diagnoseStreak(s) : null;
+  const everyday = inStreak ? null : diagnose(s);
   trackStreak(inStreak, diagnosis);
   const current = session.blocks[firstTodo];
   const pct = Math.round((prog.done / Math.max(1, session.blocks.length)) * 100);
@@ -421,7 +431,7 @@ function draw() {
       <p class="hero-next">${prog.complete ? 'Come back tomorrow.' : `Next: ${esc(current?.detail || '')}`}</p>
       <svg class="hero-knight" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21h11l-1-3c2-1 3-4 3-7 0-5-4-8-8-8l-1 2-3 1-3 5 2 1 2-1 1 2-4 5z"/></svg>
     </section>
-    ${inStreak ? leakHTML(diagnosis) : ''}
+    ${inStreak ? leakHTML(diagnosis) : everyday?.leak ? windowLeakHTML(everyday) : ''}
     ${goalHTML()}
     ${ratingTiles()}
     <section aria-labelledby="plan-head">

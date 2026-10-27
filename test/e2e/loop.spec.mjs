@@ -255,7 +255,8 @@ test('a second sync does not queue the same game again', async ({ page }) => {
   await page.click('#sync-now');
   await expect(page.locator('.toast.show')).toContainText(/No new games|reviewed/, { timeout: 20000 });
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')));
-  expect(saved.sync.today.n).toBe(1);
+  // The game is a loss: queued past the daily cap, so the cap's count stays at 0, and seen once.
+  expect(saved.sync.today.n).toBe(0);
   expect(saved.sync.seen).toEqual(['lichess.org/sync0001']);
 });
 

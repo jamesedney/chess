@@ -12,7 +12,8 @@ import { pathSummary } from '../curriculum.js';
 import { evidence } from '../evidence.js';
 import { habits } from '../debrief.js';
 import { timeProfile, profileText, CLOCK_DRILLS } from '../timeprofile.js';
-import { streakMode, diagnoseStreak, LEAKS, MIN_COUNTED } from '../leak.js';
+import { streakMode, diagnoseStreak, diagnose, LEAKS, MIN_COUNTED } from '../leak.js';
+import { pointsProfile, profileLines, trend, adaptRule } from '../profile.js';
 import { tiltProfile, sinceStop, sittings, ruleLine, MIN_BUCKET } from '../tilt.js';
 import { safeStats } from '../safecheck.js';
 import { pressureStats } from '../pressure.js';
@@ -39,6 +40,7 @@ export function render(main) {
 
   main.innerHTML =
     pageHead('', 'You', '', '<a class="button-link" href="#coach">Coach</a>') +
+    pointsHTML() +
     youHTML() +
     `<div class="stat-row four">
       <div class="stat"><small>Puzzle rating</small><strong>${s.puzzle.rating}</strong>${weekDelta !== null ? `<span class="delta ${weekDelta >= 0 ? 'up' : 'down'}">${weekDelta >= 0 ? '▲' : '▼'} ${Math.abs(weekDelta)} in 7 days</span>` : `<span class="small">${plural(s.puzzle.count, 'rated puzzle')}</span>`}</div>
@@ -179,6 +181,34 @@ export function render(main) {
 }
 
 /** Goal, skills and milestones: the top of the You page. */
+/**
+ * Where your points go: the leak and what every serious mistake of the last
+ * 30 days says, costliest first, with how many losses have been read and
+ * whether the two habits that matter most are moving.
+ */
+function pointsHTML() {
+  const kOfN = x => `${x.k} of ${x.n}`;
+  const s = app.state;
+  const p = pointsProfile(s);
+  if (!p.control || p.games < 10) return '';
+  const d = streakMode(s) ? null : diagnose(s);
+  const lines = profileLines(p);
+  const t = trend(s);
+  const moving = [];
+  if (t.now.fast && t.before.fast)
+    moving.push(`Fast mistakes: ${kOfN(t.now.fast)} in the last 14 days, ${kOfN(t.before.fast)} the 14 before.`);
+  if (t.now.shortLosses && t.before.shortLosses)
+    moving.push(`Games lost by move 30: ${kOfN(t.now.shortLosses)} in the last 14 days, ${kOfN(t.before.shortLosses)} the 14 before.`);
+  return `<section class="panel points" aria-labelledby="points-head">
+    <h2 id="points-head">Where your points go</h2>
+    <p class="small">Last ${p.days} days of ${esc(p.control)}: ${p.games} games, ${Math.round(p.score * 100)}%. ${p.reviewedLosses} of your ${p.lost} losses read${p.reviewedLosses < p.lost ? '; the rest are being reviewed' : ''}.</p>
+    ${d?.leak ? `<p class="points-lead">${esc(d.line)}</p>` : ''}
+    ${lines.length ? `<ul class="points-list">${lines.map(l => `<li class="${l.flag ? 'flag' : ''}">${esc(l.text)}</li>`).join('')}</ul>` : '<p class="muted">Your reviews will show where the points go after a few more games.</p>'}
+    ${moving.length ? `<h3>Is it moving</h3>${moving.map(m => `<p class="small">${esc(m)}</p>`).join('')}` : ''}
+    <p class="small">Today’s plan is built from this.</p>
+  </section>`;
+}
+
 function youHTML() {
   const s = app.state;
   const g = goalStatus(s);
@@ -327,7 +357,7 @@ function eveningsHTML() {
   const ledger = s.ledger || [];
   if (ledger.length < 10) return '';
   const now = Date.now();
-  const profile = tiltProfile(ledger, { now });
+  const profile = adaptRule(tiltProfile(ledger, { now }), pointsProfile(s, { now }));
   const recent = sittings(ledger).filter(x => x.end >= now - 14 * DAY);
   const games = recent.reduce((a, x) => a + x.games.length, 0);
   const stop = sinceStop(s, now);

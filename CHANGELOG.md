@@ -1,5 +1,16 @@
 # Changelog
 
+## 5.4.0
+
+Training that adapts to how you actually lose.
+
+- Every loss of the last 30 days is reviewed, not five games a day: losses skip the daily cap, losses from earlier syncs that were never reviewed are queued, the shortest first, and a loss counts from five moves. Wins and draws keep the cap.
+- Where your points go, on You: over the last 30 days, how many of your serious mistakes were played too fast, how many left a piece or your king to be taken, how you score from the 4th game of a sitting on, where you stand at move 10 with each colour, and how often you recall your repertoire. Flagged lines lead. Below them, whether fast mistakes and games lost by move 30 are moving, fortnight on fortnight.
+- The leak is named outside a losing streak too: Today shows the one thing that started most of your losses in the last 30 days, with its habit. Chess causes come only from reviewed losses; losing on time and tilt are read from every loss, so an unreviewed backlog cannot skew it.
+- A loss that ran out of time after the decisive move was played with minutes left is no longer counted as a clock loss.
+- Today's plan takes its orders from this. Fast or hung mistakes make Safe or hanging? (or the vision sprint, until you have positions for it) required, with the count-three habit, and the game's objective becomes that habit. Coming out of the opening worse, or recalling your repertoire badly, makes the repertoire block required. The curriculum unit follows what your games ask for, and on an everyday leak it stays as filler. Puzzle blocks aim 100 above the skill's rating. Today's plan is rebuilt after the update, keeping what you have done.
+- The play rule adapts: when your 4th game of a sitting on has cost points over the last 30 days, it is 3 games.
+
 ## 5.3.5
 
 - The last move is shown as a filled yellow on both its squares, as the chess apps do, instead of a thin frame. Yellow only ever means the last move; green still only means a good move.

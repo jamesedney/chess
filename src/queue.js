@@ -4,17 +4,17 @@
 import { app } from './app-context.js';
 import { engine } from './engine.js';
 import { analyseGame } from './analyse.js';
-import { fetchLichessNew, fetchChessComNew, selectNew } from './sync.js';
+import { fetchLichessNew, fetchChessComNew, selectNew, MAX_FAILED } from './sync.js';
 import { describeGame } from './pgn.js';
 import { toast } from './ui.js';
 import { scheduleDeepAnalysis } from './deep.js';
 import { mergeNewGames } from './session.js';
 import { syncRatings } from './rating-sync.js';
 import { needsDebrief } from './debrief.js';
-import { ledgerFrom, recordLedger, MAX_LEDGER } from './ledger.js';
+import { ledgerFrom, recordLedger, MAX_LEDGER, keyFromSite } from './ledger.js';
 
 const KEY = 'rankup-queue';
-const MAX_QUEUE = 12;
+const MAX_QUEUE = 60; // room for a month of losses on the first sync after 5.4
 const SYNC_GAP_MS = 10 * 60000; // do not poll the sites more often than this
 const FOREGROUND_GAP_MS = 60000; // opening the app checks for a game you just finished, at most once a minute
 
@@ -134,9 +134,12 @@ export function runQueue(delay = 1500) {
       }
       scheduleDeepAnalysis();
     } catch (e) {
-      // A game that cannot be analysed is dropped rather than retried for ever.
+      // A game that cannot be analysed is dropped, and remembered so a later sync does not queue it again.
       queue = queue.filter(i => i !== item);
       persist();
+      const sync = app.state.sync;
+      sync.failed = [...(sync.failed || []).filter(k => k !== item.key), item.key].slice(-MAX_FAILED);
+      app.save();
       toast(`Could not review ${label(item)}: ${e.message || 'analysis failed.'}`);
     }
     current = null;
@@ -198,7 +201,12 @@ export async function syncNow({ force = false, gap = SYNC_GAP_MS, fetchImpl = fe
         const after = s.ledger.length >= MAX_LEDGER ? s.ledger[0].t : 0;
         const known = new Set(s.ledger.map(r => r.k));
         ledgered += recordLedger(s.ledger, ledgerFrom(fetched, { usernames: names, known, after }));
-        items.push(...selectNew(fetched, { usernames: names, sync: s.sync, source, now }));
+        // Reviews from before game keys were saved are matched by their Site header, as the diagnosis does.
+        const reviewed = new Set([
+          ...s.reviews.flatMap(r => [r.gameKey, r.site ? keyFromSite(r.site) : null]).filter(Boolean),
+          ...queue.map(q => q.key),
+        ]);
+        items.push(...selectNew(fetched, { usernames: names, sync: s.sync, source, now, reviewed }));
         // The backfill is Lichess's: it is done once Lichess has answered, whatever the other site did.
         if (source === 'lichess' && !s.sync.ledgerAt) s.sync.ledgerAt = now;
       } catch (e) {

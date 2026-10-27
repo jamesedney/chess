@@ -81,7 +81,7 @@ test('time controls are classed like Lichess does', () => {
 
 test('games are accepted only when they are yours, finished, long enough and in scope', () => {
   const sync = DEFAULT_SYNC();
-  assert.deepEqual(acceptGame(GAME({}), ['me'], sync), { ok: true, colour: 'w' });
+  assert.deepEqual(acceptGame(GAME({}), ['me'], sync), { ok: true, colour: 'w', loss: false, plies: 22 });
   assert.equal(acceptGame(GAME({ Black: 'me', White: 'x' }), ['me'], sync).colour, 'b');
   assert.equal(acceptGame(GAME({}), ['someone'], sync).reason, 'not your game');
   assert.equal(acceptGame(GAME({ Result: '*' }), ['me'], sync).reason, 'unfinished');
@@ -90,6 +90,18 @@ test('games are accepted only when they are yours, finished, long enough and in 
   assert.equal(acceptGame(GAME({}), ['me'], { ...sync, ratedOnly: false }, { rated: false }).ok, true);
   assert.equal(acceptGame(GAME({ TimeControl: '60+0' }), ['me'], sync).reason, 'time control');
   assert.equal(acceptGame(GAME({}, '1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0'), ['me'], sync).reason, 'too short');
+  // A loss counts from five moves: a quick loss is the one most worth reading.
+  const quickLoss = '1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. a3 a6 5. b3 b6 6. Qxf7# 1-0';
+  assert.deepEqual(acceptGame(GAME({ White: 'rival', Black: 'me' }, quickLoss), ['me'], sync), {
+    ok: true,
+    colour: 'b',
+    loss: true,
+    plies: 11,
+  });
+  assert.equal(
+    acceptGame(GAME({ White: 'rival', Black: 'me' }, '1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0'), ['me'], sync).reason,
+    'too short',
+  );
   assert.equal(gameKey(GAME({})), 'lichess.org/abcd1234');
   assert.equal(gameKey(GAME({ Site: 'https://lichess.org/abcd1234/black' })), 'lichess.org/abcd1234');
 });
@@ -119,6 +131,45 @@ test('new games are chosen once, within the daily cap, and unfinished games are 
   // With every game finished the next fetch starts an hour before this one.
   selectNew([fetched[0]], { usernames: ['me'], sync, source: 'lichess', now: NOW });
   assert.equal(sync.last.lichess, NOW - 3600000);
+});
+
+test('every recent loss is queued: past the cap, from earlier syncs, shortest first; not once reviewed, failed or old', () => {
+  const sync = DEFAULT_SYNC();
+  sync.dailyCap = 1;
+  const loss = (id, moves, extra = {}) => ({
+    pgn: GAME({ Site: `https://lichess.org/${id}`, White: 'rival', Black: 'me', UTCDate: '2026.10.07' }, moves),
+    ...extra,
+  });
+  const long = '1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 1-0';
+  const short = '1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. a3 a6 5. b3 b6 6. Qxf7# 1-0';
+  const fetched = [
+    { pgn: GAME({ Site: 'https://lichess.org/w1' }) },
+    { pgn: GAME({ Site: 'https://lichess.org/w2' }) },
+    loss('l-long', long),
+    loss('l-short', short),
+    loss('l-old', short, { fresh: false }),
+    loss('l-done', short, { fresh: false }),
+    loss('l-failed', short, { fresh: false }),
+    { pgn: GAME({ Site: 'https://lichess.org/l-ancient', White: 'rival', Black: 'me', UTCDate: '2026.08.01' }, short), fresh: false },
+  ];
+  sync.failed = ['lichess.org/l-failed'];
+  const chosen = selectNew(fetched, { usernames: ['me'], sync, source: 'lichess', now: NOW, reviewed: new Set(['lichess.org/l-done']) });
+  // Losses first, the shortest first; one win under the cap of one; losses do not use the cap.
+  assert.deepEqual(
+    chosen.map(c => c.key),
+    ['lichess.org/l-short', 'lichess.org/l-old', 'lichess.org/l-long', 'lichess.org/w1'],
+  );
+  assert.equal(sync.today.n, 1);
+  // A loss seen by an earlier sync but never reviewed (over the old cap) is queued on the next one.
+  const later = selectNew([loss('l-long', long)], { usernames: ['me'], sync, source: 'lichess', now: NOW });
+  assert.deepEqual(
+    later.map(c => c.key),
+    ['lichess.org/l-long'],
+  );
+  assert.deepEqual(
+    selectNew([loss('l-long', long)], { usernames: ['me'], sync, source: 'lichess', now: NOW, reviewed: new Set(['lichess.org/l-long']) }),
+    [],
+  );
 });
 
 test('fetching maps site responses and errors', async () => {

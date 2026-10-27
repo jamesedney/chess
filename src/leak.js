@@ -130,7 +130,9 @@ export function classifyLoss(review, row, state) {
   let chess;
   if (time?.rushed) chess = 'rushed';
   else if (SAFETY_KINDS.has(kind) || (d.mark.cls === 'blunder' && !kind)) chess = 'safety';
-  else if (flagged || time?.trouble || (d.ply >= LATE_PLY && time && time.left < LATE_LEFT)) chess = 'clock';
+  // Running out of time in a position the decisive move had already lost is not a clock loss:
+  // with the move's clock known, only time trouble at that move counts.
+  else if ((flagged && !time) || time?.trouble || (d.ply >= LATE_PLY && time && time.left < LATE_LEFT)) chess = 'clock';
   else if (d.wasWinning) chess = 'convert';
   else if (d.ply < 20) chess = 'opening';
   else chess = 'calc';
@@ -185,6 +187,7 @@ export function diagnoseStreak(state, { now = Date.now(), losses = LOSSES } = {}
   const counts = {};
   for (const id of LEAK_ORDER) counts[id] = 0;
   const empty = {
+    mode: 'streak',
     control,
     games10: 0,
     lost10: 0,
@@ -253,10 +256,117 @@ export function diagnoseStreak(state, { now = Date.now(), losses = LOSSES } = {}
   return d;
 }
 
-/** "Losing 7 of your last 10. 5 of them began with a piece hung in one move. Habit: …", or null without a leak. */
+/** The everyday diagnosis reads every loss of the main control in this many days. */
+export const WINDOW_DAYS = 30;
+
+/**
+ * The everyday diagnosis, outside streak mode: every loss of the main control
+ * in the last WINDOW_DAYS, each classified. The chess leak is the top
+ * category among the losses with a review, when at least 4 are classified and
+ * it started 40% of them. Tilt and losing on time are read from the ledger
+ * alone, so they cover every loss: either wins only when its share of all
+ * the losses is 40% or more and larger still. (Counting unreviewed time
+ * losses with the reviewed ones would let the clock win just because the
+ * other losses have not been read yet.) Same shape
+ * as diagnoseStreak, with `mode: 'window'`, `days`, `games`, `lost` and
+ * `reviewed` (losses with a review).
+ */
+export function diagnose(state, { now = Date.now(), days = WINDOW_DAYS } = {}) {
+  const ledger = byTime(state?.ledger);
+  const control = mainControl(ledger, { now });
+  const counts = {};
+  for (const id of LEAK_ORDER) counts[id] = 0;
+  const empty = {
+    mode: 'window',
+    control,
+    days,
+    games: 0,
+    lost: 0,
+    reviewed: 0,
+    base: DEFAULT_BASE,
+    losses: [],
+    counted: 0,
+    counts,
+    leak: null,
+    label: null,
+    share: null,
+    habit: null,
+    line: null,
+    examples: [],
+  };
+  if (!control) return empty;
+  const rows = annotate(ledger).filter(r => r.tc === control && r.t >= now - days * DAY);
+  const losses = rows.filter(r => r.r === 0).sort((a, b) => b.t - a.t);
+  const classified = losses.map(row => {
+    const review = reviewFor(state, row);
+    const { chess, tilt } = classifyLoss(review, row, state);
+    const d = review ? firstDecisiveError(review) : null;
+    return { row, reviewId: review ? review.id : null, chess, tilt, ply: d ? d.ply : null };
+  });
+  let counted = 0;
+  for (const l of classified) {
+    if (l.chess && l.reviewId) {
+      counts[l.chess]++;
+      counted++;
+    }
+    if (l.tilt) counts.tilt++;
+  }
+  const flagged = losses.filter(r => r.term === 'time').length;
+  const chessIds = LEAK_ORDER.filter(id => id !== 'tilt');
+  const top = chessIds.reduce((best, id) => (counts[id] > counts[best] ? id : best), chessIds[0]);
+  let leak = counted >= MIN_COUNTED && counts[top] / counted + EPS >= MIN_SHARE ? top : null;
+  let share = leak ? counts[top] / counted : 0;
+  // Whole-ledger shares: every loss, read or not.
+  for (const [id, n] of [
+    ['clock', flagged],
+    ['tilt', counts.tilt],
+  ]) {
+    const whole = losses.length ? n / losses.length : 0;
+    if (losses.length >= MIN_COUNTED && whole + EPS >= MIN_SHARE && whole > share) {
+      leak = id;
+      share = whole;
+      if (id === 'clock') counts.clock = n;
+    }
+  }
+  const base = baseOf(ledger.filter(r => r.tc === control));
+  const label = leak ? (leak === 'rushed' ? rushedLabel(base) : LEAKS[leak].label) : null;
+  const examples = leak
+    ? classified
+        .filter(l => l.reviewId && l.ply !== null && (l.chess === leak || (leak === 'tilt' && l.tilt)))
+        .map(l => ({ reviewId: l.reviewId, ply: l.ply }))
+    : [];
+  const d = {
+    ...empty,
+    games: rows.length,
+    lost: losses.length,
+    reviewed: classified.filter(l => l.reviewId).length,
+    base,
+    losses: classified,
+    counted,
+    counts,
+    leak,
+    label,
+    share: leak ? share : null,
+    habit: leak ? LEAKS[leak].habit : null,
+    examples,
+  };
+  d.line = leakLine(d);
+  return d;
+}
+
+/**
+ * "Losing 7 of your last 10. 5 of them began with a piece hung in one move. Habit: …"
+ * in streak mode; "Last 30 days: 60 losses. Of the 24 read, 14 began with … Habit: …"
+ * for the everyday diagnosis; null without a leak.
+ */
 export function leakLine(d) {
   if (!d || !d.leak) return null;
   const label = d.label || LEAKS[d.leak].label;
+  if (d.mode === 'window') {
+    const whole = d.leak === 'tilt' || (d.leak === 'clock' && d.counts.clock > d.counted);
+    const of = whole ? `${d.counts[d.leak]} of them` : `Of the ${d.counted} read, ${d.counts[d.leak]}`;
+    return `Last ${d.days} days: ${d.lost} losses. ${of} began with ${label}. Habit: ${LEAKS[d.leak].habit}`;
+  }
   return `Losing ${d.lost10} of your last ${d.games10}. ${d.counts[d.leak]} of them began with ${label}. Habit: ${LEAKS[d.leak].habit}`;
 }
 

@@ -239,6 +239,25 @@ test('outside streak mode the streak panel is hidden and the evening tiles wait 
   await expect(page.locator('#main')).not.toContainText('Safe or hanging:');
 });
 
+test('outside a streak, every loss of the last 30 days names the leak on Today and on You', async ({ page }) => {
+  const now = Date.now();
+  const state = calmState(now);
+  // The six losses (every other game) all reviewed: each hung a piece.
+  const losses = state.ledger.filter(r => r.r === 0);
+  state.reviews = losses.map((r, i) => lostGame('rc' + i, r.t, r.k));
+  state.mistakes = state.reviews.map(r => mistake(r.id, r.created));
+  await seed(page, state);
+  await open(page, 'today');
+  const card = page.locator('section:has(#leak-head)');
+  await expect(card).toContainText('Where your points go');
+  await expect(card).toContainText('Last 30 days: 6 losses. Of the 6 read, 6 began with a piece hung in one move.');
+  await expect(page.locator('#streak-head')).toHaveCount(0);
+  await open(page, 'progress');
+  const points = page.locator('section:has(#points-head)');
+  await expect(points).toContainText('12 games, 50%. 6 of your 6 losses read.');
+  await expect(points.locator('.points-lead')).toContainText('Of the 6 read, 6 began with a piece hung in one move.');
+});
+
 test('with fewer than ten games neither panel shows', async ({ page }) => {
   const now = Date.now();
   await seed(page, {
@@ -250,4 +269,5 @@ test('with fewer than ten games neither panel shows', async ({ page }) => {
   await expect(page.locator('#working-title')).toContainText('Is it working?');
   await expect(page.locator('#streak-title')).toHaveCount(0);
   await expect(page.locator('#evenings-title')).toHaveCount(0);
+  await expect(page.locator('#points-head')).toHaveCount(0);
 });

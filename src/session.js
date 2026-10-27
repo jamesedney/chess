@@ -1,7 +1,7 @@
 // Runs today's session: starts each block on the right page, notices when it
 // is done, and moves on. The plan itself comes from program.js.
 import { app } from './app-context.js';
-import { planSession, baseline, blockDone, resetBlock } from './program.js';
+import { planSession, baseline, blockDone, resetBlock, PLAN_VERSION } from './program.js';
 import { refreshMastery } from './curriculum.js';
 import { dateKey } from './state.js';
 import { goalStatus } from './progress-model.js';
@@ -13,9 +13,13 @@ const listeners = new Set();
 export function todaysSession({ rebuild = false } = {}) {
   const s = app.state;
   const today = dateKey();
-  if (!rebuild && s.session?.date === today) return s.session;
+  // A plan made by an older planner is rebuilt after an update, keeping the blocks already done.
+  const stale = s.session?.date === today && s.session.plan !== PLAN_VERSION;
+  if (!rebuild && !stale && s.session?.date === today) return s.session;
+  const done = stale ? new Set(s.session.blocks.filter(b => b.status === 'done').map(b => b.id)) : new Set();
   const status = goalStatus(s);
   s.session = planSession(s, { puzzles: app.allPuzzles(), goalStatus: status?.status || null, target: s.target?.target || null });
+  for (const b of s.session.blocks) if (done.has(b.id)) b.status = 'done';
   app.save();
   return s.session;
 }
