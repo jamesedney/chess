@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.3.5
+
+- The last move is shown as a filled yellow on both its squares, as the chess apps do, instead of a thin frame. Yellow only ever means the last move; green still only means a good move.
+
 ## 5.3.4
 
 - The last-move frame is dark on light squares and light on dark squares, so it shows on every board colour. Before, it vanished on the cream squares of the green board.
