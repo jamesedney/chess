@@ -38,7 +38,15 @@ export const app = {
   save() {
     try {
       if (!storage) throw new Error('no storage');
-      saveState(storage, this.state);
+      try {
+        saveState(storage, this.state);
+      } catch (e) {
+        // Storage full: the oldest reviews go first (their saved positions stay), then try once more.
+        const reviews = this.state.reviews;
+        if (!storage || reviews.length <= 50) throw e;
+        this.state.reviews = reviews.slice(0, Math.floor(reviews.length * 0.7));
+        saveState(storage, this.state);
+      }
     } catch {
       this.storageOK = false;
       toast('Progress could not be saved. Storage is unavailable or full. Export a backup in Settings.');

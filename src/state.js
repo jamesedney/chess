@@ -16,7 +16,7 @@ export const STORAGE_KEY = 'rankup-v1'; // Kept for continuity; the version live
 export const RECOVERY_PREFIX = 'rankup-recovery-';
 export const CURRENT_VERSION = 10;
 export const MAX_GAMES = 50;
-export const MAX_REVIEWS = 20;
+export const MAX_REVIEWS = 400; // about two months of games at a dozen a day; each review is a few kilobytes
 export const MAX_LOG = 4000;
 
 export function defaults() {

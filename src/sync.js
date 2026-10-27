@@ -2,7 +2,6 @@
 // hand them to the analysis queue. The filters and URL building are pure and
 // unit tested; the network calls take a fetch implementation.
 import { splitPgn, readHeaders, loadGame, detectColour } from './pgn.js';
-import { dateKey } from './state.js';
 
 export const CONTROLS = ['bullet', 'blitz', 'rapid', 'classical', 'correspondence'];
 export const DEFAULT_SYNC = () => ({
@@ -18,10 +17,10 @@ export const DEFAULT_SYNC = () => ({
 });
 const FIRST_SYNC_DAYS = 7;
 const MAX_SEEN = 300;
-/** Every loss this recent is reviewed, past the daily cap and from older syncs. */
-export const REVIEW_DAYS = 30;
-/** A loss counts from this many moves: a quick loss is the one most worth reading. */
-export const LOSS_MIN_MOVES = 5;
+/** Every game this recent is reviewed, including games from earlier syncs that never were. */
+export const REVIEW_DAYS = 60;
+/** A game counts from this many moves: a quick loss is the one most worth reading. */
+export const REVIEW_MIN_MOVES = 5;
 /** Games the engine could not review, kept so they are not queued again every sync. */
 export const MAX_FAILED = 100;
 /** The ledger's first fill reaches back this far, this many games; later syncs fetch SYNC_MAX. */
@@ -92,7 +91,7 @@ export function acceptGame(pgn, usernames, sync, { rated = null, control = null 
     return { ok: false, reason: 'unreadable' };
   }
   const loss = h.Result === (colour === 'w' ? '0-1' : '1-0');
-  if (moves < (loss ? Math.min(sync.minMoves, LOSS_MIN_MOVES) : sync.minMoves) * 2) return { ok: false, reason: 'too short' };
+  if (moves < Math.min(sync.minMoves, REVIEW_MIN_MOVES) * 2) return { ok: false, reason: 'too short' };
   return { ok: true, colour, loss, plies: moves };
 }
 
@@ -168,38 +167,38 @@ export async function fetchChessComNew(username, sync, { fetchImpl = fetch, now 
 }
 
 /**
- * Pick the games to queue from a fetch result. Wins and draws honour the
- * daily cap; every loss of the last REVIEW_DAYS is queued, including games
- * seen by earlier syncs (or before the review window) that were never
- * reviewed, unless the engine already failed on them. Losses come first,
- * shortest first: a quick loss is the clearest lesson. `reviewed` is the set
- * of game keys already reviewed. Mutates sync (seen, today, last).
+ * Pick the games to queue from a fetch result: every game of the last
+ * REVIEW_DAYS, including games seen by earlier syncs (or before the review
+ * window) that were never reviewed, unless the engine already failed on
+ * them. Losses come first, the shortest first (a quick loss is the clearest
+ * lesson), then the rest, newest first. `reviewed` is the set of game keys
+ * already reviewed. Mutates sync (seen, last).
  */
 export function selectNew(fetched, { usernames, sync, source, now = Date.now(), reviewed = new Set() }) {
-  const today = dateKey(new Date(now));
-  if (sync.today.d !== today) sync.today = { d: today, n: 0 };
   const failed = new Set(sync.failed || []);
   const chosen = [];
   // Next time, fetch from an hour before this sync, or from before the start of
   // a game still running, so it is fetched again when it ends; `seen` removes the overlap.
   let from = now - 3600000;
-  /** A loss not yet reviewed, recent enough to be worth it. */
-  const backlog = (g, key) => {
-    if (reviewed.has(key) || failed.has(key)) return null;
-    const when = g.ended ?? startMs(g.pgn);
-    if (when === null || when < now - REVIEW_DAYS * DAY) return null;
-    // From the headers first: only a loss is worth parsing the moves for.
-    const colour = detectColour(g.pgn, usernames);
-    if (!colour || readHeaders(g.pgn).Result !== (colour === 'w' ? '0-1' : '1-0')) return null;
-    const verdict = acceptGame(g.pgn, usernames, sync, { rated: g.rated ?? null, control: g.control ?? null });
-    return verdict.ok && verdict.loss ? verdict : null;
-  };
+  const item = (g, key, verdict) => ({
+    pgn: g.pgn,
+    colour: verdict.colour,
+    source,
+    key,
+    added: now,
+    at: g.ended ?? startMs(g.pgn),
+    loss: verdict.loss,
+    plies: verdict.plies,
+  });
   for (const g of fetched) {
     const key = gameKey(g.pgn);
-    // Older games feed the ledger; only their unreviewed losses are queued, and they are not marked seen.
+    // Older games feed the ledger; those not yet reviewed are queued, and they are not marked seen.
     if (g.fresh === false || sync.seen.includes(key)) {
-      const verdict = backlog(g, key);
-      if (verdict) chosen.push({ pgn: g.pgn, colour: verdict.colour, source, key, added: now, loss: true, plies: verdict.plies });
+      if (reviewed.has(key) || failed.has(key)) continue;
+      const when = g.ended ?? startMs(g.pgn);
+      if (when === null || when < now - REVIEW_DAYS * DAY) continue;
+      const verdict = acceptGame(g.pgn, usernames, sync, { rated: g.rated ?? null, control: g.control ?? null });
+      if (verdict.ok) chosen.push(item(g, key, verdict));
       continue;
     }
     const verdict = acceptGame(g.pgn, usernames, sync, { rated: g.rated ?? null, control: g.control ?? null });
@@ -210,14 +209,9 @@ export function selectNew(fetched, { usernames, sync, source, now = Date.now(), 
       continue;
     }
     sync.seen.push(key);
-    if (!verdict.ok) continue;
-    if (!verdict.loss) {
-      if (sync.today.n >= sync.dailyCap) continue;
-      sync.today.n++;
-    }
-    chosen.push({ pgn: g.pgn, colour: verdict.colour, source, key, added: now, loss: verdict.loss, plies: verdict.plies });
+    if (verdict.ok) chosen.push(item(g, key, verdict));
   }
   sync.last[source] = from;
   if (sync.seen.length > MAX_SEEN) sync.seen.splice(0, sync.seen.length - MAX_SEEN);
-  return chosen.sort((a, b) => Number(b.loss) - Number(a.loss) || (a.loss && b.loss ? a.plies - b.plies : 0));
+  return chosen.sort((a, b) => Number(b.loss) - Number(a.loss) || (a.loss ? a.plies - b.plies : (b.at || 0) - (a.at || 0)));
 }

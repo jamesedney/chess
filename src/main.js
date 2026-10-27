@@ -275,8 +275,7 @@ function openSettings() {
         <label><input type="checkbox" id="sync-rated" ${s.sync.ratedOnly ? 'checked' : ''}> Rated games only</label>
       </div>
       <div class="pill-row small" role="group" aria-label="Time controls to import">${CONTROLS.map(c => `<button type="button" data-control="${c}" class="${s.sync.controls.includes(c) ? 'active' : ''}" aria-pressed="${s.sync.controls.includes(c)}">${c[0].toUpperCase() + c.slice(1)}</button>`).join('')}</div>
-      <label for="sync-cap">Games per day, at most</label><select id="sync-cap">${[2, 5, 10, 20].map(n => `<option value="${n}" ${s.sync.dailyCap === n ? 'selected' : ''}>${n}</option>`).join('')}</select>
-      <small>Public games only, fetched when the app is open. Games with Lichess analysis review almost instantly; others take Stockfish a minute or two each, in the background.</small>
+      <small>Public games only, fetched when the app is open. Every game of the last two months is reviewed, losses first. Games with Lichess analysis review almost instantly; others take Stockfish a minute or two each, in the background.</small>
       <div class="actions"><button type="button" id="sync-now">Check for new games now</button></div>
     </fieldset>
     <div class="checks"><label><input type="checkbox" id="auto-level" ${s.settings.autoLevel ? 'checked' : ''}> Adjust the practice opponent to my results</label></div>
@@ -357,10 +356,6 @@ function openSettings() {
   };
   $('#sync-rated').onchange = e => {
     s.sync.ratedOnly = e.target.checked;
-    app.save();
-  };
-  $('#sync-cap').onchange = e => {
-    s.sync.dailyCap = Number(e.target.value);
     app.save();
   };
   $('#settings-perf').onchange = e => today.followPerf(e.target.value);

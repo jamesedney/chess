@@ -51,13 +51,16 @@ function toMover(evalWhite, turn) {
  *   onProgress(text): status updates
  *   isCancelled(): return true to stop early
  *   background: yield to anything the user is waiting for
+ *   playedAt: when the game was played (ms), for a game reviewed later than
+ *     that; `created` is the game's time, so every window by date sees it
+ *     where it was played
  * Resolves with { review, found, duplicate } where duplicate is an existing
  * complete review of the same game, or rejects with a user-facing Error.
  */
 export async function analyseGame(
   pgn,
-  /** @type {{ colour: string, onProgress?: (text: string) => void, isCancelled?: () => boolean, background?: boolean }} */
-  { colour, onProgress = () => {}, isCancelled = () => false, background = false },
+  /** @type {{ colour: string, onProgress?: (text: string) => void, isCancelled?: () => boolean, background?: boolean, playedAt?: number | null }} */
+  { colour, onProgress = () => {}, isCancelled = () => false, background = false, playedAt = null },
 ) {
   const game = loadGame(pgn);
   const moves = game.history({ verbose: true });
@@ -75,7 +78,7 @@ export async function analyseGame(
     id: 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
     key,
     gameKey: gameKey(pgn), // links the review to its ledger row
-    created: Date.now(),
+    created: playedAt && playedAt <= Date.now() ? playedAt : Date.now(),
     white: d.white,
     black: d.black,
     result: d.result,
@@ -203,7 +206,10 @@ export async function analyseGame(
     }
   }
   review.complete = !isCancelled();
-  app.state.reviews = [review, ...app.state.reviews.filter(r => r.key !== key)].slice(0, MAX_REVIEWS);
+  // Newest game first, whatever order they were reviewed in; past the limit the oldest games go.
+  app.state.reviews = [review, ...app.state.reviews.filter(r => r.key !== key)]
+    .sort((a, b) => (b.created || 0) - (a.created || 0))
+    .slice(0, MAX_REVIEWS);
   app.save();
   return { review, found, duplicate: false };
 }

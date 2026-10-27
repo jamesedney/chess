@@ -106,36 +106,34 @@ test('games are accepted only when they are yours, finished, long enough and in 
   assert.equal(gameKey(GAME({ Site: 'https://lichess.org/abcd1234/black' })), 'lichess.org/abcd1234');
 });
 
-test('new games are chosen once, within the daily cap, and unfinished games are not marked seen', () => {
+test('new games are chosen once, every one of them, and unfinished games are not marked seen', () => {
   const sync = DEFAULT_SYNC();
-  sync.dailyCap = 2;
   const fetched = [
-    { pgn: GAME({ Site: 'https://lichess.org/g1' }) },
+    { pgn: GAME({ Site: 'https://lichess.org/g1', UTCTime: '10:00:00' }) },
     { pgn: GAME({ Site: 'https://lichess.org/g2', Result: '*' }) },
-    { pgn: GAME({ Site: 'https://lichess.org/g3' }) },
-    { pgn: GAME({ Site: 'https://lichess.org/g4' }) },
+    { pgn: GAME({ Site: 'https://lichess.org/g3', UTCTime: '10:30:00' }) },
+    { pgn: GAME({ Site: 'https://lichess.org/g4', UTCTime: '11:00:00' }) },
   ];
   const chosen = selectNew(fetched, { usernames: ['me'], sync, source: 'lichess', now: NOW });
+  // No daily cap: every finished game, newest first.
   assert.deepEqual(
     chosen.map(c => c.key),
-    ['lichess.org/g1', 'lichess.org/g3'],
+    ['lichess.org/g4', 'lichess.org/g3', 'lichess.org/g1'],
   );
   assert.equal(chosen[0].colour, 'w');
-  assert.ok(sync.seen.includes('lichess.org/g4'), 'a game over the cap is still seen: it comes back tomorrow only if fetched again');
   assert.ok(!sync.seen.includes('lichess.org/g2'), 'an unfinished game is fetched again when it ends');
-  assert.equal(sync.today.n, 2);
   // The next fetch starts a minute before the unfinished game began, so it is fetched again when it ends.
   assert.equal(sync.last.lichess, Math.min(NOW - 3600000, Date.UTC(2026, 9, 8, 9, 59, 0)));
-  const again = selectNew(fetched, { usernames: ['me'], sync, source: 'lichess', now: NOW });
-  assert.equal(again.length, 0, 'nothing is queued twice');
+  const reviewed = new Set(chosen.map(c => c.key));
+  const again = selectNew(fetched, { usernames: ['me'], sync, source: 'lichess', now: NOW, reviewed });
+  assert.equal(again.length, 0, 'nothing reviewed is queued twice');
   // With every game finished the next fetch starts an hour before this one.
-  selectNew([fetched[0]], { usernames: ['me'], sync, source: 'lichess', now: NOW });
+  selectNew([fetched[0]], { usernames: ['me'], sync, source: 'lichess', now: NOW, reviewed });
   assert.equal(sync.last.lichess, NOW - 3600000);
 });
 
-test('every recent loss is queued: past the cap, from earlier syncs, shortest first; not once reviewed, failed or old', () => {
+test('every game of the last 60 days is queued, losses first and the shortest first; not once reviewed, failed or older', () => {
   const sync = DEFAULT_SYNC();
-  sync.dailyCap = 1;
   const loss = (id, moves, extra = {}) => ({
     pgn: GAME({ Site: `https://lichess.org/${id}`, White: 'rival', Black: 'me', UTCDate: '2026.10.07' }, moves),
     ...extra,
@@ -144,31 +142,26 @@ test('every recent loss is queued: past the cap, from earlier syncs, shortest fi
   const short = '1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. a3 a6 5. b3 b6 6. Qxf7# 1-0';
   const fetched = [
     { pgn: GAME({ Site: 'https://lichess.org/w1' }) },
-    { pgn: GAME({ Site: 'https://lichess.org/w2' }) },
+    { pgn: GAME({ Site: 'https://lichess.org/w-old', UTCDate: '2026.09.01' }), fresh: false },
     loss('l-long', long),
     loss('l-short', short),
     loss('l-old', short, { fresh: false }),
     loss('l-done', short, { fresh: false }),
     loss('l-failed', short, { fresh: false }),
-    { pgn: GAME({ Site: 'https://lichess.org/l-ancient', White: 'rival', Black: 'me', UTCDate: '2026.08.01' }, short), fresh: false },
+    { pgn: GAME({ Site: 'https://lichess.org/l-ancient', White: 'rival', Black: 'me', UTCDate: '2026.07.01' }, short), fresh: false },
   ];
   sync.failed = ['lichess.org/l-failed'];
   const chosen = selectNew(fetched, { usernames: ['me'], sync, source: 'lichess', now: NOW, reviewed: new Set(['lichess.org/l-done']) });
-  // Losses first, the shortest first; one win under the cap of one; losses do not use the cap.
   assert.deepEqual(
     chosen.map(c => c.key),
-    ['lichess.org/l-short', 'lichess.org/l-old', 'lichess.org/l-long', 'lichess.org/w1'],
+    ['lichess.org/l-short', 'lichess.org/l-old', 'lichess.org/l-long', 'lichess.org/w1', 'lichess.org/w-old'],
   );
-  assert.equal(sync.today.n, 1);
-  // A loss seen by an earlier sync but never reviewed (over the old cap) is queued on the next one.
-  const later = selectNew([loss('l-long', long)], { usernames: ['me'], sync, source: 'lichess', now: NOW });
+  // The game's own time goes with it, so its review is dated when it was played.
+  assert.equal(chosen.find(c => c.key === 'lichess.org/w-old').at, Date.UTC(2026, 8, 1, 10, 0, 0));
+  // A game seen by an earlier sync but never reviewed (over the old cap) is queued on the next one.
   assert.deepEqual(
-    later.map(c => c.key),
+    selectNew([loss('l-long', long)], { usernames: ['me'], sync, source: 'lichess', now: NOW }).map(c => c.key),
     ['lichess.org/l-long'],
-  );
-  assert.deepEqual(
-    selectNew([loss('l-long', long)], { usernames: ['me'], sync, source: 'lichess', now: NOW, reviewed: new Set(['lichess.org/l-long']) }),
-    [],
   );
 });
 

@@ -14,7 +14,7 @@ import { needsDebrief } from './debrief.js';
 import { ledgerFrom, recordLedger, MAX_LEDGER, keyFromSite } from './ledger.js';
 
 const KEY = 'rankup-queue';
-const MAX_QUEUE = 60; // room for a month of losses on the first sync after 5.4
+const MAX_QUEUE = 400; // room for two months of games on the first sync after 5.4
 const SYNC_GAP_MS = 10 * 60000; // do not poll the sites more often than this
 const FOREGROUND_GAP_MS = 60000; // opening the app checks for a game you just finished, at most once a minute
 
@@ -118,6 +118,7 @@ export function runQueue(delay = 1500) {
       const { review, found, duplicate } = await analyseGame(item.pgn, {
         colour: item.colour,
         background: true,
+        playedAt: item.at ?? null,
         onProgress: text => {
           if (current?.item === item) {
             current.progress = text;

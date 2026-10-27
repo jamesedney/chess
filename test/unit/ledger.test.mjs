@@ -329,13 +329,15 @@ test('the first sync after 5.0 fills the ledger: 60 days and 200 games, then 60 
   const q3 = new URL(urls[2]).searchParams;
   assert.equal(q3.get('max'), String(LEDGER_MAX));
   assert.ok(Number(q3.get('since')) <= NOW - 60 * DAY);
-  // Ledger-only games are neither queued nor marked seen.
+  // A ledger-only game from the last 60 days is queued for review too (newest first), but not marked seen.
   const chosen = selectNew(first, { usernames: ['me'], sync, source: 'lichess', now: NOW });
-  assert.deepEqual(
-    chosen.map(c => c.key),
-    ['lichess.org/zz'],
-  );
+  assert.deepEqual(chosen.map(c => c.key).sort(), ['lichess.org/abcd1234', 'lichess.org/zz']);
   assert.ok(!sync.seen.includes('lichess.org/abcd1234'));
+  // Once reviewed it is not queued again.
+  assert.deepEqual(
+    selectNew(first.slice(0, 1), { usernames: ['me'], sync, source: 'lichess', now: NOW, reviewed: new Set(['lichess.org/abcd1234']) }),
+    [],
+  );
 });
 
 test('Chess.com returns every game in the archives, with results and ratings, fresh only after the last sync', async () => {

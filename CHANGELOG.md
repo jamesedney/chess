@@ -4,7 +4,7 @@
 
 Training that adapts to how you actually lose.
 
-- Every loss of the last 30 days is reviewed, not five games a day: losses skip the daily cap, losses from earlier syncs that were never reviewed are queued, the shortest first, and a loss counts from five moves. Wins and draws keep the cap.
+- Every game of the last two months is reviewed, not five a day: the daily cap is gone, games from earlier syncs that were never reviewed are queued, losses first and the shortest first, then the rest newest first, and a game counts from five moves. Up to 400 reviews are kept, not 20; if the browser's storage ever fills, the oldest reviews go first. A game reviewed late is dated when it was played, so the debrief, the profile and every other window by date see it in the right place.
 - Where your points go, on You: over the last 30 days, how many of your serious mistakes were played too fast, how many left a piece or your king to be taken, how you score from the 4th game of a sitting on, where you stand at move 10 with each colour, and how often you recall your repertoire. Flagged lines lead. Below them, whether fast mistakes and games lost by move 30 are moving, fortnight on fortnight.
 - The leak is named outside a losing streak too: Today shows the one thing that started most of your losses in the last 30 days, with its habit. Chess causes come only from reviewed losses; losing on time and tilt are read from every loss, so an unreviewed backlog cannot skew it.
 - A loss that ran out of time after the decisive move was played with minutes left is no longer counted as a clock loss.
