@@ -35,7 +35,7 @@ test('a username is all it takes: rating, goal, level and today’s plan', async
   await expect(page.locator('.goal-card')).toContainText('1400');
   await expect(page.locator('.goal-card')).toContainText('Lichess rapid');
   await expect(page.locator('.level-line')).toContainText('Calculator');
-  await expect(page.locator('#start-session')).toContainText('Start today’s session');
+  await expect(page.locator('#start-session')).toContainText('Practice');
   await expect(page.locator('.agenda-item').first()).toBeVisible();
   const s = await saved(page);
   expect(s.onboarded).toBe(true);

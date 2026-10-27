@@ -95,13 +95,15 @@ test('Today: the session card, your other ratings as tiles, the drills and a Pla
   });
   await open(page, 'today');
   await expect(page.locator('.session-hero h2')).toHaveText(await page.locator('.agenda-item.current strong').innerText());
-  await expect(page.locator('#start-session')).toHaveText('Start today’s session');
+  await expect(page.locator('#start-session')).toHaveText('Practice');
   // The goal's own rating is the big number, so the tiles are the others on that site, then puzzles.
   await expect(page.locator('.rating-tile span')).toHaveText(['Bullet', 'Rapid', 'Puzzles']);
   await expect(page.locator('.rating-tile strong').first()).toHaveText('943');
   await expect(page.locator('.drill-card').first()).toContainText('Weak openings');
-  await page.click('#play-now');
-  await expect(page).toHaveURL(/#play/);
+  // The one big button runs today's training, not a game.
+  await page.click('#start-session');
+  await expect(page).toHaveURL(/#(train|drills|review|play)/);
+  await expect(page.locator('#session-bar')).toBeVisible();
 });
 
 test('a debrief lists the reasons likeliest first, with how often each came up before', async ({ page }) => {

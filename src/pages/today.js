@@ -405,7 +405,7 @@ function draw() {
   const unitPct = unit ? Math.round(unitStatus(s, unit).progress * 100) : 0;
   const streak = streaks(s.days);
   const firstTodo = session.blocks.findIndex(b => b.status === 'todo' || b.status === 'active');
-  const label = prog.complete ? 'Done for today' : prog.done ? 'Continue' : 'Start today’s session';
+  const label = prog.complete ? 'Done for today' : prog.done ? 'Continue' : 'Practice';
   const stop = stopState(s);
   const inStreak = streakMode(s);
   const diagnosis = inStreak || s.streak ? diagnoseStreak(s) : null;
@@ -418,7 +418,7 @@ function draw() {
       <span class="eyebrow" id="today-head">Today’s session · ${prog.complete ? 'all done' : `${prog.done} of ${session.blocks.length} done · ${prog.minutesLeft ?? session.minutes} min`}</span>
       <h2>${esc(prog.complete ? 'Done for today' : current?.title || 'Today’s session')}</h2>
       <div class="hero-track" role="img" aria-label="${pct}% done"><span style="width:${pct}%"></span></div>
-      <button type="button" id="start-session" class="gold" ${prog.complete ? 'disabled' : ''}><span>${esc(label)}</span></button>
+      <p class="hero-next">${prog.complete ? 'Come back tomorrow.' : `Next: ${esc(current?.detail || '')}`}</p>
       <svg class="hero-knight" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21h11l-1-3c2-1 3-4 3-7 0-5-4-8-8-8l-1 2-3 1-3 5 2 1 2-1 1 2-4 5z"/></svg>
     </section>
     ${inStreak ? leakHTML(diagnosis) : ''}
@@ -447,9 +447,8 @@ function draw() {
       ${s.profiles.lichess || s.profiles.chesscom ? `<span>·</span><label for="follow-perf">Rating</label><select id="follow-perf">${perfOptions(s.settings.perf)}</select>` : ''}
       <span>·</span><a href="#path">Your path</a><span>·</span><a href="#coach">Coach</a>
     </div>
-    <button type="button" id="play-now" class="play-cta">Play</button>
+    <button type="button" id="start-session" class="play-cta" ${prog.complete ? 'disabled' : ''}>${esc(label)}</button>
   </div>`;
-  $('#play-now', root).onclick = () => app.navigate('play');
   root.querySelectorAll('[data-drill]').forEach(b => (b.onclick = () => app.navigate('drills', { drill: b.dataset.drill })));
   $('#start-session', root).onclick = () => startBlock(firstTodo);
   $('#stop-reset', root)?.addEventListener('click', () => startReset());

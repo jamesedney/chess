@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.3.2
+
+- The big button on Today is Practice: it runs today's training, block by block, and reads Continue once you have begun. The session card shows what is next instead of carrying a second button. A game is a tap away on the Play tab.
+
 ## 5.3.1
 
 - Training on a phone: the Next, Hint and Solution buttons were hidden under the new tab bar. They sit above it now, and so does the Play button on Today.
