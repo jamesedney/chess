@@ -14,6 +14,7 @@ import { habits } from '../debrief.js';
 import { timeProfile, profileText, CLOCK_DRILLS } from '../timeprofile.js';
 import { streakMode, diagnoseStreak, diagnose, LEAKS, MIN_COUNTED } from '../leak.js';
 import { pointsProfile, profileLines, trend, adaptRule } from '../profile.js';
+import { habitTrend, currentExperiment, experimentLine, PHASE_DAYS } from '../proof.js';
 import { tiltProfile, sinceStop, sittings, ruleLine, MIN_BUCKET } from '../tilt.js';
 import { safeStats } from '../safecheck.js';
 import { pressureStats } from '../pressure.js';
@@ -41,6 +42,7 @@ export function render(main) {
   main.innerHTML =
     pageHead('', 'You', '', '<a class="button-link" href="#coach">Coach</a>') +
     pointsHTML() +
+    proofHTML() +
     youHTML() +
     `<div class="stat-row four">
       <div class="stat"><small>Puzzle rating</small><strong>${s.puzzle.rating}</strong>${weekDelta !== null ? `<span class="delta ${weekDelta >= 0 ? 'up' : 'down'}">${weekDelta >= 0 ? '▲' : '▼'} ${Math.abs(weekDelta)} in 7 days</span>` : `<span class="small">${plural(s.puzzle.count, 'rated puzzle')}</span>`}</div>
@@ -206,6 +208,47 @@ function pointsHTML() {
     ${lines.length ? `<ul class="points-list">${lines.map(l => `<li class="${l.flag ? 'flag' : ''}">${esc(l.text)}</li>`).join('')}</ul>` : '<p class="muted">Your reviews will show where the points go after a few more games.</p>'}
     ${moving.length ? `<h3>Is it moving</h3>${moving.map(m => `<p class="small">${esc(m)}</p>`).join('')}` : ''}
     <p class="small">Today’s plan is built from this.</p>
+  </section>`;
+}
+
+/**
+ * Proof: the habit the gate trains, measured in your real games (time on
+ * captures and checks, hung pieces a game) now against the fortnight before,
+ * and the experiment that decides whether the gate stays.
+ */
+function proofHTML() {
+  const s = app.state;
+  const t = habitTrend(s);
+  const e = currentExperiment(s) || (s.experiments || []).filter(x => x.phase === 'done').at(-1) || null;
+  if (!t.control && !e) return '';
+  const pct = h => (h.critical.n >= 10 ? `${Math.round((100 * h.critical.fast) / h.critical.n)}%` : null);
+  const lines = [];
+  const fNow = pct(t.now);
+  const fBefore = pct(t.before);
+  if (fNow)
+    lines.push(
+      `Captures and checks played fast: ${fNow} of ${t.now.critical.n} in the last ${PHASE_DAYS} days${fBefore ? `, ${fBefore} of ${t.before.critical.n} the ${PHASE_DAYS} before` : ''}.`,
+    );
+  if (t.now.games >= 5)
+    lines.push(
+      `Hung pieces: ${t.now.hung.perGame.toFixed(1)} a game over ${t.now.games} games${t.before.games >= 5 ? `, ${t.before.hung.perGame.toFixed(1)} the ${PHASE_DAYS} before` : ''}.`,
+    );
+  const past = (s.experiments || []).filter(x => x.phase === 'done' && x.verdict?.text);
+  return `<section class="panel" aria-labelledby="proof-head">
+    <h2 id="proof-head">Proof</h2>
+    <p class="small">The gate trains one thing: time on captures and checks. This is that habit in the games you play online, read from their clocks.</p>
+    ${lines.length ? lines.map(l => `<p>${esc(l)}</p>`).join('') : `<p class="muted">Needs reviewed games with clocks from the last ${PHASE_DAYS} days.</p>`}
+    ${e && e.phase !== 'done' ? `<p class="small"><strong>Experiment:</strong> ${esc(experimentLine(e))}</p>` : ''}
+    ${
+      past.length
+        ? `<h3>Verdicts</h3>${past
+            .slice(-3)
+            .reverse()
+            .map(x => `<p class="small">${esc(formatDate(new Date(x.end).toISOString().slice(0, 10)))}: ${esc(x.verdict.text)}</p>`)
+            .join('')}`
+        : ''
+    }
+    ${s.gate?.set === 'you' ? '<p class="small">The gate is set by hand in Play options; Proof measures but does not move it.</p>' : ''}
   </section>`;
 }
 

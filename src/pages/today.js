@@ -16,6 +16,7 @@ import { stopState, tiltProfile, ruleLine } from '../tilt.js';
 import { mainControl, rowsBetween } from '../ledger.js';
 import { strugglingLines } from '../opening-practice.js';
 import { pointsProfile, adaptRule } from '../profile.js';
+import { advanceExperiment } from '../proof.js';
 import { dueCards } from '../repertoire.js';
 
 let root = null;
@@ -65,6 +66,8 @@ function ensurePlan() {
     place(s, real || s.puzzle.rating, dateKey());
   }
   updateGoal(s);
+  // Proof: the gate experiment moves with the calendar.
+  advanceExperiment(s);
   checkSession({ settle: true });
   app.save();
 }
