@@ -8,7 +8,6 @@ import { lineChart, hydrateLineChart, activityGrid, barList } from '../charts.js
 import { calibration } from '../assess.js';
 import { skillMap } from '../skills.js';
 import { goalStatus, goalSeries, PUZZLE_PERF } from '../progress-model.js';
-import { pathSummary } from '../curriculum.js';
 import { evidence } from '../evidence.js';
 import { habits } from '../debrief.js';
 import { timeProfile, profileText, CLOCK_DRILLS } from '../timeprofile.js';
@@ -255,7 +254,6 @@ function proofHTML() {
 function youHTML() {
   const s = app.state;
   const g = goalStatus(s);
-  const path = pathSummary(s);
   const target = s.target?.target || s.puzzle.rating + 200;
   const skills = skillMap(s, target);
   const max = Math.max(target, ...skills.map(k => k.effective)) + 50;
@@ -279,7 +277,6 @@ function youHTML() {
              }`
           : '<p class="muted">Your goal appears after setup on the Today page.</p>'
       }
-      <p class="small">${esc(path.band.label)} · ${path.done} of ${path.total} curriculum units mastered.</p>
       ${s.milestones.length ? `<p class="small">Targets reached: ${s.milestones.map(m => `${m.target} (${esc(formatDate(m.date))})`).join(', ')}</p>` : ''}
     </section>
     <section class="panel">

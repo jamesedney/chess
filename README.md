@@ -2,16 +2,16 @@
 
 A mobile-friendly, installable chess trainer that runs entirely in the browser. There is no server, account, API key or subscription. Stockfish runs on your device, and your progress stays in your browser.
 
-Enter your Lichess or Chess.com username and Rankup does the rest: it reads your rating, sets your next target with a deadline, places you on a curriculum, and plans every day's session. It is built for players from beginner to about 2000.
+Enter your Lichess or Chess.com username and Rankup does the rest: it reads your rating and every game you play, works out where your points go, and plans each day's session from that. It is built for players from beginner to about 2000.
 
 ## What it does
 
 ### The plan
 - **Zero-effort setup.** A username is all it asks for. Your rating and its history are read from your public profile; without an online account, one tap on a rough level is enough.
 - **A goal that tracks itself.** The next target is the next round hundred at least 150 points up, with a deadline from a realistic pace for your rating and daily time. Your real rating is re-read whenever you come back to the app and after each imported game, then projected forward: on track, or how many weeks behind. Reach it and the next target is set. You choose which time control it follows (bullet, blitz, rapid or classical), or leave it on Auto for the one you play most.
-- **A full curriculum.** Seven bands from Foundations (under 800) to the Expert path (1800–2200), about 45 units across board safety, tactics, attacking the king, calculation, strategy, endgames and openings. Each unit has a concept, a puzzle set, and often a lesson and a drill. A unit is mastered when its gate is met: enough clean solves at a set accuracy, the lesson finished, the drill passed. Bands below your rating are placed as known.
+- **Where your points go.** Every game of the last two months is reviewed, losses first. From them, and from the ledger of every game played: how many serious mistakes were played fast, how many left a piece hanging, how you score from the fourth game of a sitting, where you stand at move 10 with each colour, and how often you recall your repertoire. Flagged lines lead, on You and in the plan.
 - **A skill map.** Every rated puzzle updates a rating for each skill it trains, and your reviewed games correct it: each serious mistake per game in a skill counts against it. The plan always trains the skill furthest below what your target needs.
-- **Today: one button.** Each day's session fits the time you choose (10 to 60 minutes): the mistakes from your latest game while they are fresh, positions due for recall, the current unit's lesson, puzzles and drill, your weakest other skill, and a game with one objective. A bar at the top steps you through it. If your games show an old weakness coming back, a refresher is added; if you fall behind the goal, the volume goes up.
+- **Today: one button.** Each day's session fits the time you choose (10 to 60 minutes): the warm-up your mistakes ask for, your latest game while it is fresh, a Nemesis game with the gate, positions due for recall, your repertoire, the leak's drill, puzzles on your weakest skill a step above your level, and a game with one habit. A bar at the top steps you through it. If you fall behind the goal, the volume goes up.
 - **Your games import themselves.** New games from your account are fetched whenever the app is open and reviewed in the background. Their mistakes become tomorrow's first block.
 - **The opponent adapts.** Score well over five practice games and the next one is a rung higher on a ladder that interleaves Maia and Stockfish levels; struggle and it steps down.
 
@@ -22,6 +22,11 @@ Enter your Lichess or Chess.com username and Rankup does the rest: it reads your
 - **Safe or hanging?** Your own positions with the move you played drawn, five seconds each. Hanging comes from a real blunder with its refutation; safe from a tense position where your move held. Scored as hits minus false alarms.
 - **A real clock.** Session games on your most played blitz control, Play it again with the seconds you actually had, and a clock for free games on request. Running out is a loss.
 - **Same clock, better move.** Your decisive positions on the seconds you had when you got them wrong.
+
+### Nemesis, the gate and Proof
+- **Nemesis.** An opponent built from how you lose. It plays like a person of your level (Maia's candidate moves) and, when one of them leaves a position where the move you would probably play loses a piece, it plays that one, giving up at most a little to do it. Every trap is scored, taken or declined, and said after your move.
+- **The gate.** In session and Nemesis games, a capture or check is held until you tap the square the opponent's reply lands on; your answer is scored against the engine. It fades in stages as your real games change: captures and checks, captures only, only where Nemesis set a trap, off.
+- **Proof.** The habit the gate trains, measured in the games you play online from their clocks: captures and checks played fast, and hung pieces a game. An experiment runs the gate on for two weeks and off for two, compares them, and keeps the gate (stepping it down) or drops it. What does not change your real games does not stay.
 
 ### Training from your games
 - **Post-game debrief.** After each imported game, the two or three moments that decided it: find the better move, then one tap on what went wrong (missed their threat, missed my chance, miscalculated, played too fast, short of time, wrong plan). The likely reason is offered first, from your clock and the kind of mistake. Over many games the notes become your habits, and the plan trains them.
@@ -44,18 +49,18 @@ Enter your Lichess or Chess.com username and Rankup does the rest: it reads your
 - **Strategy puzzles.** A theme of quiet moves, defensive moves and zugzwang from the Lichess set, where the answer is not a capture or a check.
 - **Calculation drills.** Visualisation: follow a line of moves in your head and tap where a piece ends up, with lines that grow as you get them right. Find every check: play every checking move in a position.
 - **Vision sprint.** One-minute drills: each position has exactly one free piece to win.
-- **Interactive lessons.** Twenty-three lessons played step by step on the board, including eight on strategy: pawn structure, outposts, files, bishops, pawn breaks, the worst piece, trading when ahead and king plans. Structure claims are verified by code, moves by Stockfish.
+- **A library of lessons.** Twenty-three lessons played step by step on the board, including eight on strategy: pawn structure, outposts, files, bishops, pawn breaks, the worst piece, trading when ahead and king plans, kept as a shelf to read from rather than a ladder to climb. Structure claims are verified by code, moves by Stockfish.
 - **Judgement training.** Assess the position: positions from your own games, you say who is better, the engine answers, and over time you learn whether you overrate or underrate yourself. Candidate moves: name the squares you are considering before each practice move and see how often the engine's best was among them.
 
 ### Playing and review
 - **Human-like opponents.** Maia networks at about 1100, 1500 and 1900, trained on millions of human games, run on your device and make the mistakes people make. Stockfish levels are there too, up to full strength.
-- **Your games become the curriculum.** Fetch recent games from Lichess or Chess.com by username, or paste a PGN. The reviewer marks inaccuracies, mistakes and blunders, explains them and saves the important moments as exercises.
+- **Your games are the syllabus.** Fetch recent games from Lichess or Chess.com by username, or paste a PGN. The reviewer marks inaccuracies, mistakes and blunders, explains them and saves the important moments as exercises.
 - **A board-first game viewer.** Step through the game with an evaluation bar, and at each mistake find the better move yourself before it is shown. The graph, move list and details fold away.
 - **Richer review.** Each game is matched to its named opening, and a table shows your results and mistakes per opening. Clock data shows how long you spent on each move and flags critical moves played too fast. While the engine is idle, marked moves are re-checked with a much deeper search: wrong suggestions are corrected, and false alarms are cleared.
 
 ### Everything else
 - **Themes and sound.** Eight board colours (grey by default), five piece sets, synthesised move sounds and vibration on supported phones, all in Settings.
-- **You.** Your goal with its chart, path progress, milestones and the skill map, plus the puzzle rating, per-theme strength, a practice calendar and streak.
+- **You.** Where your points go, Proof, your goal with its chart, milestones and the skill map, plus the puzzle rating, per-theme strength, a practice calendar and streak.
 - **Works offline and installs as an app.** After the first visit, about 10 MB, everything including Stockfish works offline. Each Maia level downloads about 1.7 MB the first time you play it.
 
 ## Publish on GitHub Pages

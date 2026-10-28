@@ -9,12 +9,12 @@ import { KIND_IDS, kindFromExplanation } from './mistake-kinds.js';
 import { BOARD_THEMES, PIECE_SETS, DEFAULT_APPEARANCE } from './appearance.js';
 import { DEFAULT_SYNC, CONTROLS } from './sync.js';
 import { RATING_PERFS } from './ratings.js';
-import { SKILLS } from '../data/curriculum.js';
+import { SKILLS } from '../data/skills.js';
 import { validateLedger } from './ledger.js';
 
 export const STORAGE_KEY = 'rankup-v1'; // Kept for continuity; the version lives inside.
 export const RECOVERY_PREFIX = 'rankup-recovery-';
-export const CURRENT_VERSION = 10;
+export const CURRENT_VERSION = 11;
 export const MAX_GAMES = 50;
 export const MAX_REVIEWS = 400; // about two months of games at a dozen a day; each review is a few kilobytes
 export const MAX_LOG = 4000;
@@ -75,7 +75,6 @@ export function defaults() {
     target: null, // { perf, start: { rating, date }, target, by, minutes }
     milestones: [], // targets reached: { date, perf, rating, target }
     skills: seedSkills(STAGES[0].rating), // skill id -> { rating, count }
-    curriculum: { units: {}, current: null, placed: false },
     session: null, // today's plan; see program.js
     // Added in version 7.
     replays: {}, // "reviewId:ply" -> { tries, success, last }: positions played again; see replay.js
@@ -192,6 +191,20 @@ export const MIGRATIONS = [
     },
   },
   {
+    from: 10,
+    run(s) {
+      // 6.0: Nemesis, the gate and Proof; the curriculum and its placement are gone.
+      const { curriculum, ...rest } = s;
+      void curriculum;
+      return {
+        ...rest,
+        settings: { ...s.settings, nemesis: false },
+        gate: { stage: 3, set: 'default', since: null },
+        experiments: [],
+      };
+    },
+  },
+  {
     from: 9,
     run(s) {
       // 5.3 game look: the default board became tournament green. Other choices stay.
@@ -256,7 +269,6 @@ export function migrate(input) {
     calc: { ...base.calc, ...s.calc },
     sync: { ...base.sync, ...s.sync },
     skills: { ...base.skills, ...s.skills },
-    curriculum: { ...base.curriculum, ...s.curriculum },
   };
 }
 
@@ -346,9 +358,6 @@ export function validate(s) {
   if (!Array.isArray(s.milestones)) return 'milestones';
   if (!s.skills || typeof s.skills !== 'object') return 'skills';
   for (const v of Object.values(s.skills)) if (!finite(v?.rating, 100, 3500) || !finite(v?.count, 0)) return 'skill';
-  if (!s.curriculum || typeof s.curriculum.units !== 'object' || typeof s.curriculum.placed !== 'boolean') return 'curriculum';
-  for (const [id, u] of Object.entries(s.curriculum.units))
-    if (!/^[a-z0-9-]+$/.test(id) || !finite(u?.tries, 0) || !finite(u?.clean, 0) || !Array.isArray(u.recent)) return 'unit progress';
   if (s.gate !== undefined && (!s.gate || !Number.isInteger(s.gate.stage) || s.gate.stage < 0 || s.gate.stage > 3)) return 'gate';
   if (s.experiments !== undefined && !Array.isArray(s.experiments)) return 'experiments';
   if (s.session !== null && (typeof s.session !== 'object' || !isDate(s.session.date) || !Array.isArray(s.session.blocks)))

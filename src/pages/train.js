@@ -17,7 +17,6 @@ import { cue } from '../sound.js';
 import { nextStep } from '../guide.js';
 import { snapshot as queueSnapshot, subscribe as watchQueue } from '../queue.js';
 import { recordSkillPuzzle } from '../skills.js';
-import { recordUnitPuzzle, unitById } from '../curriculum.js';
 import { activeBlock, continueSession } from '../session.js';
 import { CLOCK_DRILLS } from '../timeprofile.js';
 import { safeItems, hasSafeBank, judgeSafe, runSummary, recordSafeRun, SAFE_SECONDS } from '../safecheck.js';
@@ -316,13 +315,6 @@ function sessionGoal() {
   return session.mode === 'mistakes' && session.total ? Math.min(session.total, app.state.goal) : app.state.goal;
 }
 
-function unitProgress(unit) {
-  const p = app.state.curriculum.units[unit.id];
-  if (!p) return 0;
-  if (p.done) return 1;
-  return Math.min(1, p.clean / unit.gate.puzzles);
-}
-
 /** Carry on past the goal: another block of positions, with a mistakes pool allowed to repeat. */
 function keepGoing() {
   session.limit = sessionGoal() + app.state.goal;
@@ -358,11 +350,9 @@ function topLine() {
             ? `<span class="chip">${session.review ? 'This game’s mistakes' : 'My mistakes'}</span>`
             : activeBlock()
               ? '' // the session bar above already names the block
-              : session.unit && unitById(session.unit)
-                ? `<span class="chip">${esc(unitById(session.unit).title)}</span>`
-                : session.tags?.length
-                  ? `<span class="chip">${esc(tagSummary(session.tags))}</span>`
-                  : '';
+              : session.tags?.length
+                ? `<span class="chip">${esc(tagSummary(session.tags))}</span>`
+                : '';
   return `<div class="focus-top">
     <span id="focus-progress" class="focus-progress">${progress}</span>
     ${chip}
@@ -510,9 +500,8 @@ function drawFinished(body) {
     app.save();
   }
   if (block) {
-    const unit = unitById(session.unit);
     body.innerHTML = `<div class="panel dark-panel"><div class="eyebrow">Block complete</div><h2>${esc(block.title)}</h2>
-      <p>${session.clean} of ${session.done} solved without help.${change ? ` Puzzle rating ${change > 0 ? '+' : '−'}${Math.abs(change)}.` : ''}${unit ? ` ${esc(unit.title)} is ${Math.round(unitProgress(unit) * 100)}% mastered.` : ''}</p>
+      <p>${session.clean} of ${session.done} solved without help.${change ? ` Puzzle rating ${change > 0 ? '+' : '−'}${Math.abs(change)}.` : ''}</p>
       <div class="actions"><button type="button" id="session-next" class="lime">Continue session</button><button type="button" id="keep-going">Keep going here</button></div></div>`;
     $('#session-next', body).onclick = continueSession;
     $('#keep-going', body).onclick = keepGoing;
@@ -733,8 +722,6 @@ function finish(c, revealed) {
     recordSkillPuzzle(s.skills, p.tags || [], p.rating, clean);
     ratingNote = ` Puzzle rating ${u.rating} (${u.delta >= 0 ? '+' : '−'}${Math.abs(u.delta)}).`;
   }
-  const mastered = isMistake(p) ? [] : recordUnitPuzzle(s, p.tags || [], clean, dateKey());
-  if (mastered.length) ratingNote += ` Unit mastered: ${mastered.map(m => m.title).join(', ')}.`;
   const today = app.today();
   today.attempts++;
   if (clean) today.clean++;

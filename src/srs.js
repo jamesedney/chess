@@ -68,7 +68,7 @@ export function choosePuzzle({
   rng = Math.random,
 }) {
   let pool = puzzles.filter(p => !p.archived && (!theme || p.theme === theme) && (mode !== 'mistakes' || isMistake(p)));
-  // A curriculum block trains one skill: only puzzles with its tags, when there are any.
+  // A skill block trains one skill: only puzzles with its tags, when there are any.
   if (strictTags && focusTags.length) {
     const tagged = pool.filter(p => (p.tags || []).some(t => focusTags.includes(t)));
     if (tagged.length) pool = tagged;

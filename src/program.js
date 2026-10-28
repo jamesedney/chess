@@ -1,9 +1,10 @@
-// The planner: turns your goal, skill map and curriculum into today's session,
-// a short list of blocks that fills the time you have. Pure functions of the
-// saved state; src/session.js runs the result.
-import { UNITS, BANDS, OBJECTIVES } from '../data/curriculum.js';
-import { chooseUnit, currentBand, unitStatus, refresher, drillDone } from './curriculum.js';
-import { skillMap, leaks } from './skills.js';
+// The planner: turns what your games show into today's session, a short list
+// of blocks that fills the time you have: the warm-up your mistakes ask for,
+// yesterday's game, a Nemesis game with the gate, recall, your repertoire, the
+// leak's drill, and a game with one habit. Pure functions of the saved state;
+// src/session.js runs the result.
+import { OBJECTIVES } from '../data/skills.js';
+import { skillMap, leaks, tagsOf } from './skills.js';
 import { isDue } from './srs.js';
 import { dateKey, logCount, gameCount } from './state.js';
 import { needsDebrief, pickMoments } from './debrief.js';
@@ -33,7 +34,7 @@ export const SAFETY_WARMUP = 0.5;
 /** Puzzle blocks aim this far above the skill's rating: practice at your level only maintains it. */
 export const STRETCH = 100;
 /** Bumped when the planner changes, so today's plan is rebuilt (keeping what is done) after an update. */
-export const PLAN_VERSION = 2;
+export const PLAN_VERSION = 3;
 
 /** The newest reviewed game whose saved positions have not been attempted. */
 export function undrilledGame(state, now = Date.now()) {
@@ -56,19 +57,12 @@ export function gameToDebrief(state, now = Date.now()) {
   return state.reviews.find(r => (r.created || 0) >= now - 3 * DAY && needsDebrief(r)) || null;
 }
 
-/** Puzzle tags that train a skill around the current band. */
+/** The puzzle tags that train a skill. */
 export function tagsForSkill(state, skill) {
-  const band = BANDS.indexOf(currentBand(state));
-  const near = UNITS.filter(u => u.skill === skill && Math.abs(BANDS.findIndex(b => b.id === u.band) - band) <= 1);
-  return [...new Set((near.length ? near : UNITS.filter(u => u.skill === skill)).flatMap(u => u.tags))];
+  return tagsOf(skill);
 }
 
-const drillLabel = d =>
-  d.type === 'endgame'
-    ? 'Endgame drill'
-    : { vision: 'Vision sprint', visual: 'Visualisation drill', checks: 'Find every check', assess: 'Assess the position' }[d.type];
-
-/** The four-minute reset after two losses in a row (or when the STOP card's button is pressed). */
+/** The stop line's reset block: four minutes of your own positions before any game. */
 export function resetBlock(state, now = Date.now(), stop = stopState(state, now)) {
   const safeCount = safeItems(state, { limit: 4, Chess, now }).length;
   return {
@@ -127,9 +121,7 @@ export function planSession(state, { now = Date.now(), puzzles = [], goalStatus 
   const minutes = state.minutes || state.target?.minutes || 20;
   const map = skillMap(state, target || state.target?.target || state.puzzle.rating + 200, now);
   const order = map.map(s => s.id);
-  const unit = chooseUnit(state, order);
   const lk = leaks(state, now);
-  const refresh = refresher(lk);
   // What your debriefs, clock and recent results say to push on.
   const push = focus(state, now);
   const ledger = state.ledger || [];
@@ -285,49 +277,17 @@ export function planSession(state, { now = Date.now(), puzzles = [], goalStatus 
     }
   }
 
-  // 4–6. The current unit: lesson, puzzles, drill. On a losing streak the leak
-  // is the whole day; an everyday leak (last 30 days) keeps the unit as filler.
-  if (unit && (!rebuilt || d.mode === 'window')) {
-    const st = unitStatus(state, unit);
-    if (unit.lesson && !st.lessonDone)
-      add({
-        id: 'lesson',
-        type: 'lesson',
-        title: `Lesson: ${unit.title}`,
-        detail: unit.concept,
-        est: 5,
-        params: { lesson: unit.lesson },
-        ...(rebuilt ? { optional: true } : {}),
-      });
-    const rating = (state.skills?.[unit.skill]?.rating || state.puzzle.rating) + STRETCH;
-    const n = goalStatus === 'behind' ? 10 : 8;
-    add({
-      id: 'unit',
-      type: 'puzzles',
-      title: `${unit.title}: ${n} puzzles`,
-      detail: unit.concept,
-      est: n,
-      params: { mode: 'daily', tags: unit.tags, strict: 1, limit: n, unit: unit.id, rating },
-      count: n,
-      ...(rebuilt ? { optional: true } : {}),
-    });
-    if (unit.drill && !drillDone(state, unit.drill) && !rebuilt)
-      add({
-        id: 'drill',
-        type: 'drill',
-        title: drillLabel(unit.drill),
-        detail: `Part of mastering ${unit.title.toLowerCase()}.`,
-        est: unit.drill.type === 'endgame' ? 4 : 3,
-        params:
-          unit.drill.type === 'endgame'
-            ? { drill: 'endgames', id: unit.drill.id }
-            : unit.drill.type === 'vision'
-              ? { mode: 'vision' }
-              : { drill: unit.drill.type === 'visual' ? 'visualise' : unit.drill.type },
-        drill: unit.drill,
-        optional: true,
-      });
-  }
+  // 4. Nemesis: a game against the opponent built from your mistakes, with
+  // the gate on, and the habit your games ask for as the objective.
+  const nemesisHabit = habit || looseHabit;
+  add({
+    id: 'nemesis',
+    type: 'nemesis',
+    title: 'Nemesis: a game with the gate',
+    detail: `It plays like a person of your level and sets the traps your likely move falls into. ${nemesisHabit}`,
+    est: 12,
+    params: { nemesis: 1, objective: nemesisHabit },
+  });
 
   // 7. Your clock habit, when it is the problem: the drill that trains it; or
   // your decisive positions on the clock you had, required when you lose on time.
@@ -351,38 +311,19 @@ export function planSession(state, { now = Date.now(), puzzles = [], goalStatus 
     add(realBlock('clock', positions, { optional: !onTime }));
   }
 
-  // 8. The weakest other skill: the one your debriefs point at, a refresher if
-  // your games keep leaking it, or the furthest behind.
-  const weak =
-    push?.skill && push.skill !== unit?.skill
-      ? push.skill
-      : refresh && refresh.skill !== unit?.skill
-        ? refresh.skill
-        : order.find(s => s !== unit?.skill);
+  // 8. Puzzles on the weakest skill: the one your debriefs point at, or the
+  // furthest behind, above your level. Filler, after what your games ask for.
+  const weak = push?.skill || order[0];
   if (weak && !rebuilt) {
-    const n = goalStatus === 'behind' ? 6 : 4;
+    const n = goalStatus === 'behind' ? 8 : 6;
     const rating = (state.skills?.[weak]?.rating || state.puzzle.rating) + STRETCH;
     add({
       id: 'weak',
       type: 'puzzles',
-      title:
-        refresh && refresh.skill === weak
-          ? `Refresher: ${refresh.title.toLowerCase()}`
-          : `${map.find(s => s.id === weak).label}: ${n} puzzles`,
-      detail:
-        push?.skill === weak
-          ? push.reason
-          : refresh && refresh.skill === weak
-            ? 'Your recent games show this coming back.'
-            : 'Your weakest skill after today’s unit.',
+      title: `${map.find(s => s.id === weak).label}: ${n} puzzles`,
+      detail: push?.skill === weak ? push.reason : 'Your weakest skill, a step above your level.',
       est: n,
-      params: {
-        mode: 'daily',
-        tags: refresh && refresh.skill === weak ? refresh.tags : tagsForSkill(state, weak),
-        strict: 1,
-        limit: n,
-        rating,
-      },
+      params: { mode: 'daily', tags: tagsForSkill(state, weak), strict: 1, limit: n, rating },
       count: n,
       optional: true,
     });
@@ -424,7 +365,7 @@ export function planSession(state, { now = Date.now(), puzzles = [], goalStatus 
   if (!stop.tonight) {
     const recentGame =
       state.games.some(g => g.d >= dateKey(new Date(now - 2 * DAY))) || state.reviews.some(r => (r.created || 0) >= now - 2 * DAY);
-    const focusSkill = unit?.skill || weak || 'safety';
+    const focusSkill = weak || 'safety';
     // The game practises the habit that would have saved the most points.
     const objective = habit || (profile.flags.fast ? LEAKS.rushed.habit : profile.flags.hung ? LEAKS.safety.habit : OBJECTIVES[focusSkill]);
     const clocked = rowsBetween(ledger, now - 42 * DAY, Infinity, { control: 'blitz' }).length >= CLOCK_ROWS;
@@ -440,11 +381,6 @@ export function planSession(state, { now = Date.now(), puzzles = [], goalStatus 
     });
   }
 
-  // When your own games give orders, the curriculum unit follows what they ask for.
-  if (Object.values(profile.flags).some(Boolean)) {
-    const rank = b => (['lesson', 'unit', 'drill'].includes(b.id) ? 1 : ['weak', 'replay', 'game'].includes(b.id) ? 2 : 0);
-    blocks.sort((a, b) => rank(a) - rank(b));
-  }
   // Fit the time: required blocks always; optional ones while time allows.
   let used = blocks.filter(b => !b.optional).reduce((a, b) => a + b.est, 0);
   const fitted = blocks.filter(b => {
@@ -457,7 +393,6 @@ export function planSession(state, { now = Date.now(), puzzles = [], goalStatus 
     date: dateKey(new Date(now)),
     plan: PLAN_VERSION,
     minutes,
-    unit: unit?.id || null,
     focus: order.slice(0, 2),
     streak: leak ? { leak, share: d.share, count: d.counts[leak], counted: d.counted, line: d.line } : null,
     blocks: fitted.map(b => ({ ...b, status: 'todo' })),
@@ -501,6 +436,7 @@ export function blockDone(state, block) {
       return state.calc[d.type].runs > base[d.type];
     }
     case 'game':
+    case 'nemesis':
       return gameCount(state) > base.games;
     case 'debrief':
       return !!state.reviews.find(r => r.id === block.params.review)?.debriefed;

@@ -5,7 +5,6 @@ import { pointsProfile, profileLines, trend, seriousErrors, adaptRule } from '..
 import { tiltProfile, ruleLine } from '../../src/tilt.js';
 import { diagnose, classifyLoss } from '../../src/leak.js';
 import { planSession, STRETCH, PLAN_VERSION } from '../../src/program.js';
-import { UNITS } from '../../data/curriculum.js';
 
 /** Clocks for a 10-ply game where your move at `ply` takes `spent` seconds (5+0). */
 function clocksWith(ply, spent) {
@@ -134,7 +133,7 @@ test('the everyday diagnosis reads 30 days of losses: chess leaks from reviewed 
 /** Wins spaced a day apart and ending now, so the newest games are not a streak and nothing stops tonight. */
 const winsUntilNow = n => spaced(n, NOW - 3600000, () => ({ r: 1, n: 80 }));
 
-test('a leak in the last 30 days rebuilds the day: its block first and required, the unit kept as filler above your level', () => {
+test('a leak in the last 30 days rebuilds the day: its block first and required, Nemesis after it with the habit', () => {
   const games = Array.from({ length: 10 }, (_, i) => timedLoss(i < 6 ? 1 : 20, { created: NOW - (i + 1) * 2 * DAY }));
   const s = stateWith({ reviews: games.map(g => g.r), ledger: [...games.map(g => g.l), ...winsUntilNow(12)], minutes: 60 });
   for (const r of s.reviews) r.debriefed = true;
@@ -145,12 +144,11 @@ test('a leak in the last 30 days rebuilds the day: its block first and required,
   const leak = plan.blocks.find(b => b.id === 'leak');
   assert.equal(leak.optional, undefined);
   assert.match(plan.blocks.find(b => b.id === 'game').detail, /count three/);
-  // The unit stays, after the leak, optional, aimed above the skill's rating.
-  const unit = plan.blocks.find(b => b.id === 'unit');
-  assert.ok(ids.indexOf('unit') > ids.indexOf('leak'));
-  assert.equal(unit.optional, true);
-  const skill = UNITS.find(u => u.id === plan.unit).skill;
-  assert.equal(unit.params.rating, (s.skills[skill]?.rating || s.puzzle.rating) + STRETCH);
+  // Nemesis follows the leak block, carrying the habit; nothing from a curriculum.
+  assert.ok(ids.indexOf('nemesis') > ids.indexOf('leak'));
+  assert.match(plan.blocks.find(b => b.id === 'nemesis').params.objective, /count three/);
+  assert.ok(!ids.includes('unit') && !ids.includes('lesson'));
+  void STRETCH;
 });
 
 test('without a leak, fast and hung mistakes across your games make Safe or hanging? required and set the game objective', () => {
@@ -168,6 +166,8 @@ test('without a leak, fast and hung mistakes across your games make Safe or hang
   assert.match(warm.detail, /count three/);
   if (warm.type === 'safe') assert.equal(warm.optional, false);
   assert.match(plan.blocks.find(b => b.id === 'game').detail, /count three/);
-  // The curriculum unit follows what the games ask for.
-  if (ids.includes('unit')) assert.ok(ids.indexOf('unit') > ids.indexOf('warmup'));
+  // Weak-skill puzzles aim above the skill's rating.
+  const weak = plan.blocks.find(b => b.id === 'weak');
+  if (weak) assert.ok(weak.params.rating >= s.puzzle.rating + STRETCH - 1);
+  assert.ok(ids.includes('nemesis'));
 });

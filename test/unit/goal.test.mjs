@@ -4,23 +4,9 @@ import { defaults, migrate, validate, CURRENT_VERSION } from '../../src/state.js
 import { makeGoal, nextTarget, projection, trendSlope, paceFor } from '../../src/goal.js';
 import { mainPerf, mergeRatings, lichessRatings, chessComRatings, seriesFor } from '../../src/ratings.js';
 import { skillsOf, seedSkills, recordSkillPuzzle, leaks, skillMap } from '../../src/skills.js';
-import {
-  UNITS,
-  BANDS,
-  unitById,
-  unitStatus,
-  recordUnitPuzzle,
-  refreshMastery,
-  place,
-  currentBand,
-  chooseUnit,
-  refresher,
-  pathSummary,
-  bandForRating,
-} from '../../src/curriculum.js';
 import { planSession, baseline, blockDone } from '../../src/program.js';
 import { updateGoal, goalStatus, PUZZLE_PERF } from '../../src/progress-model.js';
-import { SKILLS, OBJECTIVES } from '../../data/curriculum.js';
+import { SKILLS, OBJECTIVES } from '../../data/skills.js';
 import { lessons as LESSONS } from '../../data/lessons.js';
 import { puzzles } from '../../data/puzzles.js';
 
@@ -28,34 +14,6 @@ const NOW = new Date('2026-10-08T12:00:00Z');
 const day = n => new Date(NOW.getTime() + n * 86400000).toISOString().slice(0, 10);
 const fresh = () => defaults();
 const json = (body, status = 200) => ({ ok: status < 400, status, json: async () => body });
-
-test('the curriculum is well formed', () => {
-  const ids = new Set();
-  const lessonIds = new Set(LESSONS.map(l => l.id));
-  for (const u of UNITS) {
-    assert.ok(!ids.has(u.id), `duplicate unit ${u.id}`);
-    ids.add(u.id);
-    assert.ok(
-      BANDS.some(b => b.id === u.band),
-      `${u.id} band`,
-    );
-    assert.ok(SKILLS[u.skill], `${u.id} skill`);
-    assert.ok(u.tags.length, `${u.id} tags`);
-    assert.ok(u.gate.puzzles > 0 && u.gate.accuracy > 0 && u.gate.accuracy <= 1, `${u.id} gate`);
-    if (u.lesson) assert.ok(lessonIds.has(u.lesson), `${u.id} lesson ${u.lesson} exists`);
-    // Every unit's tags must train at least one skill, so solving them moves the map.
-    assert.ok(skillsOf(u.tags).length, `${u.id} tags map to a skill`);
-    // Strict unit sessions need enough puzzles to reach the gate without repeats.
-    const pool = puzzles.filter(p => u.tags.some(t => p.tags?.includes(t))).length;
-    assert.ok(pool >= u.gate.puzzles * 3, `${u.id} has ${pool} puzzles`);
-  }
-  for (const b of BANDS)
-    assert.ok(
-      UNITS.some(u => u.band === b.id),
-      `${b.id} has units`,
-    );
-  for (const s of Object.keys(SKILLS)) assert.ok(OBJECTIVES[s], `objective for ${s}`);
-});
 
 test('goal: next target, deadline from pace, and trend slope', () => {
   assert.equal(nextTarget(1180), 1400);
@@ -249,97 +207,46 @@ test('skills: leaks from reviewed games widen the gap', () => {
   const map = skillMap(s, 1200, now);
   assert.equal(map[0].id, 'safety');
   assert.equal(map[0].effective, 880);
-  const r = refresher(lk);
-  assert.equal(r.skill, 'safety');
-  assert.equal(refresher({ games: 2, perGame: { safety: 3 } }), null);
 });
 
-test('curriculum: placement starts you at your level', () => {
-  const s = fresh();
-  place(s, 1180, day(0));
-  assert.equal(bandForRating(1180).id, 'b3');
-  assert.equal(currentBand(s).id, 'b3');
-  assert.ok(UNITS.filter(u => u.band === 'b1' || u.band === 'b2').every(u => s.curriculum.units[u.id]?.placed));
-  const sum = pathSummary(s);
-  assert.equal(sum.band.id, 'b3');
-  assert.equal(sum.bandDone, 0);
-  const beginner = fresh();
-  place(beginner, 600, day(0));
-  assert.equal(currentBand(beginner).id, 'b1');
-});
-
-test('curriculum: the weakest skill picks the unit, and the gate masters it', () => {
-  const s = fresh();
-  place(s, 1180, day(0));
-  const unit = chooseUnit(s, ['tactics', 'safety']);
-  assert.equal(unit.id, 'c-deflect');
-  assert.equal(s.curriculum.current, 'c-deflect');
-  // The current unit sticks even if the order changes.
-  assert.equal(chooseUnit(s, ['mating']).id, 'c-deflect');
-  assert.equal(unitStatus(s, unit).progress, 0);
-  for (let i = 0; i < unit.gate.puzzles - 1; i++) assert.deepEqual(recordUnitPuzzle(s, ['deflection'], true, day(0)), []);
-  assert.ok(unitStatus(s, unit).progress > 0.85 && unitStatus(s, unit).progress < 1);
-  const mastered = recordUnitPuzzle(s, ['deflection'], true, day(0));
-  assert.deepEqual(
-    mastered.map(u => u.id),
-    ['c-deflect'],
-  );
-  assert.equal(s.curriculum.current, null);
-  assert.equal(unitStatus(s, unit).progress, 1);
-  assert.notEqual(chooseUnit(s, ['tactics']).id, 'c-deflect');
-});
-
-test('curriculum: low accuracy holds the gate, and a lesson must be finished', () => {
-  const s = fresh();
-  place(s, 1180, day(0));
-  const unit = unitById('c-deflect');
-  for (let i = 0; i < 20; i++) recordUnitPuzzle(s, ['deflection'], i % 2 === 0, day(0));
-  assert.equal(unitStatus(s, unit).done, false);
-  const withLesson = unitById('c-reply');
-  for (let i = 0; i < 12; i++) recordUnitPuzzle(s, withLesson.tags, true, day(0));
-  assert.equal(unitStatus(s, withLesson).done, false);
-  assert.equal(unitStatus(s, withLesson).progress, 0.5);
-  s.lessons[withLesson.lesson] = { done: true };
-  assert.deepEqual(
-    refreshMastery(s, day(0)).map(u => u.id),
-    ['c-reply'],
-  );
-});
-
-test('planner: a session fits the time and leads with the current unit', () => {
+test('planner: a session fits the time and always holds a Nemesis game with the gate', () => {
   const s = fresh();
   s.puzzle.rating = 1180;
   s.skills = seedSkills(1180);
-  place(s, 1180, day(0));
   s.minutes = 20;
   const plan = planSession(s, { now: NOW.getTime(), goalStatus: 'on-track', target: 1400 });
   const ids = plan.blocks.map(b => b.id);
-  assert.ok(ids.includes('unit'), ids.join());
+  assert.ok(ids.includes('nemesis'), ids.join());
   assert.ok(ids.includes('game'), 'a game when none was played recently');
-  const unit = plan.blocks.find(b => b.id === 'unit');
-  assert.equal(unit.params.unit, plan.unit);
-  assert.equal(unit.params.strict, 1);
-  assert.ok(plan.blocks.reduce((a, b) => a + b.est, 0) <= 20 * 1.15 + 15);
+  const nemesis = plan.blocks.find(b => b.id === 'nemesis');
+  assert.equal(nemesis.type, 'nemesis');
+  assert.equal(nemesis.params.nemesis, 1);
+  assert.ok(nemesis.params.objective, 'the habit rides along as the objective');
+  assert.equal(nemesis.optional, undefined, 'never optional');
+  assert.ok(!ids.includes('unit') && !ids.includes('lesson') && !ids.includes('drill'), 'no curriculum');
   assert.ok(plan.blocks.every(b => b.status === 'todo'));
+  assert.equal(plan.unit, undefined);
 
-  // More time adds the optional blocks; behind adds volume.
+  // More time adds the optional blocks; behind adds volume to the weak-skill puzzles.
   s.minutes = 60;
   const long = planSession(s, { now: NOW.getTime(), goalStatus: 'behind', target: 1400 });
   assert.ok(long.blocks.length > plan.blocks.length);
-  assert.equal(long.blocks.find(b => b.id === 'unit').count, 10);
+  const weak = long.blocks.find(b => b.id === 'weak');
+  assert.equal(weak.count, 8);
+  assert.equal(weak.params.strict, 1);
+  assert.ok(weak.params.tags.length, 'tags come from the skill, not a unit');
 
-  // A recent game makes the game optional; with ten minutes it drops out.
+  // A recent game makes the game optional; with ten minutes it drops out, Nemesis stays.
   s.minutes = 10;
   s.games.push({ d: day(0) });
   const short = planSession(s, { now: NOW.getTime(), goalStatus: 'on-track', target: 1400 });
   assert.ok(!short.blocks.some(b => b.id === 'game'));
-  assert.ok(short.blocks.some(b => b.id === 'unit'));
+  assert.ok(short.blocks.some(b => b.id === 'nemesis'));
 });
 
 test('planner: a fresh game review comes first and blocks know when they are done', () => {
   const s = fresh();
   s.puzzle.rating = 1180;
-  place(s, 1180, day(0));
   s.minutes = 30;
   s.mistakes = [{ id: 'm1', kind: 'missed-tactic', fen: '8/8/8/8/8/8/8/K6k w - - 0 1' }];
   s.reviews = [
@@ -371,15 +278,17 @@ test('planner: a fresh game review comes first and blocks know when they are don
   const review = plan.blocks.find(b => b.id === 'review');
   assert.ok(review, plan.blocks.map(b => b.id).join());
   assert.match(review.title, /Rival/);
-  assert.ok(plan.blocks.indexOf(review) < plan.blocks.findIndex(b => b.id === 'unit'));
+  assert.ok(plan.blocks.indexOf(review) < plan.blocks.findIndex(b => b.id === 'nemesis'));
 
   const block = { ...review, base: baseline(s) };
   assert.equal(blockDone(s, block), false);
   s.log.push({ k: 'm' });
   assert.equal(blockDone(s, block), true);
   const game = { type: 'game', base: baseline(s) };
+  const nemesis = { type: 'nemesis', base: baseline(s) };
   s.games.push({ d: day(0) });
   assert.equal(blockDone(s, game), true);
+  assert.equal(blockDone(s, nemesis), true);
   assert.equal(blockDone(s, { type: 'game' }), false, 'not started');
 });
 
@@ -427,7 +336,10 @@ test('state v6: new fields default, migrate and validate', () => {
   assert.ok(CURRENT_VERSION >= 6);
   const d = fresh();
   assert.equal(d.onboarded, false);
-  assert.deepEqual(d.curriculum, { units: {}, current: null, placed: false });
+  assert.equal(d.curriculum, undefined, 'the curriculum went in 6.0');
+  assert.deepEqual(d.gate, { stage: 3, set: 'default', since: null });
+  assert.deepEqual(d.experiments, []);
+  assert.equal(d.settings.nemesis, false);
   assert.ok(d.skills.tactics);
   const old = { ...fresh(), version: 5 };
   delete old.skills;
@@ -439,4 +351,20 @@ test('state v6: new fields default, migrate and validate', () => {
   assert.ok(m.skills.safety);
   assert.ok(Array.isArray(m.milestones));
   assert.doesNotThrow(() => validate(m));
+  // A 5.x state with its curriculum: 6.0 drops it and adds the gate, Proof and the Nemesis setting.
+  const v10 = {
+    ...fresh(),
+    version: 10,
+    curriculum: { units: { 'f-scan': { tries: 0, clean: 0, recent: [], done: true } }, current: null, placed: true },
+  };
+  delete v10.gate;
+  delete v10.experiments;
+  delete v10.settings.nemesis;
+  const m11 = migrate(v10);
+  assert.equal(m11.version, CURRENT_VERSION);
+  assert.equal(m11.curriculum, undefined);
+  assert.deepEqual(m11.gate, { stage: 3, set: 'default', since: null });
+  assert.deepEqual(m11.experiments, []);
+  assert.equal(m11.settings.nemesis, false);
+  assert.equal(validate(m11), null);
 });

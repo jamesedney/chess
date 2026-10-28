@@ -11,7 +11,7 @@ import { KINDS, phaseOf } from './mistake-kinds.js';
 import { mainControl, rowsBetween, lossRun, keyFromSite, score } from './ledger.js';
 import { annotate } from './tilt.js';
 import { outcome } from './openings.js';
-import { OBJECTIVES } from '../data/curriculum.js';
+import { OBJECTIVES } from '../data/skills.js';
 
 const DAY = 86400000;
 /** Losses read for a diagnosis, and the window they must fall in. */

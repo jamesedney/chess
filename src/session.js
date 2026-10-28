@@ -2,7 +2,6 @@
 // is done, and moves on. The plan itself comes from program.js.
 import { app } from './app-context.js';
 import { planSession, baseline, blockDone, resetBlock, PLAN_VERSION } from './program.js';
-import { refreshMastery } from './curriculum.js';
 import { dateKey } from './state.js';
 import { goalStatus } from './progress-model.js';
 import { stopState, recordReset } from './tilt.js';
@@ -48,6 +47,7 @@ function route(block) {
     case 'drill':
       return block.params.mode === 'vision' ? ['train', block.params] : ['drills', block.params];
     case 'game':
+    case 'nemesis':
       return ['play', block.params];
     case 'debrief':
       return ['review', block.params];
@@ -166,7 +166,6 @@ function nextTodo(s, from = -1) {
 export function checkSession({ settle = false } = {}) {
   const block = activeBlock();
   if (!block) return false;
-  refreshMastery(app.state, dateKey());
   if (!block.complete && !blockDone(app.state, block)) return false;
   const fresh = !block.complete;
   block.complete = true;

@@ -3,16 +3,14 @@ import { Chess } from '../../vendor/chess.js';
 import { lessons, SECTIONS } from '../../data/lessons.js';
 import { app } from '../app-context.js';
 import { BoardView, turnLabel } from '../board.js';
-import { $, esc, pageHead, choosePromotion, plural, settle, showModal, closeModal } from '../ui.js';
+import { $, esc, pageHead, choosePromotion, plural, settle } from '../ui.js';
 import { moveToUci, playUci } from '../chess-utils.js';
 import { PERSONAL } from '../themes.js';
 import { cue } from '../sound.js';
 import { personalLessons, PERSONAL_SECTION } from '../personal-lessons.js';
 import { engine, BUDGET } from '../engine.js';
 import { judgeAlternative } from '../verify.js';
-import { BANDS, UNITS, unitsIn, unitStatus, currentBand } from '../curriculum.js';
-import { SKILLS } from '../../data/curriculum.js';
-import { endgameTitle } from '../endgames.js';
+import { ENDGAME_DRILLS } from '../endgames.js';
 
 /** Built-in lessons plus the ones made from the user's own mistakes. */
 function allLessons() {
@@ -54,98 +52,58 @@ export function leave() {
   active = null;
 }
 
-// ---------- The path ----------
+// ---------- The library ----------
 
-/** The curriculum map: every band and unit, where you are, and the lessons inside. */
+/** Every drill, for the shelf at the end of the library. */
+const DRILLS = [
+  { page: 'drills', params: { drill: 'openings' }, title: 'Openings you struggle with', detail: 'Play on from where your lines go wrong.' },
+  {
+    page: 'drills',
+    params: { drill: 'repertoire' },
+    title: 'Your repertoire',
+    detail: 'Your moves in the openings you play, and the better ones.',
+  },
+  { page: 'train', params: { mode: 'safe' }, title: 'Safe or hanging?', detail: 'Five seconds a position, from your own games.' },
+  { page: 'train', params: { mode: 'vision' }, title: 'Vision sprint', detail: 'One minute: capture the free piece.' },
+  {
+    page: 'drills',
+    params: { drill: 'endgames' },
+    title: 'Endgames vs Stockfish',
+    detail: `${ENDGAME_DRILLS.length} endings to win or hold.`,
+  },
+  { page: 'drills', params: { drill: 'checks' }, title: 'Find every check', detail: 'Calculation: list them all.' },
+  { page: 'drills', params: { drill: 'assess' }, title: 'Assess the position', detail: 'Who is better, and by how much?' },
+  { page: 'drills', params: { drill: 'visualise' }, title: 'Visualisation', detail: 'Play a line in your head.' },
+  { page: 'play', params: { nemesis: 1 }, title: 'Nemesis', detail: 'A game against the opponent built from your mistakes.' },
+];
+
+/** The library: lessons made from your games, then every lesson by section, then the drills. Reference, not a ladder. */
 function drawList() {
   const s = app.state;
-  const band = currentBand(s);
-  const current = s.curriculum.current;
-  const inUnits = new Set(UNITS.map(u => u.lesson).filter(Boolean));
-  const extras = lessons.filter(l => !inUnits.has(l.id));
   const personal = personalLessons(s);
-  const bandIndex = BANDS.indexOf(band);
+  const sections = SECTIONS.map(name => ({ name, lessons: lessons.filter(l => l.section === name) })).filter(x => x.lessons.length);
+  const stray = lessons.filter(l => !SECTIONS.includes(l.section));
+  if (stray.length) sections.push({ name: 'More', lessons: stray });
+  const read = lessons.filter(l => progressOf(l).done).length;
   root.innerHTML =
-    pageHead('', 'Your path') +
-    `${personal.length ? `<section class="path-section"><h2 class="path-heading">Made from your games</h2><div class="lesson-grid">${personal.map(l => lessonCard(l, false)).join('')}</div></section>` : ''}
-    ${BANDS.map((b, i) => {
-      const units = unitsIn(b.id);
-      const done = units.filter(u => unitStatus(s, u).done).length;
-      const state = i < bandIndex ? 'past' : i === bandIndex ? 'now' : 'later';
-      return `<details class="band band-${state}" ${state === 'now' ? 'open' : ''}>
-        <summary><span class="band-name">${esc(b.label)}</span><span class="small">${b.floor ? b.floor + '–' : 'up to '}${b.ceiling} · ${done} of ${units.length}</span></summary>
-        <ol class="units">${units
-          .map(u => {
-            const st = unitStatus(s, u);
-            const cls = st.done ? 'done' : u.id === current ? 'current' : '';
-            const pct = Math.round(st.progress * 100);
-            return `<li class="unit ${cls}"><button type="button" data-unit="${u.id}">
-              <span class="unit-ring" style="--pct:${pct}" aria-hidden="true">${st.done ? '✓' : ''}</span>
-              <span class="unit-text"><strong>${esc(u.title)}</strong><span class="small">${esc(SKILLS[u.skill].short)}${st.placed ? ' · placed' : st.done ? ' · mastered' : u.id === current ? ' · now' : pct ? ` · ${pct}%` : ''}</span></span>
-            </button></li>`;
-          })
-          .join('')}</ol>
-      </details>`;
-    }).join('')}
-    ${extras.length ? `<section class="path-section"><h2 class="path-heading">More lessons</h2><div class="lesson-grid">${extras.map(l => lessonCard(l, false)).join('')}</div></section>` : ''}`;
+    pageHead('', 'Library') +
+    `<p class="small library-note">${read} of ${lessons.length} lessons read. Today’s plan comes from your games; this is the shelf.</p>
+    ${personal.length ? `<section class="path-section"><h2 class="path-heading">${esc(PERSONAL_SECTION)}</h2><div class="lesson-grid">${personal.map(l => lessonCard(l, false)).join('')}</div></section>` : ''}
+    ${sections
+      .map(
+        sec =>
+          `<details class="band" ${sec.lessons.some(l => !progressOf(l).done) ? 'open' : ''}><summary><span class="band-name">${esc(sec.name)}</span><span class="small">${sec.lessons.filter(l => progressOf(l).done).length} of ${sec.lessons.length}</span></summary>
+          <div class="lesson-grid">${sec.lessons.map(l => lessonCard(l, false)).join('')}</div></details>`,
+      )
+      .join('')}
+    <section class="path-section"><h2 class="path-heading">Drills</h2><div class="drill-cards">${DRILLS.map(
+      (d, i) =>
+        `<button type="button" class="drill-card" data-shelf="${i}"><strong>${esc(d.title)}</strong><span>${esc(d.detail)}</span></button>`,
+    ).join('')}</div></section>`;
   root.querySelectorAll('[data-lesson]').forEach(b => (b.onclick = () => app.navigate('path', { lesson: b.dataset.lesson })));
-  root.querySelectorAll('[data-unit]').forEach(b => (b.onclick = () => openUnit(UNITS.find(u => u.id === b.dataset.unit))));
-}
-
-/** A unit's detail: what it teaches, how far you are, and a way into each part. */
-function openUnit(unit) {
-  const s = app.state;
-  const st = unitStatus(s, unit);
-  const lesson = unit.lesson && lessons.find(l => l.id === unit.lesson);
-  const drill = unit.drill;
-  const drillText = !drill
-    ? ''
-    : drill.type === 'endgame'
-      ? `Win the “${endgameTitle(drill.id)}” endgame drill`
-      : drill.type === 'vision'
-        ? `Score ${drill.score} in a vision sprint`
-        : drill.type === 'visual'
-          ? `Score ${drill.score} in visualisation`
-          : drill.type === 'checks'
-            ? `Score ${drill.score} in find every check`
-            : `Complete ${plural(drill.runs, 'assessment run')}`;
-  showModal(`<h2>${esc(unit.title)}</h2>
-    <p>${esc(unit.concept)}</p>
-    <ul class="gate">
-      <li class="${st.puzzlesOk ? 'ok' : ''}">Solve ${unit.gate.puzzles} puzzles cleanly (${Math.min(st.clean, unit.gate.puzzles)} so far) at ${Math.round(unit.gate.accuracy * 100)}% accuracy${st.recent.length ? ` (now ${Math.round(st.accuracy * 100)}%)` : ''}</li>
-      ${lesson ? `<li class="${st.lessonDone ? 'ok' : ''}">Finish the lesson “${esc(lesson.title)}”</li>` : ''}
-      ${drill ? `<li class="${st.drillOk ? 'ok' : ''}">${esc(drillText)}</li>` : ''}
-    </ul>
-    ${st.done ? `<p class="status success">${st.placed ? 'Placed: your rating says you know this. It comes back if your games say otherwise.' : 'Mastered.'}</p>` : ''}
-    <div class="actions">
-      <button type="button" class="primary" id="unit-practise">Practise now</button>
-      ${lesson ? `<button type="button" id="unit-lesson">${st.lessonDone ? 'Replay lesson' : 'Lesson'}</button>` : ''}
-      ${drill ? '<button type="button" id="unit-drill">Drill</button>' : ''}
-      ${!st.done && unit.id !== s.curriculum.current ? '<button type="button" id="unit-focus">Make this today’s unit</button>' : ''}
-    </div>`);
-  $('#unit-practise').onclick = () => {
-    closeModal();
-    app.navigate('train', { mode: 'daily', tags: unit.tags, strict: 1, unit: unit.id, rating: s.skills[unit.skill]?.rating, limit: 8 });
-  };
-  $('#unit-lesson')?.addEventListener('click', () => {
-    closeModal();
-    app.navigate('path', { lesson: unit.lesson });
-  });
-  $('#unit-drill')?.addEventListener('click', () => {
-    closeModal();
-    if (drill.type === 'vision') app.navigate('train', { mode: 'vision' });
-    else
-      app.navigate(
-        'drills',
-        drill.type === 'endgame' ? { drill: 'endgames', id: drill.id } : { drill: drill.type === 'visual' ? 'visualise' : drill.type },
-      );
-  });
-  $('#unit-focus')?.addEventListener('click', () => {
-    s.curriculum.current = unit.id;
-    s.session = null; // re-plan today around it
-    app.save();
-    closeModal();
-    drawList();
+  root.querySelectorAll('[data-shelf]').forEach(b => {
+    const d = DRILLS[Number(b.dataset.shelf)];
+    b.onclick = () => app.navigate(d.page, d.params);
   });
 }
 

@@ -15,7 +15,7 @@ import {
   windowHeadline,
 } from '../../src/leak.js';
 import { KINDS } from '../../src/mistake-kinds.js';
-import { OBJECTIVES } from '../../data/curriculum.js';
+import { OBJECTIVES } from '../../data/skills.js';
 import { annotate } from '../../src/tilt.js';
 import { review, lostGame, mistakeFor, row, stateWith, NOW, DAY, MOVES, START, FEN_BEFORE_NXF7 } from './fixtures-v5.mjs';
 

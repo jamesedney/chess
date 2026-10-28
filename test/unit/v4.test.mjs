@@ -9,7 +9,6 @@ import { timeProfile, profileText } from '../../src/timeprofile.js';
 import { evidence, headlineText, focus } from '../../src/evidence.js';
 import { schedule } from '../../src/srs.js';
 import { planSession, baseline, blockDone } from '../../src/program.js';
-import { place } from '../../src/curriculum.js';
 
 const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const NOW = Date.parse('2026-10-11T12:00:00Z');
@@ -271,7 +270,6 @@ test('planner: a clock drill for a clock habit, a game to play again, and repert
     });
   const state = { ...defaults(), reviews: [game(NOW - 4 * DAY), game(NOW - 5 * DAY)], minutes: 60 };
   state.puzzle.rating = 1200;
-  place(state, 1200, '2026-10-11');
   const plan = planSession(state, { now: NOW, target: 1400 });
   const ids = plan.blocks.map(b => b.id);
   const clock = plan.blocks.find(b => b.id === 'clock');

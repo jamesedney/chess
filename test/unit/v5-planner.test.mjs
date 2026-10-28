@@ -13,7 +13,7 @@ import { stopState, SITTING_MS, QUICK_MS } from '../../src/tilt.js';
 import { MIN_POSITIONS } from '../../src/pressure.js';
 import { CLOCK_DRILLS } from '../../src/timeprofile.js';
 import { KINDS } from '../../src/mistake-kinds.js';
-import { OBJECTIVES } from '../../data/curriculum.js';
+import { OBJECTIVES } from '../../data/skills.js';
 import { review, lostGame, mistakeFor, row, stateWith, NOW, DAY } from './fixtures-v5.mjs';
 
 const MIN = 60000;
@@ -152,6 +152,7 @@ test('F1 planner: a safety leak rebuilds the day around Safe or hanging? and the
     line: `Losing 7 of your last 10. 5 of them began with a piece hung in one move. Habit: ${KINDS['hung-piece'].habit}`,
   });
   for (const id of ['lesson', 'unit', 'weak', 'drill', 'clock']) assert.ok(!list.includes(id), `${id} is skipped: ${list.join()}`);
+  assert.ok(list.includes('nemesis'), 'Nemesis stays on a losing streak');
   // The debrief of the freshest game stays first among the required blocks; recall stays.
   assert.equal(required(plan)[0], 'debrief');
   assert.ok(list.indexOf('debrief') < list.indexOf('leak'));
@@ -199,7 +200,6 @@ test('F1 planner: without a bank of safe positions the leak block is the vision 
   assert.equal(leak.optional, undefined);
   assert.deepEqual(leak.params, { mode: 'vision' });
   assert.equal(byId(plan, 'support').params.clock, 'pause');
-  assert.ok(!ids(plan).includes('unit'));
   // The leak block is the day's sprint: no separate warm-up doubles it.
   assert.ok(!ids(plan).includes('warmup'));
 });
@@ -218,7 +218,7 @@ test('F1 planner: a clock leak trains the pace drill, with Same clock as support
   assert.equal(leak.count, 10);
   assert.equal(leak.optional, undefined);
   assert.ok(!byId(plan, 'support'), 'no positions, no support');
-  assert.ok(!ids(plan).includes('unit') && !ids(plan).includes('weak'));
+  assert.ok(!ids(plan).includes('weak'));
   assert.equal(byId(plan, 'game').params.objective, LEAKS.clock.habit);
   // Saved positions from other games: five run the pause drill, six run on the real clock.
   const positions = n => {
@@ -240,7 +240,7 @@ test('F1 planner: a clock leak trains the pace drill, with Same clock as support
   });
 });
 
-test('F1 planner: a tilt leak keeps the curriculum; the habit becomes the game objective', () => {
+test('F1 planner: a tilt leak keeps the rest of the day; the habit becomes the game objective', () => {
   // Seven losses in a row, each queued a minute after the one before: six of them straight after a loss.
   const ledger = sitting('L l l l l l l w w w', { end: NOW - DAY });
   const state = stateWith({ ledger, minutes: 60 });
@@ -249,10 +249,11 @@ test('F1 planner: a tilt leak keeps the curriculum; the habit becomes the game o
   assert.equal(d.leak, 'tilt');
   const plan = planSession(state, { now: NOW, target: 1400 });
   const list = ids(plan);
-  assert.ok(list.includes('unit'), list.join());
+  assert.ok(list.includes('nemesis'), list.join());
   assert.ok(list.includes('weak'), list.join());
   assert.ok(!list.includes('leak') && !list.includes('support'));
   assert.equal(plan.streak.leak, 'tilt');
+  assert.equal(byId(plan, 'nemesis').params.objective, LEAKS.tilt.habit);
   assert.equal(byId(plan, 'game').params.objective, LEAKS.tilt.habit);
   assert.equal(byId(plan, 'game').optional, false);
 });
@@ -269,7 +270,6 @@ test('F1 planner: convert, opening and calc leaks map to the replay, repertoire 
   assert.equal(leak.optional, undefined);
   assert.equal(leak.title, 'Play it again: convert the win');
   assert.ok(!ids(cplan).includes('replay'), 'the replay block is the leak block');
-  assert.ok(!ids(cplan).includes('unit'));
   // Five saved positions: the pause drill supports it; the game objective is the habit.
   assert.equal(byId(cplan, 'support').params.clock, 'pause');
   assert.equal(byId(cplan, 'game').params.objective, LEAKS.convert.habit);
@@ -439,7 +439,7 @@ test('F2 planner: two losses in a row tonight put the reset first and drop the g
     status: 'todo',
   });
   assert.ok(!ids(plan).includes('game'), ids(plan).join());
-  assert.ok(ids(plan).includes('unit'), 'the rest of the plan stands');
+  assert.ok(ids(plan).includes('nemesis'), 'the rest of the plan stands');
   // The reset runs the pause drill on three of your positions, or Safe or hanging? on four.
   const own = stateWith({ ledger, minutes: 60, reviews: [lostGame(), lostGame(), lostGame()] });
   assert.deepEqual(resetBlock(own, NOW).params, { mode: 'mistakes', clock: 'pause', limit: 3 });

@@ -1,7 +1,7 @@
-// The skill model: a rating for each skill in the curriculum, updated from
+// The skill model: a rating for each skill (data/skills.js), updated from
 // every rated puzzle, and corrected by what your real games show. The planner
 // trains the skill furthest below where your target rating needs it.
-import { SKILLS } from '../data/curriculum.js';
+import { SKILLS } from '../data/skills.js';
 import { updateRating } from './rating.js';
 import { phaseOf } from './mistake-kinds.js';
 
@@ -49,6 +49,13 @@ const TAG_SKILLS = {
   opening: ['openings'],
   attackingF2F7: ['openings'],
 };
+
+/** The puzzle tags that train a skill. */
+export function tagsOf(skill) {
+  return Object.entries(TAG_SKILLS)
+    .filter(([, skills]) => skills.includes(skill))
+    .map(([tag]) => tag);
+}
 
 /** The skills a puzzle trains, from its tags. */
 export function skillsOf(tags = []) {

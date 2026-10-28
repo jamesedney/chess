@@ -24,7 +24,6 @@ import {
   mergeStop,
 } from './session.js';
 import { blockDone } from './program.js';
-import { refreshMastery } from './curriculum.js';
 import { syncRatings, startRatingSync, onRatingsChange } from './rating-sync.js';
 import { RATING_PERFS } from './ratings.js';
 import { goalStatus, PUZZLE_PERF } from './progress-model.js';
@@ -196,12 +195,6 @@ function updateSessionBar() {
     if (checking) return;
     checking = true;
     try {
-      // Lessons and drills finished anywhere count towards the curriculum.
-      const mastered = refreshMastery(app.state, dateKey());
-      if (mastered.length) {
-        rawSave();
-        toast(`Unit mastered: ${mastered.map(u => u.title).join(', ')}.`);
-      }
       checkSession();
     } finally {
       checking = false;

@@ -34,14 +34,13 @@ test('a username is all it takes: rating, goal, level and today’s plan', async
   await expect(page.locator('.goal-card')).toContainText('1180');
   await expect(page.locator('.goal-card')).toContainText('1400');
   await expect(page.locator('.goal-card')).toContainText('Lichess rapid');
-  await expect(page.locator('.level-line')).toContainText('Calculator');
   await expect(page.locator('#start-session')).toContainText('Practice');
   await expect(page.locator('.agenda-item').first()).toBeVisible();
   const s = await saved(page);
   expect(s.onboarded).toBe(true);
   expect(s.profiles.lichess).toBe('me');
   expect(s.target).toMatchObject({ perf: 'Lichess rapid', target: 1400 });
-  expect(s.curriculum.units['f-scan']).toMatchObject({ done: true, placed: true });
+  expect(s.curriculum).toBeUndefined();
   expect(s.puzzle.rating).toBe(1180);
   // The goal shows in the sidebar and on the You page, with the skill map.
   await page.click('nav a[data-page="progress"]');
@@ -101,7 +100,6 @@ test('an unknown username explains itself, and the no-account path picks a level
   await expect(page.locator('.status.error')).toContainText('No Lichess account');
   await page.click('#no-account');
   await page.locator('[data-level="0"]').click();
-  await expect(page.locator('.level-line')).toContainText('Foundations');
   const s = await saved(page);
   expect(s.target.perf).toBe('Rankup puzzle rating');
   expect(s.profiles.lichess).toBe('');
@@ -131,12 +129,12 @@ test('one button runs the session block by block', async ({ page }) => {
   await expect(page.locator('#minutes')).toHaveValue('60');
 });
 
-test('a unit on the path opens with its gate and can become today’s focus', async ({ page }) => {
+test('the library lists every lesson by section and every drill, and a drill opens from it', async ({ page }) => {
   await open(page, 'path');
-  await page.locator('[data-unit="f-loose"]').click();
-  await expect(page.locator('#modal .gate')).toContainText('puzzles cleanly');
-  await page.click('#unit-focus');
-  expect((await saved(page)).curriculum.current).toBe('f-loose');
-  await page.goto('./#path');
-  await expect(page.locator('[data-unit="f-loose"]')).toContainText('now');
+  await expect(page.locator('h1')).toContainText('Library');
+  await expect(page.locator('.band').first()).toContainText('Foundations');
+  await expect(page.locator('[data-lesson="mating-net"]')).toBeVisible();
+  await expect(page.locator('.drill-card')).toHaveCount(9);
+  await page.locator('.drill-card', { hasText: 'Find every check' }).click();
+  await expect(page).toHaveURL(/#drills\?drill=checks/);
 });

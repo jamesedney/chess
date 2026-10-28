@@ -1,10 +1,9 @@
-// Today: the home screen. Your goal, where you are in the curriculum, and one
+// Today: the home screen. Your session, your goal, where your points go, and one
 // button that runs today's session. New players get a one-step setup.
 import { app } from '../app-context.js';
 import { $, esc, plural, formatDate, toast } from '../ui.js';
 import { todaysSession, startBlock, sessionProgress, checkSession, startReset } from '../session.js';
 import { goalStatus, goalSeries, updateGoal, PUZZLE_PERF } from '../progress-model.js';
-import { pathSummary, place, unitById, unitStatus } from '../curriculum.js';
 import { syncRatings } from '../rating-sync.js';
 import { RATING_PERFS } from '../ratings.js';
 import { sparkline } from '../charts.js';
@@ -58,13 +57,9 @@ export function render(main) {
   draw();
 }
 
-/** Place the curriculum and set a goal the first time, from the best rating known. */
+/** Set the goal the first time, keep it current, and move Proof along. */
 function ensurePlan() {
   const s = app.state;
-  if (!s.curriculum.placed) {
-    const real = s.ratings.at(-1)?.rating;
-    place(s, real || s.puzzle.rating, dateKey());
-  }
   updateGoal(s);
   // Proof: the gate experiment moves with the calendar.
   advanceExperiment(s);
@@ -160,13 +155,12 @@ async function linkAccount(name) {
   syncNow({ force: true }).catch(() => {});
 }
 
-/** Seed the puzzle and skill ratings, place the curriculum and set the goal. */
+/** Seed the puzzle and skill ratings and set the goal. */
 function finishSetup(rating) {
   const s = app.state;
   const seed = Math.max(STAGES[0].rating - 200, Math.min(2200, rating));
   if (s.puzzle.count < 10) s.puzzle.rating = seed;
   for (const k of Object.keys(s.skills)) if (!s.skills[k].count) s.skills[k] = { rating: seed, count: 0 };
-  place(s, rating, dateKey());
   s.onboarded = true;
   s.session = null;
   updateGoal(s);
@@ -412,9 +406,6 @@ function draw() {
   const s = app.state;
   const session = todaysSession();
   const prog = sessionProgress(session);
-  const path = pathSummary(s);
-  const unit = unitById(session.unit);
-  const unitPct = unit ? Math.round(unitStatus(s, unit).progress * 100) : 0;
   const streak = streaks(s.days);
   const firstTodo = session.blocks.findIndex(b => b.status === 'todo' || b.status === 'active');
   const label = prog.complete ? 'Done for today' : prog.done ? 'Continue' : 'Practice';
@@ -451,14 +442,13 @@ function draw() {
         )
         .join('')}</ol>
     </section>
-    <p class="level-line"><strong>${esc(path.band.label)}</strong> · ${path.bandDone} of ${path.bandTotal} units${unit ? ` · now: ${esc(unit.title)} (${unitPct}%)` : ''}</p>
     ${prog.complete ? `<p class="status success">Session complete. ${streak.current > 1 ? `${streak.current}-day streak. ` : ''}Tomorrow’s plan builds on today.</p><div class="actions center"><button type="button" id="more">Train more</button></div>` : ''}
     ${drillsHTML()}
     <div class="today-foot small">
       <label for="minutes">Daily time</label>
       <select id="minutes">${[10, 20, 30, 45, 60].map(m => `<option value="${m}" ${s.minutes === m ? 'selected' : ''}>${m} min</option>`).join('')}</select>
       ${s.profiles.lichess || s.profiles.chesscom ? `<span>·</span><label for="follow-perf">Rating</label><select id="follow-perf">${perfOptions(s.settings.perf)}</select>` : ''}
-      <span>·</span><a href="#path">Your path</a><span>·</span><a href="#coach">Coach</a>
+      <span>·</span><a href="#path">Library</a><span>·</span><a href="#coach">Coach</a>
     </div>
     <button type="button" id="start-session" class="play-cta" ${prog.complete ? 'disabled' : ''}>${esc(label)}</button>
   </div>`;

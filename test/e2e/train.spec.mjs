@@ -7,7 +7,7 @@ test('every page loads without errors', async ({ page }) => {
   await expect(page.locator('#board .square')).toHaveCount(64);
   for (const [name, selector, text] of [
     ['today', 'h1', 'Set up your plan'],
-    ['path', 'h1', 'Your path'],
+    ['path', 'h1', 'Library'],
     ['play', '#board-title', 'Practice game'],
     ['review', 'h1', 'Your games'],
     ['progress', 'h1', 'You'],
@@ -95,11 +95,8 @@ test('vision sprint scores a correct capture', async ({ page }) => {
 
 test('a lesson walks through reading, tapping, moving and deciding, and saves progress', async ({ page }) => {
   await open(page, 'path');
-  await expect(page.locator('.band')).toHaveCount(7);
-  // Lessons belong to curriculum units: open the unit, then its lesson.
-  await page.locator('[data-unit="f-mate1"]').click();
-  await expect(page.locator('#modal .gate')).toContainText('puzzles cleanly');
-  await page.click('#unit-lesson');
+  await expect(page.locator('.band')).toHaveCount(6);
+  await page.locator('[data-lesson="mating-net"]').click();
   await expect(page).toHaveURL(/#path\?lesson=mating-net/);
   await expect(page.locator('.focus-progress')).toContainText('1 of 6');
   await page.click('#lesson-next');
@@ -118,7 +115,7 @@ test('a lesson walks through reading, tapping, moving and deciding, and saves pr
   await expect(page.locator('#lesson-feedback')).toContainText('Qg7#');
   // Leave and come back: progress is kept.
   await page.click('#lesson-exit');
-  await expect(page.locator('h1')).toContainText('Your path');
+  await expect(page.locator('h1')).toContainText('Library');
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')).lessons['mating-net'].step)).toBe(4);
   await page.goto('./#path?lesson=mating-net');
   await expect(page.locator('.focus-progress')).toContainText('5 of 6');
