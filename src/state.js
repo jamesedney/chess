@@ -64,6 +64,8 @@ export function defaults() {
     sync: DEFAULT_SYNC(), // automatic import of your online games
     games: [], // finished practice games: { d: date, level, r: 1 win | 0.5 draw | 0 loss }
     gamesTotal: 0, // practice games ever logged
+    // Added in version 6.
+    gate: { stage: 3, set: 'default', since: null }, // the gate's stage (see play.js); set by 'you', 'proof' or 'default'
     // Added in version 5.
     candidates: { asked: 0, hit: 0, last: [] }, // candidate-move checks in practice games: { d, h: 1 | 0 }
     // Added in version 6.
@@ -346,6 +348,7 @@ export function validate(s) {
   if (!s.curriculum || typeof s.curriculum.units !== 'object' || typeof s.curriculum.placed !== 'boolean') return 'curriculum';
   for (const [id, u] of Object.entries(s.curriculum.units))
     if (!/^[a-z0-9-]+$/.test(id) || !finite(u?.tries, 0) || !finite(u?.clean, 0) || !Array.isArray(u.recent)) return 'unit progress';
+  if (s.gate !== undefined && (!s.gate || !Number.isInteger(s.gate.stage) || s.gate.stage < 0 || s.gate.stage > 3)) return 'gate';
   if (s.session !== null && (typeof s.session !== 'object' || !isDate(s.session.date) || !Array.isArray(s.session.blocks)))
     return 'session';
   const sy = s.sync;

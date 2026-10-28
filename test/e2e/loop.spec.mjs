@@ -307,6 +307,47 @@ test('Nemesis plays like a person of your level and scores every trap it sets', 
   }
 });
 
+test('the gate holds a capture until you say where the reply lands, scores the answer, and can be withdrawn', async ({ page }) => {
+  await seed(page, { strength: 'maia1100' });
+  // A Nemesis game under way: 1. e4 d5, White (you) to move, exd5 available.
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'rankup-practice',
+      JSON.stringify({
+        pgn: '1. e4 d5',
+        color: 'w',
+        from: null,
+        mistakes: {},
+        recorded: false,
+        level: 'maia1100',
+        nemesis: true,
+        traps: [],
+      }),
+    );
+  });
+  await open(page, 'play');
+  await expect(page.locator('#board-title')).toHaveText('Nemesis');
+  await move(page, 'e4', 'd5');
+  await expect(page.locator('#board-title')).toHaveText('Where does their reply land?');
+  await expect(page.locator('#play-status')).toContainText('before exd5, where does their reply land?');
+  await expect(page.locator('#board [data-square="d5"]')).toHaveClass(/mark-answer/);
+  // Withdraw: the pawn is still on e4 and the board is yours again.
+  await page.click('#gate-cancel');
+  await expect(page.locator('#board-title')).toHaveText('Nemesis');
+  await expect(page.locator('#board [data-square="e4"] img')).toBeVisible();
+  // Again, answered: Black's reply Qxd5 lands on d5.
+  await move(page, 'e4', 'd5');
+  await expect(page.locator('#board-title')).toHaveText('Where does their reply land?');
+  await page.click('#board [data-square="d5"]');
+  await expect(page.locator('#play-status')).toContainText(/Gate: their reply/, { timeout: 45000 });
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')));
+  const gate = saved.log.filter(e => e.k === 'g');
+  expect(gate).toHaveLength(1);
+  expect(gate[0].t).toBe('gate');
+  // A plain (non-capture, non-check) move is not held.
+  await expect(page.locator('#play-status')).toContainText('Your move', { timeout: 45000 });
+});
+
 test('the practice opponent climbs the ladder after five wins', async ({ page }) => {
   const d = new Date().toISOString().slice(0, 10);
   await seed(page, { games: Array.from({ length: 4 }, () => ({ d, level: 'maia1100', r: 1 })), strength: 'maia1100' });
