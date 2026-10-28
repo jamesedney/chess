@@ -274,34 +274,43 @@ test('the training page always shows the next step, and the session complete scr
 test('the human-like opponent loads its Maia network and replies', async ({ page }) => {
   const maia = [];
   page.on('response', r => r.url().includes('/maia/') && maia.push(`${r.status()} ${r.url().split('/maia/')[1]}`));
-  await seed(page, { strength: 'maia1100' });
+  // You play White, so the first move is yours and the reply is Maia's.
+  await seed(page, { strength: 'maia1100', settings: { colour: 'w' } });
   await open(page, 'play');
   await expect(page.locator('#play-status')).toContainText('Your move');
   await move(page, 'e2', 'e4');
   // Maia, not the Stockfish fallback, plays the reply.
-  await expect(page.locator('#play-status')).toContainText('Your move', { timeout: 30000 });
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-practice')).pgn)).toMatch(/1\. e4 [a-hKQRBNO]/);
+  // The status reads "Your move" until the reply is under way, so wait for the reply itself.
+  await expect
+    .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('rankup-practice')).pgn), { timeout: 30000 })
+    .toMatch(/1\. e4 [a-hKQRBNO]/);
+  await expect(page.locator('#play-status')).toContainText('Your move');
   await expect(page.locator('.toast.show')).toHaveCount(0);
   expect(maia).toEqual(expect.arrayContaining(['200 tables.json', '200 maia-1100.bin']));
 });
 
 test('Nemesis plays like a person of your level and scores every trap it sets', async ({ page }) => {
-  await seed(page, { strength: 'maia1100' });
+  test.setTimeout(180000);
+  // You play White: with a random colour Nemesis may open itself and your e4 is not a move.
+  await seed(page, { strength: 'maia1100', settings: { colour: 'w' } });
   await open(page, 'play?nemesis=1');
   await expect(page.locator('#board-title')).toHaveText('Nemesis');
   await expect(page.locator('.focus-progress')).toContainText('Nemesis (Maia 1100)');
   await expect(page.locator('#play-status')).toContainText('Your move');
   await move(page, 'e2', 'e4');
-  await expect(page.locator('#play-status')).toContainText('Your move', { timeout: 45000 });
+  // Nemesis reads up to four candidates with the engine and Maia, which takes a while on a slow machine.
+  await expect
+    .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('rankup-practice')).pgn), { timeout: 60000 })
+    .toMatch(/1\. e4 [a-hKQRBNO]/);
+  await expect(page.locator('#play-status')).toContainText('Your move');
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-practice')));
   expect(saved.nemesis).toBe(true);
-  expect(saved.pgn).toMatch(/1\. e4 [a-hKQRBNO]/);
   // The trap, when one is set, is scored on your next move and said aloud.
   if (saved.trap) {
     const uci = saved.trap.uci;
     expect(uci).toMatch(/^[a-h][1-8][a-h][1-8]/);
     await move(page, 'g1', 'f3');
-    await expect(page.locator('#play-status')).toContainText(/Nemesis's trap|declined Nemesis's trap/, { timeout: 45000 });
+    await expect(page.locator('#play-status')).toContainText(/Nemesis's trap|declined Nemesis's trap/, { timeout: 60000 });
     const after = await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')));
     expect(after.log.filter(e => e.k === 'n')).toHaveLength(1);
   }
