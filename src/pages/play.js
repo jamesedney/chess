@@ -46,7 +46,7 @@ const play = {
   trap: null, // the trap in the position you are in, if Nemesis set one: { uci, san, p, loss, best }
   traps: [], // this game's traps: [{ san, loss, taken }]
   ahead: new Map(), // Nemesis's replies worked out while you think, by the position your likely move reaches: fen -> { fen, dropped, promise }
-  gate: null, // a capture or check held by the gate until you say where the reply lands: { move, san, from, to, at }
+  gate: null, // a capture or check held by the gate for a moment before it is played: { move, san, from, to, at, timer, preview }
 };
 
 (function restore() {
@@ -158,6 +158,7 @@ export function render(main, params = {}) {
 export function leave() {
   stopClockTimer();
   dropAhead();
+  if (play.gate) closeGate();
   if (play.clock?.running) {
     haltClock();
     persist();
@@ -221,6 +222,7 @@ function flagOut(now = Date.now()) {
   play.thinking = false;
   play.prepared = null;
   dropAhead();
+  if (play.gate) closeGate();
   play.marking = false;
   if (play.challenge) settleChallenge({ result: 'loss', timed: true });
   else recordResult();
@@ -289,38 +291,50 @@ function gateApplies(move) {
   return !!m.captured || trial.isCheck();
 }
 
-/** Hold a move at the gate and ask for the reply's square. */
+/** A capture or check waits this long at the gate before it is played. */
+export const GATE_HOLD_MS = 2000;
+
+/**
+ * Hold a move at the gate: the piece is shown on its new square, and the move
+ * is played after a moment unless you take it back. Nothing is asked of you;
+ * the pause is the point, time to see what comes back.
+ */
 function holdAtGate(move) {
-  const m = new Chess(play.game.fen()).move(move);
-  play.gate = { move, san: m.san, from: m.from, to: m.to, at: Date.now() };
+  const preview = new Chess(play.game.fen());
+  const m = preview.move(move);
+  play.gate = { move, san: m.san, from: m.from, to: m.to, at: Date.now(), preview, timer: null };
+  play.gate.timer = setTimeout(releaseGate, GATE_HOLD_MS);
   refreshBoard();
-  status(`Gate: before ${m.san}, where does their reply land? Tap the square.`);
+  status(`Gate: ${m.san} in a moment. What comes back? Take it back if it is not safe.`);
   const title = $('#board-title');
-  if (title) title.textContent = 'Where does their reply land?';
+  if (title) title.textContent = 'Look first';
   const cancel = $('#gate-cancel');
   if (cancel) cancel.hidden = false;
 }
 
-/** The gate's answer: the square tapped; then the held move is played. */
-function answerGate(sq) {
+/** The gate opens: the held move is played and judged. */
+function releaseGate() {
   const held = play.gate;
   if (!held) return;
-  play.gate = null;
-  const cancel = $('#gate-cancel');
-  if (cancel) cancel.hidden = true;
-  const title = $('#board-title');
-  if (title) title.textContent = play.from ? `From: ${play.from}` : play.nemesis ? 'Nemesis' : 'Practice game';
-  playMove(held.move, { answer: sq, at: held.at });
+  closeGate();
+  playMove(held.move, { at: held.at, san: held.san });
 }
 
+/** Take the held move back: the piece returns and the board is yours again. */
 function cancelGate() {
+  if (!play.gate) return;
+  closeGate();
+  refreshBoard();
+  status(gameStatus());
+}
+
+function closeGate() {
+  clearTimeout(play.gate?.timer);
   play.gate = null;
   const cancel = $('#gate-cancel');
   if (cancel) cancel.hidden = true;
   const title = $('#board-title');
   if (title) title.textContent = play.from ? `From: ${play.from}` : play.nemesis ? 'Nemesis' : 'Practice game';
-  refreshBoard();
-  status(gameStatus());
 }
 
 /** Nemesis plays like a person of your rating: the Maia level nearest your real rating, else your puzzle rating. */
@@ -490,7 +504,7 @@ function draw() {
              ${app.state.settings.candidates ? `<button type="button" id="candidates" ${g.turn() === play.color && !g.isGameOver() && !play.thinking && !play.flagged ? '' : 'disabled'}>Candidates</button>` : ''}
              <button type="button" id="undo-game" ${g.history().length && !play.thinking && !play.clock ? '' : 'disabled'}>Take back</button>`
       }
-      <button type="button" id="gate-cancel" class="secondary" ${play.gate ? '' : 'hidden'}>Withdraw the move</button>
+      <button type="button" id="gate-cancel" class="secondary" ${play.gate ? '' : 'hidden'}>Take it back</button>
       <button type="button" id="board-flip" class="secondary" aria-label="Flip board"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 20V4M4.5 7.5 8 4l3.5 3.5M16 4v16M12.5 16.5 16 20l3.5-3.5"/></svg></button>
     </div>
   </div>`;
@@ -576,7 +590,7 @@ function openMenu() {
         .join('')}</optgroup>
     </select><small>${app.state.settings.autoLevel ? 'Adjusts to your results after five games at a level. Turn that off in Settings to pin one.' : 'Maia plays like people of that rating; Stockfish levels play engine moves with a strength limit.'}</small></div>
     <div class="field"><label for="play-colour">Your colour</label><select id="play-colour"><option value="r">Random</option><option value="w">White</option><option value="b">Black</option></select><small>For each new game. This game: ${play.color === 'w' ? 'White' : 'Black'}.</small></div>
- <div class="field"><label for="gate-stage">The gate</label><select id="gate-stage">${GATE_STAGES.map((t, i) => `<option value="${i}" ${(app.state.gate?.stage ?? 0) === i ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select><small>In session and Nemesis games a capture or check is held until you tap where the reply lands. Proof moves this as your real games change.</small></div>
+ <div class="field"><label for="gate-stage">The gate</label><select id="gate-stage">${GATE_STAGES.map((t, i) => `<option value="${i}" ${(app.state.gate?.stage ?? 0) === i ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select><small>In session and Nemesis games a capture or check waits two seconds before it is played, with Take it back to hand, and is judged safe or not once played. Proof moves this as your real games change.</small></div>
     <div class="checks">
       <label><input type="checkbox" id="nemesis-on" ${app.state.settings.nemesis ? 'checked' : ''}> Nemesis: the opponent sets the traps my likely move falls into (new games)</label>
       <label><input type="checkbox" id="coach" ${app.state.coach ? 'checked' : ''}> Coach: save my missed opportunities as exercises</label>
@@ -678,7 +692,7 @@ function newGame({ fen = null, color = 'w', from = null, clock = null, nemesis =
   play.nemesis = nemesis;
   play.trap = null;
   play.traps = [];
-  play.gate = null;
+  if (play.gate) closeGate();
   engine.newGame();
   persist();
 }
@@ -724,15 +738,16 @@ function recordResult() {
 function refreshBoard() {
   if (!board || app.page !== 'play') return;
   const g = play.game;
-  board.onSquare = play.gate ? answerGate : play.marking ? toggleCandidate : null;
+  board.onSquare = play.marking ? toggleCandidate : null;
   board.set({
-    game: g,
+    // At the gate the board shows the move as it will be, piece on its new square, while you look.
+    game: play.gate ? play.gate.preview : g,
     orientation: board.game ? board.orientation : play.color,
     interactive:
       !play.gate && !play.marking && !play.thinking && !play.challenge?.done && !play.flagged && g.turn() === play.color && !g.isGameOver(),
     movable: play.color,
-    lastMove: play.lastMove,
-    marks: play.gate ? { [play.gate.from]: 'hint', [play.gate.to]: 'answer' } : Object.fromEntries(play.candidates.map(sq => [sq, 'hint'])),
+    lastMove: play.gate ? [play.gate.from, play.gate.to] : play.lastMove,
+    marks: play.gate ? {} : Object.fromEntries(play.candidates.map(sq => [sq, 'hint'])),
   });
   const chip = $('#board-chip');
   if (chip) chip.textContent = turnLabel(g);
@@ -854,7 +869,7 @@ async function onMove(move) {
   return playMove(move, null);
 }
 
-/** Play your move; `gated` carries the gate's answer and the time of the original tap. */
+/** Play your move; `gated` says it came through the gate, with the time of the original tap. */
 async function playMove(move, gated) {
   const g = play.game;
   if (play.thinking || g.turn() !== play.color || g.isGameOver() || play.flagged) return;
@@ -867,7 +882,7 @@ async function playMove(move, gated) {
   try {
     let before = null;
     const named = play.candidates.slice();
-    if (app.state.coach || named.length) {
+    if (app.state.coach || named.length || gated) {
       status('Coach is checking the position…');
       before = await (play.prepared?.fen === fen ? play.prepared.promise : engine.analyse(fen, { nodes: BUDGET.coach }));
     }
@@ -919,16 +934,13 @@ async function playMove(move, gated) {
       after = await engine.analyse(g.fen(), { nodes: BUDGET.coach, multipv: level.mode === 'noise' ? level.multipv : 1 });
     }
     if (token !== play.token) return;
-    // The gate's verdict: did their best reply land where you said?
-    if (gated && after?.best) {
-      const lands = after.best.slice(2, 4);
-      const hit = gated.answer === lands;
+    // The gate's verdict: was the move you looked at safe?
+    if (gated && before && after?.best) {
+      const safe = !isTrainableMistake(before.score, after.score);
       const reply = playUci(new Chess(g.fen()), after.best).san;
-      logAttempt(app.state, { kind: 'g', theme: 'gate', clean: hit });
+      logAttempt(app.state, { kind: 'g', theme: 'gate', clean: safe });
       app.save();
-      play.note = hit
-        ? `Gate: their reply ${reply} lands on ${lands}, as you said.`
-        : `Gate: their reply is ${reply}, landing on ${lands}, not ${gated.answer}.`;
+      play.note = safe ? `Gate: ${m.san} was safe; their best is ${reply}.` : `Gate: ${m.san} loses to ${reply}.`;
     }
     if (app.state.coach && before && after && moveToUci(m) !== before.best && isTrainableMistake(before.score, after.score)) {
       const saved = createMistake({

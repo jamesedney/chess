@@ -25,7 +25,7 @@ Enter your Lichess or Chess.com username and Rankup does the rest: it reads your
 
 ### Nemesis, the gate and Proof
 - **Nemesis.** An opponent built from how you lose. It plays like a person of your level (Maia's candidate moves) and, when one of them leaves a position where the move you would probably play loses a piece, it plays that one, giving up at most a little to do it. Every trap is scored, taken or declined, and said after your move.
-- **The gate.** In session and Nemesis games, a capture or check is held until you tap the square the opponent's reply lands on; your answer is scored against the engine. It fades in stages as your real games change: captures and checks, captures only, only where Nemesis set a trap, off.
+- **The gate.** In session and Nemesis games, a capture or check waits two seconds before it is played, shown on the board as it will be, with Take it back to hand. Nothing is asked of you; the pause is the point. Once played, the move is judged safe or not against the engine. It fades in stages as your real games change: captures and checks, captures only, only where Nemesis set a trap, off.
 - **Proof.** The habit the gate trains, measured in the games you play online from their clocks: captures and checks played fast, and hung pieces a game. An experiment runs the gate on for two weeks and off for two, compares them, and keeps the gate (stepping it down) or drops it. What does not change your real games does not stay.
 
 ### Training from your games

@@ -316,7 +316,7 @@ test('Nemesis plays like a person of your level and scores every trap it sets', 
   }
 });
 
-test('the gate holds a capture until you say where the reply lands, scores the answer, and can be withdrawn', async ({ page }) => {
+test('the gate holds a capture for a moment, shows it as it will be, can be taken back, and judges it once played', async ({ page }) => {
   await seed(page, { strength: 'maia1100' });
   // A Nemesis game under way: 1. e4 d5, White (you) to move, exd5 available.
   await page.addInitScript(() => {
@@ -337,24 +337,27 @@ test('the gate holds a capture until you say where the reply lands, scores the a
   await open(page, 'play');
   await expect(page.locator('#board-title')).toHaveText('Nemesis');
   await move(page, 'e4', 'd5');
-  await expect(page.locator('#board-title')).toHaveText('Where does their reply land?');
-  await expect(page.locator('#play-status')).toContainText('before exd5, where does their reply land?');
-  await expect(page.locator('#board [data-square="d5"]')).toHaveClass(/mark-answer/);
-  // Withdraw: the pawn is still on e4 and the board is yours again.
+  await expect(page.locator('#board-title')).toHaveText('Look first');
+  await expect(page.locator('#play-status')).toContainText('exd5 in a moment. What comes back?');
+  // The pawn is shown on d5 while you look, and nothing is asked: no square to tap.
+  await expect(page.locator('#board [data-square="d5"] img[src*="wP"]')).toBeVisible();
+  await expect(page.locator('#board [data-square="e4"] img')).toHaveCount(0);
+  // Take it back within the moment: the pawn is on e4 again and the board is yours.
   await page.click('#gate-cancel');
   await expect(page.locator('#board-title')).toHaveText('Nemesis');
   await expect(page.locator('#board [data-square="e4"] img')).toBeVisible();
-  // Again, answered: Black's reply Qxd5 lands on d5.
+  await expect(page.locator('#gate-cancel')).toBeHidden();
+  // Left alone, the move is played after the hold and judged: exd5 is safe.
   await move(page, 'e4', 'd5');
-  await expect(page.locator('#board-title')).toHaveText('Where does their reply land?');
-  await page.click('#board [data-square="d5"]');
-  await expect(page.locator('#play-status')).toContainText(/Gate: their reply/, { timeout: 45000 });
+  await expect(page.locator('#board-title')).toHaveText('Look first');
+  await expect(page.locator('#play-status')).toContainText(/Gate: exd5 was safe/, { timeout: 60000 });
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')));
   const gate = saved.log.filter(e => e.k === 'g');
   expect(gate).toHaveLength(1);
   expect(gate[0].t).toBe('gate');
+  expect(gate[0].c).toBe(1);
   // A plain (non-capture, non-check) move is not held.
-  await expect(page.locator('#play-status')).toContainText('Your move', { timeout: 45000 });
+  await expect(page.locator('#play-status')).toContainText('Your move', { timeout: 60000 });
 });
 
 test('the practice opponent climbs the ladder after five wins', async ({ page }) => {
