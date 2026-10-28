@@ -1,5 +1,14 @@
 # Changelog
 
+## 6.0.0
+
+V6: the trainer that trains behaviour, and proves it in your real games.
+
+- **Nemesis.** An opponent built from how you lose. It plays like a person of your level, Maia's candidate moves at the level nearest your rating, and when one of those candidates leaves a position where the move you would probably play loses a piece or more, it plays that one, giving up at most a little to do it. The trap is defined by a model of you, not by what looks tempting: on your reviewed blunders it sets such a trap in ten of eighteen positions, where a tempting-capture definition found none. Every trap is scored, taken or declined, said after your move, and tallied at the end. In the session every day, in the Library, and as an Options checkbox for new games.
+- **The gate.** In session and Nemesis games a capture or check is held until you tap the square the opponent's best reply lands on. Your answer is scored against the engine and said after the move; the move can be withdrawn instead. Stages: captures and checks, captures only, only where Nemesis set a trap, off. Never in a challenge, a game from a position, or on a move that ends the game.
+- **Proof.** The habit the gate trains, measured in the games you play online, from their clocks: captures and checks played fast, and hung pieces a game, the last fortnight against the one before. An experiment runs the gate on for 14 days and off for 14, compares the two in your real games, and keeps the gate, stepping it down a stage, or drops it; an inconclusive run repeats. A gate set by hand in Options is measured but not moved. On You.
+- **The curriculum is gone.** No bands, units, placement or mastery gates. Each day's plan is built from your games: the warm-up your mistakes ask for, your latest game, a Nemesis game with the gate and the day's habit, recall, your repertoire, the leak's drill, puzzles on your weakest skill a step above your level, and a game with one habit. The Path page is now the Library: every lesson by section, the lessons made from your games, and every drill, a shelf rather than a ladder. Saved progress migrates; nothing is lost.
+
 ## 5.4.0
 
 Training that adapts to how you actually lose.
