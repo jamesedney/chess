@@ -58,6 +58,7 @@ export function defaults() {
       perf: 'auto',
       colour: 'r',
       clock: false, // a real clock in free practice games
+      nemesis: false, // new practice games are against Nemesis
     },
     // Added in version 4.
     sync: DEFAULT_SYNC(), // automatic import of your online games
@@ -101,8 +102,8 @@ const THEME_SKILL = {
 export const emptyDrillStats = () => ({ best: 0, runs: 0, last: [] });
 
 /** Exercise kinds in the log. */
-// puzzle, my mistake, endgame, calculation, vision, debrief, replay, repertoire
-export const LOG_KINDS = ['p', 'm', 'e', 'c', 'v', 'b', 'r', 'o'];
+// puzzle, my mistake, endgame, calculation, vision, debrief, replay, repertoire, Nemesis trap, gate
+export const LOG_KINDS = ['p', 'm', 'e', 'c', 'v', 'b', 'r', 'o', 'n', 'g'];
 
 const V1_SKILL_TO_LEVEL = { 0: 'beginner', 3: 'novice', 8: 'elo1600', 20: 'full' };
 

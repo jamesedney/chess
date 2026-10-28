@@ -6,7 +6,8 @@ import { BoardView, turnLabel } from '../board.js';
 import { $, esc, choosePromotion, confirmDialog, download, toast, settle, showModal, closeModal } from '../ui.js';
 import { moveToUci, playUci, opposite } from '../chess-utils.js';
 import { LEVELS, levelById, pickNoisyMove, adaptLevel } from '../strength.js';
-import { humanMove } from '../maia.js';
+import { humanMove, humanMoves } from '../maia.js';
+import { nemesisMove, maiaFor, trapText, trapTally } from '../nemesis.js';
 import { isTrainableMistake, winPercentLoss } from '../evaluation.js';
 import { createMistake, deleteMistake } from '../mistakes.js';
 import { dateKey, logGame, logCandidates, logAttempt } from '../state.js';
@@ -41,6 +42,9 @@ const play = {
   fast: 0, // of those, played in under the control's rushed threshold
   flagged: false, // the game ended because the clock ran out
   book: false, // opening practice: the opponent plays your real opponents' moves while they have one
+  nemesis: false, // the opponent sets traps your likely move falls into
+  trap: null, // the trap in the position you are in, if Nemesis set one: { uci, san, p, loss, best }
+  traps: [], // this game's traps: [{ san, loss, taken }]
 };
 
 (function restore() {
@@ -65,6 +69,9 @@ const play = {
     play.fast = saved.fast || 0;
     play.flagged = !!saved.flagged;
     play.book = !!saved.book;
+    play.nemesis = !!saved.nemesis;
+    play.trap = saved.trap || null;
+    play.traps = Array.isArray(saved.traps) ? saved.traps : [];
   } catch {}
 })();
 
@@ -91,6 +98,9 @@ function persist() {
         fast: play.fast,
         flagged: play.flagged,
         book: play.book,
+        nemesis: play.nemesis,
+        trap: play.trap,
+        traps: play.traps,
       }),
     );
   } catch {}
@@ -122,10 +132,12 @@ export function render(main, params = {}) {
   }
   // A session game: a fresh game unless one is under way, with one thing to practise, on a clock when asked.
   const control = clockParam(params.clock);
-  if (params.objective || control) {
+  const nemesis = params.nemesis === 1 || params.nemesis === '1';
+  if (params.objective || control || nemesis) {
     if (params.objective) play.objective = params.objective;
     const fresh = !play.game.history().length;
-    if (play.game.isGameOver() || play.from || play.recorded || (control && fresh)) newGame({ color: pickColour(), clock: control });
+    if (play.game.isGameOver() || play.from || play.recorded || (control && fresh) || (nemesis && !play.nemesis))
+      newGame({ color: pickColour(), clock: control, nemesis });
   }
   // A free game not yet begun takes the Clock option as it stands.
   if (!play.clock && !play.game.history().length && !play.from && !play.challenge && app.state.settings.clock) {
@@ -217,7 +229,8 @@ function clockLine() {
 
 /** The line above the board: "Maia 1500 · you play White · 5+0". */
 function progressText(level) {
-  return `${shortLevel(level)} · you play ${play.color === 'w' ? 'White' : 'Black'}${play.clock ? ` · ${controlText(play.clock)}` : ''}`;
+  const who = play.nemesis ? `Nemesis (${shortLevel(level)})` : shortLevel(level);
+  return `${who} · you play ${play.color === 'w' ? 'White' : 'Black'}${play.clock ? ` · ${controlText(play.clock)}` : ''}`;
 }
 
 function gameStatus() {
@@ -236,20 +249,31 @@ function gameStatus() {
           : g.isDraw()
             ? 'The game is drawn.'
             : '';
-  if (over) return play.clock ? `${over} ${clockLine()}` : over;
+  if (over) {
+    const tally = play.nemesis ? trapTally(play.traps) : '';
+    return [over, play.clock ? clockLine() : '', tally].filter(Boolean).join(' ');
+  }
   if (play.thinking) return `${opponentName()} is thinking…`;
   if (play.challenge?.done) return play.clock ? clockLine() : '';
   return g.turn() === play.color ? 'Your move. Check the threat before choosing.' : `${opponentName()} to move.`;
 }
 
-/** The opponent for this game: the challenge's, or your chosen practice level. */
-function currentLevel() {
-  return levelById(play.challenge?.level || app.state.strength);
+/** Nemesis plays like a person of your rating: the Maia level nearest your real rating, else your puzzle rating. */
+function nemesisLevel() {
+  const real = app.state.ratings.at(-1)?.rating;
+  return levelById(`maia${maiaFor(real || app.state.puzzle.rating)}`);
 }
 
-/** Who the practice opponent is: Maia for the human-like levels, otherwise Stockfish. */
+/** The opponent for this game: the challenge's, Nemesis, or your chosen practice level. */
+function currentLevel() {
+  if (play.challenge) return levelById(play.challenge.level);
+  if (play.nemesis) return nemesisLevel();
+  return levelById(app.state.strength);
+}
+
+/** Who the practice opponent is: Nemesis, Maia for the human-like levels, otherwise Stockfish. */
 function opponentName() {
-  return currentLevel().mode === 'maia' ? 'Maia' : 'Stockfish';
+  return play.nemesis ? 'Nemesis' : currentLevel().mode === 'maia' ? 'Maia' : 'Stockfish';
 }
 
 // ---------- Play it again ----------
@@ -373,14 +397,15 @@ function draw() {
   const left = play.clock ? timeLeft(play.clock) : 0;
   root.innerHTML = `<div class="focus">
     <div class="focus-top">
-      <span class="focus-progress">${esc(progressText(play.challenge?.level || app.state.strength))}</span>
+      <span class="focus-progress">${esc(progressText(currentLevel().id))}</span>
       <button type="button" id="play-menu" class="secondary focus-menu" aria-haspopup="dialog" aria-label="Game options: opponent, colour, coach, clock, export and review">Options</button>
     </div>
-    <div class="focus-prompt"><strong id="board-title">${esc(play.from ? `From: ${play.from}` : 'Practice game')}</strong>${
+    <div class="focus-prompt"><strong id="board-title">${esc(play.from ? `From: ${play.from}` : play.nemesis ? 'Nemesis' : 'Practice game')}</strong>${
       play.clock
         ? `<span class="chip sprint-clock${left < URGENT_SECONDS ? ' urgent' : ''}" id="play-clock" role="timer" aria-live="off">${clockText(left)}</span>`
         : '<span class="chip" id="board-chip"></span>'
     }</div>
+    ${play.nemesis ? '<p class="objective small">Nemesis plays like a person of your level, and sets the traps your likely move falls into. Every trap is scored: taken or declined.</p>' : ''}
     ${play.objective && !play.from ? `<p class="objective small"><strong>Objective:</strong> ${esc(play.objective)}</p>` : ''}
     ${play.challenge ? `<p class="objective small" id="challenge-text">${challengeText()}</p>` : ''}
     <div class="focus-board"><div id="board"></div></div>
@@ -464,7 +489,7 @@ async function startNewGame(colour) {
     if (!ok) return;
   }
   const c = colour === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : colour;
-  newGame({ color: c, clock: freeClock() });
+  newGame({ color: c, clock: freeClock(), nemesis: !!app.state.settings.nemesis });
   draw();
   if (play.color === 'b') engineTurn();
 }
@@ -485,6 +510,7 @@ function openMenu() {
     </select><small>${app.state.settings.autoLevel ? 'Adjusts to your results after five games at a level. Turn that off in Settings to pin one.' : 'Maia plays like people of that rating; Stockfish levels play engine moves with a strength limit.'}</small></div>
     <div class="field"><label for="play-colour">Your colour</label><select id="play-colour"><option value="r">Random</option><option value="w">White</option><option value="b">Black</option></select><small>For each new game. This game: ${play.color === 'w' ? 'White' : 'Black'}.</small></div>
     <div class="checks">
+      <label><input type="checkbox" id="nemesis-on" ${app.state.settings.nemesis ? 'checked' : ''}> Nemesis: the opponent sets the traps my likely move falls into (new games)</label>
       <label><input type="checkbox" id="coach" ${app.state.coach ? 'checked' : ''}> Coach: save my missed opportunities as exercises</label>
       <label><input type="checkbox" id="candidates-on" ${app.state.settings.candidates ? 'checked' : ''}> Candidate moves: name the squares I am considering before I move</label>
       <label><input type="checkbox" id="clock-on" ${app.state.settings.clock ? 'checked' : ''}> Clock: ${esc(userControl(app.state.ledger).text)} in free games (your most played control)</label>
@@ -507,6 +533,10 @@ function openMenu() {
   };
   $('#coach').onchange = e => {
     app.state.coach = e.target.checked;
+    app.save();
+  };
+  $('#nemesis-on').onchange = e => {
+    app.state.settings.nemesis = e.target.checked;
     app.save();
   };
   $('#candidates-on').onchange = e => {
@@ -551,7 +581,7 @@ function pgnWithHeaders() {
 }
 
 /** A fresh game; `clock` is a { base, inc } control, or null for no clock. */
-function newGame({ fen = null, color = 'w', from = null, clock = null }) {
+function newGame({ fen = null, color = 'w', from = null, clock = null, nemesis = false }) {
   stopClockTimer();
   play.token++;
   play.game = fen ? new Chess(fen) : new Chess();
@@ -572,6 +602,9 @@ function newGame({ fen = null, color = 'w', from = null, clock = null }) {
   play.fast = 0;
   play.flagged = false;
   play.book = false;
+  play.nemesis = nemesis;
+  play.trap = null;
+  play.traps = [];
   engine.newGame();
   persist();
 }
@@ -683,6 +716,16 @@ async function onMove(move) {
     const spent = play.clock ? endTurn(play.clock, at) : 0;
     play.lastMove = [m.from, m.to];
     play.candidates = [];
+    // Nemesis's trap in the position just left: taken or declined, scored and said.
+    if (play.trap) {
+      const trap = play.trap;
+      const taken = moveToUci(m) === trap.uci;
+      play.traps.push({ san: trap.san, loss: trap.loss, taken });
+      play.trap = null;
+      logAttempt(app.state, { kind: 'n', theme: 'trap', clean: !taken });
+      app.save();
+      play.note = taken ? `Nemesis's trap: ${trapText(trap)}` : `You declined Nemesis's trap: ${trapText(trap)}`;
+    }
     if (named.length && before?.best) {
       const bestSan = playUci(new Chess(fen), before.best).san;
       const hit = named.includes(before.best.slice(2, 4));
@@ -756,7 +799,23 @@ async function engineMove(token, after, level) {
   const book = play.book ? opponentMove(app.state.reviews, fen, play.color) : null;
   const booked = book && g.moves({ verbose: true }).find(m => m.san === book);
   if (booked) uci = moveToUci(booked);
-  else if (level.mode === 'full') {
+  else if (play.nemesis) {
+    try {
+      const candidates = await humanMoves({ level: level.maia, game: g });
+      const r = await nemesisMove(
+        fen,
+        candidates,
+        (f, o) => engine.analyse(f, { multipv: o.multipv, nodes: o.nodes }),
+        f => humanMoves({ level: level.maia, game: g, fen: f }),
+      );
+      uci = r.uci;
+      if (token === play.token) play.trap = r.trap;
+    } catch (e) {
+      // The network could not load: fall back to Stockfish at the level, with no trap.
+      toast(e.message + ' Using Stockfish for this move.');
+      uci = (await engine.analyse(fen, { elo: Math.max(1320, level.elo), movetime: 500 })).best;
+    }
+  } else if (level.mode === 'full') {
     uci = after?.best || (await engine.analyse(fen, { nodes: BUDGET.coach })).best;
   } else if (level.mode === 'noise') {
     const lines = after?.lines?.length
@@ -825,6 +884,7 @@ function takeBack() {
   play.prepared = null;
   play.note = '';
   play.lastMove = [];
+  play.trap = null;
   persist();
   refreshBoard();
   status(gameStatus());

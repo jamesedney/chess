@@ -1,5 +1,6 @@
 // Human-like move prediction with Maia, running in a module worker.
 import { sample } from './maia-core.js';
+import { Chess } from '../vendor/chess.js';
 
 let worker = null;
 let seq = 0;
@@ -34,11 +35,26 @@ export function predict({ level, fens, legal }) {
   });
 }
 
+/** The positions of a game so far, oldest first, as Maia wants them. */
+export function gameFens(game) {
+  const moves = game.history({ verbose: true });
+  return moves.length ? [moves[0].before, ...moves.map(m => m.after)] : [game.fen()];
+}
+
+/**
+ * The moves a player of `level` would consider in `game`'s position (or, with
+ * `fen`, in that position reached from the game), as [{ uci, p }], likeliest first.
+ */
+export async function humanMoves({ level, game, fen = null }) {
+  const fens = fen ? [...gameFens(game), fen] : gameFens(game);
+  const g = fen ? new Chess(fen) : game;
+  const legal = g.moves({ verbose: true }).map(m => m.from + m.to + (m.promotion || ''));
+  const { probs } = await predict({ level, fens, legal });
+  return [...probs].sort((a, b) => b.p - a.p);
+}
+
 /** Choose a move the way a player of that level might: sampled, not always the top choice. */
 export async function humanMove({ level, game }) {
-  const moves = game.history({ verbose: true });
-  const fens = moves.length ? [moves[0].before, ...moves.map(m => m.after)] : [game.fen()];
-  const legal = game.moves({ verbose: true }).map(m => m.from + m.to + (m.promotion || ''));
-  const { probs } = await predict({ level, fens, legal });
+  const probs = await humanMoves({ level, game });
   return sample(probs);
 }

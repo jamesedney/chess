@@ -285,6 +285,28 @@ test('the human-like opponent loads its Maia network and replies', async ({ page
   expect(maia).toEqual(expect.arrayContaining(['200 tables.json', '200 maia-1100.bin']));
 });
 
+test('Nemesis plays like a person of your level and scores every trap it sets', async ({ page }) => {
+  await seed(page, { strength: 'maia1100' });
+  await open(page, 'play?nemesis=1');
+  await expect(page.locator('#board-title')).toHaveText('Nemesis');
+  await expect(page.locator('.focus-progress')).toContainText('Nemesis (Maia 1100)');
+  await expect(page.locator('#play-status')).toContainText('Your move');
+  await move(page, 'e2', 'e4');
+  await expect(page.locator('#play-status')).toContainText('Your move', { timeout: 45000 });
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-practice')));
+  expect(saved.nemesis).toBe(true);
+  expect(saved.pgn).toMatch(/1\. e4 [a-hKQRBNO]/);
+  // The trap, when one is set, is scored on your next move and said aloud.
+  if (saved.trap) {
+    const uci = saved.trap.uci;
+    expect(uci).toMatch(/^[a-h][1-8][a-h][1-8]/);
+    await move(page, 'g1', 'f3');
+    await expect(page.locator('#play-status')).toContainText(/Nemesis's trap|declined Nemesis's trap/, { timeout: 45000 });
+    const after = await page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')));
+    expect(after.log.filter(e => e.k === 'n')).toHaveLength(1);
+  }
+});
+
 test('the practice opponent climbs the ladder after five wins', async ({ page }) => {
   const d = new Date().toISOString().slice(0, 10);
   await seed(page, { games: Array.from({ length: 4 }, () => ({ d, level: 'maia1100', r: 1 })), strength: 'maia1100' });

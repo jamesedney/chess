@@ -56,6 +56,7 @@ const FILES = [
   './src/repertoire.js',
   './src/opening-practice.js',
   './src/profile.js',
+  './src/nemesis.js',
   './src/timeprofile.js',
   './src/evidence.js',
   './src/ledger.js',

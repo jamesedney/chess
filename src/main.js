@@ -110,6 +110,7 @@ function hashParams() {
         'debrief',
         'replay',
         'clock',
+        'nemesis',
         ...ADDRESS_KEYS,
       ].includes(k)
     )
