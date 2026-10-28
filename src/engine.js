@@ -20,6 +20,7 @@ export class Engine {
     this.waiting = 0; // foreground searches queued or running
     this.background = false; // the search in flight is a background one
     this.preempted = false;
+    this.tag = null; // the caller's tag for the search in flight, so it can be stopped by name
   }
 
   /** True when nothing the user is waiting for is queued or running. */
@@ -96,9 +97,10 @@ export class Engine {
    * Scores are for the side to move. Resolves with the top line flattened
    * plus every MultiPV line in `lines`.
    * Background searches give way: a foreground request stops them, and they
-   * resolve with `interrupted: true` so the caller can retry later.
+   * resolve with `interrupted: true` so the caller can retry later. A `tag`
+   * names the search so stop(tag) can end it early if it is the one running.
    */
-  analyse(fen, { nodes = null, movetime = null, depth = null, multipv = 1, elo = null, background = false } = {}) {
+  analyse(fen, { nodes = null, movetime = null, depth = null, multipv = 1, elo = null, background = false, tag = null } = {}) {
     if (!background) {
       this.waiting++;
       if (this.searching && this.background) {
@@ -128,6 +130,7 @@ export class Engine {
         this.searching = true;
         this.background = background;
         this.preempted = false;
+        this.tag = tag;
         this.abort = error => {
           clearTimeout(timer);
           clearTimeout(deadTimer);
@@ -135,6 +138,7 @@ export class Engine {
           this.listener = null;
           this.searching = false;
           this.background = false;
+          this.tag = null;
           this.abort = null;
           reject(error);
         };
@@ -149,6 +153,7 @@ export class Engine {
           clearTimeout(silence);
           this.listener = null;
           this.searching = false;
+          this.tag = null;
           this.abort = null;
           if (timedOut && !lines[1]) return reject(new Error('Analysis timed out. Try again.'));
           const ordered = Object.keys(lines)
@@ -198,9 +203,9 @@ export class Engine {
     return promise;
   }
 
-  /** Ask a running search to finish now; its promise resolves with what it has. */
-  stop() {
-    if (this.searching) this.worker?.postMessage('stop');
+  /** Ask a running search to finish now; its promise resolves with what it has. With a tag, only a search of that tag. */
+  stop(tag = null) {
+    if (this.searching && (tag === null || this.tag === tag)) this.worker?.postMessage('stop');
   }
 
   newGame() {

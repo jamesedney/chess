@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.0.1
+
+- **Nemesis thinks while you do.** Its reply used to be worked out only after your move: the coach's view of the position, then an engine search and a prediction for each of its candidate moves, one after another, with the board waiting. Now, while you think, it works out its reply to your two likeliest moves, so when you play one of them the reply is ready at once; a move it did not expect is answered as before, and the search for the move you did not play is stopped. Measured on a desktop the reply after a pause falls from about a second and a half to a sixth of one; on a phone the wait it removes is longer.
+
 ## 6.0.0
 
 V6: the trainer that trains behaviour, and proves it in your real games.

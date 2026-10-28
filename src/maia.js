@@ -43,11 +43,13 @@ export function gameFens(game) {
 
 /**
  * The moves a player of `level` would consider in `game`'s position (or, with
- * `fen`, in that position reached from the game), as [{ uci, p }], likeliest first.
+ * `fen`, in that position reached from the game: one fen, or the line of fens
+ * leading there), as [{ uci, p }], likeliest first.
  */
 export async function humanMoves({ level, game, fen = null }) {
-  const fens = fen ? [...gameFens(game), fen] : gameFens(game);
-  const g = fen ? new Chess(fen) : game;
+  const line = fen ? [].concat(fen) : [];
+  const fens = [...gameFens(game), ...line];
+  const g = line.length ? new Chess(line[line.length - 1]) : game;
   const legal = g.moves({ verbose: true }).map(m => m.from + m.to + (m.promotion || ''));
   const { probs } = await predict({ level, fens, legal });
   return [...probs].sort((a, b) => b.p - a.p);

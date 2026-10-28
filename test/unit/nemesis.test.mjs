@@ -2,7 +2,18 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { Chess } from '../../vendor/chess.js';
-import { trapIn, nemesisMove, maiaFor, trapText, trapTally, TRAP_LOSS, TRAP_COST, REPLY_LINES } from '../../src/nemesis.js';
+import {
+  trapIn,
+  nemesisMove,
+  likelyYours,
+  maiaFor,
+  trapText,
+  trapTally,
+  TRAP_LOSS,
+  TRAP_COST,
+  REPLY_LINES,
+  AHEAD,
+} from '../../src/nemesis.js';
 import { UciEngine } from '../../tools/uci.mjs';
 import { loadWeights, forward, encode, moveProbabilities } from '../../src/maia-core.js';
 
@@ -137,6 +148,45 @@ test('Nemesis plays the candidate whose trap is worth most within its cost, else
     predict,
   );
   assert.equal(few.considered, 1);
+  // Once the answer is no longer wanted, Nemesis stops judging and says nothing.
+  let judged = 0;
+  const counting = async (f, o) => {
+    judged++;
+    return analyse(f, o);
+  };
+  const stopped = await nemesisMove(
+    fen,
+    [
+      { uci: 'g1f3', p: 0.5 },
+      { uci: 'd1h5', p: 0.1 },
+    ],
+    counting,
+    predict,
+    { alive: () => judged < 1 },
+  );
+  assert.equal(stopped, null);
+  assert.equal(judged, 1, 'the second candidate was never searched');
+});
+
+test('while you think, Nemesis prepares replies to your two likeliest moves, if they are likely enough', () => {
+  assert.equal(AHEAD, 2);
+  const yours = [
+    { uci: 'g1f3', p: 0.4 },
+    { uci: 'd2d4', p: 0.3 },
+    { uci: 'b1c3', p: 0.2 },
+  ];
+  assert.deepEqual(
+    likelyYours(yours).map(m => m.uci),
+    ['g1f3', 'd2d4'],
+  );
+  assert.deepEqual(
+    likelyYours([
+      { uci: 'g1f3', p: 0.9 },
+      { uci: 'a2a3', p: 0.05 },
+    ]).map(m => m.uci),
+    ['g1f3'],
+  );
+  assert.deepEqual(likelyYours([]), []);
 });
 
 test('Nemesis plays like the Maia level nearest your rating, and says what a trap would have cost', () => {

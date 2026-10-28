@@ -7,7 +7,7 @@ import { $, esc, choosePromotion, confirmDialog, download, toast, settle, showMo
 import { moveToUci, playUci, opposite } from '../chess-utils.js';
 import { LEVELS, levelById, pickNoisyMove, adaptLevel } from '../strength.js';
 import { humanMove, humanMoves } from '../maia.js';
-import { nemesisMove, maiaFor, trapText, trapTally } from '../nemesis.js';
+import { nemesisMove, likelyYours, maiaFor, trapText, trapTally } from '../nemesis.js';
 import { isTrainableMistake, winPercentLoss } from '../evaluation.js';
 import { createMistake, deleteMistake } from '../mistakes.js';
 import { dateKey, logGame, logCandidates, logAttempt } from '../state.js';
@@ -45,6 +45,7 @@ const play = {
   nemesis: false, // the opponent sets traps your likely move falls into
   trap: null, // the trap in the position you are in, if Nemesis set one: { uci, san, p, loss, best }
   traps: [], // this game's traps: [{ san, loss, taken }]
+  ahead: new Map(), // Nemesis's replies worked out while you think, by the position your likely move reaches: fen -> { fen, dropped, promise }
   gate: null, // a capture or check held by the gate until you say where the reply lands: { move, san, from, to, at }
 };
 
@@ -147,12 +148,16 @@ export function render(main, params = {}) {
   }
   draw();
   if (play.game.turn() !== play.color && !play.game.isGameOver() && !play.thinking && !play.flagged) engineTurn();
-  else beginUserTurn();
+  else {
+    beginUserTurn();
+    prepareAhead();
+  }
 }
 
 /** Leaving the page pauses your clock where it stands, as a reload does; it runs again when you come back. */
 export function leave() {
   stopClockTimer();
+  dropAhead();
   if (play.clock?.running) {
     haltClock();
     persist();
@@ -215,6 +220,7 @@ function flagOut(now = Date.now()) {
   play.token++;
   play.thinking = false;
   play.prepared = null;
+  dropAhead();
   play.marking = false;
   if (play.challenge) settleChallenge({ result: 'loss', timed: true });
   else recordResult();
@@ -655,6 +661,7 @@ function newGame({ fen = null, color = 'w', from = null, clock = null, nemesis =
   play.from = from;
   play.mistakes = {};
   play.prepared = null;
+  dropAhead();
   play.thinking = false;
   play.note = '';
   play.lastMove = [];
@@ -763,6 +770,83 @@ function prepareCoach() {
   play.prepared = { fen, promise };
 }
 
+/** Your turn: get the coach's view of the position, then Nemesis's replies to your likely moves, ready. */
+function prepareAhead() {
+  prepareCoach();
+  prepareNemesis().catch(() => {});
+}
+
+/** Forget the replies worked out ahead, and cut short the search for one of them if it is running. */
+function dropAhead(keep = null) {
+  for (const s of play.ahead.values()) {
+    if (s === keep) continue;
+    s.dropped = true;
+    engine.stop(s.fen);
+  }
+  play.ahead.clear();
+}
+
+/**
+ * While you think, Nemesis thinks too: for each of your likeliest moves it
+ * works out the coach's view of the position and its own reply, one at a
+ * time, so that when you play one of them the reply is ready. A move you were
+ * not expected to play is answered as before; the search for the move you
+ * did not play is stopped.
+ */
+async function prepareNemesis() {
+  if (!play.nemesis || play.game.isGameOver() || play.flagged || play.game.turn() !== play.color) return;
+  const token = play.token;
+  const base = new Chess();
+  base.loadPgn(play.game.pgn());
+  const level = currentLevel();
+  const yours = await humanMoves({ level: level.maia, game: base });
+  if (token !== play.token || play.game.fen() !== base.fen() || play.ahead.size) return;
+  const specs = [];
+  for (const y of likelyYours(yours)) {
+    const after = new Chess(base.fen());
+    try {
+      after.move({ from: y.uci.slice(0, 2), to: y.uci.slice(2, 4), promotion: y.uci[4] });
+    } catch {
+      continue;
+    }
+    if (after.isGameOver()) continue;
+    specs.push({ fen: after.fen(), dropped: false, promise: null, settle: null });
+  }
+  // Register every reply first, so a move played while an earlier one is being worked out waits for its own.
+  for (const spec of specs) {
+    spec.promise = new Promise(resolve => (spec.settle = resolve));
+    play.ahead.set(spec.fen, spec);
+  }
+  for (const spec of specs) {
+    let result = null;
+    try {
+      if (!spec.dropped && token === play.token) result = await replyAhead(spec, base, level, token);
+    } catch {}
+    spec.settle(result);
+  }
+}
+
+/** Work out Nemesis's reply in the position `spec.fen`, reached from `base` by your move: { after, reply } or null. */
+async function replyAhead(spec, base, level, token) {
+  const live = () => token === play.token && !spec.dropped;
+  let after = null;
+  if (app.state.coach) {
+    after = await engine.analyse(spec.fen, { nodes: BUDGET.coach, tag: spec.fen });
+    if (!live()) return null;
+  }
+  const candidates = await humanMoves({ level: level.maia, game: base, fen: spec.fen });
+  if (!live()) return null;
+  const reply = await nemesisMove(
+    spec.fen,
+    candidates,
+    (f, o) => engine.analyse(f, { multipv: o.multipv, nodes: o.nodes, tag: spec.fen }),
+    f => humanMoves({ level: level.maia, game: base, fen: [spec.fen, f] }),
+    { alive: live },
+  );
+  if (!live() || !reply) return null;
+  return { after, reply };
+}
+
 async function onMove(move) {
   const g = play.game;
   if (play.thinking || play.gate || g.turn() !== play.color || g.isGameOver() || play.flagged) return;
@@ -792,6 +876,9 @@ async function playMove(move, gated) {
     const spent = play.clock ? endTurn(play.clock, at) : 0;
     play.lastMove = [m.from, m.to];
     play.candidates = [];
+    // Nemesis may have its reply ready; replies prepared for moves you did not play are dropped.
+    const ahead = play.ahead.get(g.fen()) || null;
+    dropAhead(ahead);
     // Nemesis's trap in the position just left: taken or declined, scored and said.
     if (play.trap) {
       const trap = play.trap;
@@ -821,7 +908,14 @@ async function playMove(move, gated) {
     }
     const level = currentLevel();
     let after = null;
-    if (app.state.coach || level.mode === 'noise' || level.mode === 'full' || gated) {
+    let ready = null;
+    if (ahead) {
+      status((play.note ? play.note + ' ' : '') + `${opponentName()} is thinking…`);
+      ready = await ahead.promise;
+      if (token !== play.token) return;
+      after = ready?.after || null;
+    }
+    if (!after && (app.state.coach || level.mode === 'noise' || level.mode === 'full' || gated)) {
       after = await engine.analyse(g.fen(), { nodes: BUDGET.coach, multipv: level.mode === 'noise' ? level.multipv : 1 });
     }
     if (token !== play.token) return;
@@ -855,7 +949,7 @@ async function playMove(move, gated) {
       }
     }
     status((play.note ? play.note + ' ' : '') + `${opponentName()} is thinking…`);
-    await engineMove(token, after, level);
+    await engineMove(token, after, level, ready?.reply || null);
     // The challenge is judged by the engine once you have made your moves.
     const ch = play.challenge;
     if (token === play.token && ch && !ch.done && !g.isGameOver() && ch.moves >= MAX_MOVES) {
@@ -874,12 +968,13 @@ async function playMove(move, gated) {
       );
       if (play.challenge?.done) draw();
       beginUserTurn();
-      prepareCoach();
+      prepareAhead();
     }
   }
 }
 
-async function engineMove(token, after, level) {
+/** The opponent's move; `ready` is Nemesis's reply worked out while you thought, when there is one. */
+async function engineMove(token, after, level, ready = null) {
   const g = play.game;
   const fen = g.fen();
   let uci = null;
@@ -888,13 +983,14 @@ async function engineMove(token, after, level) {
   if (booked) uci = moveToUci(booked);
   else if (play.nemesis) {
     try {
-      const candidates = await humanMoves({ level: level.maia, game: g });
-      const r = await nemesisMove(
-        fen,
-        candidates,
-        (f, o) => engine.analyse(f, { multipv: o.multipv, nodes: o.nodes }),
-        f => humanMoves({ level: level.maia, game: g, fen: f }),
-      );
+      const r =
+        ready ||
+        (await nemesisMove(
+          fen,
+          await humanMoves({ level: level.maia, game: g }),
+          (f, o) => engine.analyse(f, { multipv: o.multipv, nodes: o.nodes }),
+          f => humanMoves({ level: level.maia, game: g, fen: f }),
+        ));
       uci = r.uci;
       if (token === play.token) play.trap = r.trap;
     } catch (e) {
@@ -946,7 +1042,7 @@ async function engineTurn() {
       refreshBoard();
       status(gameStatus());
       beginUserTurn();
-      prepareCoach();
+      prepareAhead();
     }
   }
 }
@@ -969,6 +1065,7 @@ function takeBack() {
   }
   play.token++;
   play.prepared = null;
+  dropAhead();
   play.note = '';
   play.lastMove = [];
   play.trap = null;
@@ -977,5 +1074,5 @@ function takeBack() {
   status(gameStatus());
   if (removed) toast(`Removed ${removed === 1 ? 'the mistake' : removed + ' mistakes'} saved for that move.`);
   if (g.turn() !== play.color) engineTurn();
-  else prepareCoach();
+  else prepareAhead();
 }

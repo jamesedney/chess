@@ -22,9 +22,17 @@ export const MIN_REPLY_PROB = 0.08;
 /** Engine lines asked for your replies, and the search size for each candidate. */
 export const REPLY_LINES = 6;
 export const NODES = 30000;
+/** While you think, Nemesis works out its reply to this many of your likeliest moves, each at least this likely. */
+export const AHEAD = 2;
+export const MIN_AHEAD_PROB = 0.12;
 
 /** A mate score as centipawns, so the maths below can compare it. */
 const cp = line => (line.mate != null ? (line.mate > 0 ? 1 : -1) * (10000 - Math.abs(line.mate)) : (line.score ?? 0));
+
+/** Your moves worth preparing a reply to: the likeliest AHEAD with at least MIN_AHEAD_PROB, from [{ uci, p }] likeliest first. */
+export function likelyYours(moves) {
+  return moves.slice(0, AHEAD).filter(m => m.p >= MIN_AHEAD_PROB);
+}
 
 /** The Maia level that plays most like a player of this rating. */
 export function maiaFor(rating) {
@@ -78,11 +86,18 @@ export function trapIn(fen, lines, replies) {
  * position after it. The move is the candidate whose trap is worth most
  * (probability times loss) among those within TRAP_COST of the best
  * candidate, else the likeliest candidate. Resolves with { uci, trap, cost,
- * considered }.
+ * considered }, or null once `alive()` says the answer is no longer wanted.
  */
-export async function nemesisMove(fen, candidates, analyse, predict, { nodes = NODES } = {}) {
+export async function nemesisMove(
+  fen,
+  candidates,
+  analyse,
+  predict,
+  { nodes = NODES, alive = /** @type {() => boolean} */ (() => true) } = {},
+) {
   const judged = [];
   for (const c of candidates.slice(0, MAX_CANDIDATES)) {
+    if (!alive()) return null;
     if (judged.length && c.p < MIN_PROB) break;
     const after = new Chess(fen);
     try {
@@ -100,6 +115,7 @@ export async function nemesisMove(fen, candidates, analyse, predict, { nodes = N
     // The top line is your best reply, from your side; Nemesis's view is the opposite.
     judged.push({ uci: c.uci, ours: -cp(lines[0]), trap: trapIn(after.fen(), lines, replies) });
   }
+  if (!alive()) return null;
   if (!judged.length) {
     const legal = new Chess(fen).moves({ verbose: true });
     return { uci: legal.length ? moveToUci(legal[0]) : null, trap: null, cost: 0, considered: 0 };
