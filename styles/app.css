@@ -231,7 +231,7 @@ main {
 .screen {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: 'context' 'stage' 'prompt' 'result' 'bar' 'nudge';
+  grid-template-areas: 'context' 'stage' 'prompt' 'bar' 'nudge';
   max-width: 560px;
   margin: 0 auto;
   animation: screen-in 180ms ease-out;
@@ -339,9 +339,6 @@ main {
 .bar:empty {
   display: none;
 }
-#p-result {
-  grid-area: result;
-}
 .nudge {
   grid-area: nudge;
   margin: 0 16px 16px;
@@ -351,21 +348,6 @@ main {
   font-size: 14.5px;
   font-weight: 700;
   text-decoration: none;
-}
-.lesson {
-  margin: 4px 16px 6px;
-  padding: 14px 16px;
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-.lesson strong {
-  display: block;
-  font-size: 22px;
-  font-weight: 900;
-}
-.lesson p {
-  color: var(--muted);
-  font-size: 15px;
 }
 .label {
   font-size: 12.5px;
@@ -575,7 +557,7 @@ input[type='checkbox'] {
   height: 20px;
   accent-color: var(--accent);
 }
-.check {
+.tick {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1019,8 +1001,7 @@ dialog .actions {
   .prompt p {
     font-size: 16px;
   }
-  .nudge,
-  .lesson {
+  .nudge {
     margin-left: 0;
     margin-right: 0;
   }

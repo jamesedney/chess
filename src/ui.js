@@ -57,7 +57,7 @@ if (typeof document !== 'undefined')
  */
 export function toast(text, { action = null, duration = 4500 } = {}) {
   const el = toastElement();
-  el.innerHTML = `<span>${esc(text)}</span>${action ? `<button type="button" class="primary toast-action">${esc(action.label)}</button>` : ''}<button type="button" class="toast-close" aria-label="Dismiss"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>`;
+  el.innerHTML = `<span>${esc(text)}</span>${action ? `<button type="button" class="toast-action">${esc(action.label)}</button>` : ''}<button type="button" class="toast-close" aria-label="Dismiss"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>`;
   el.classList.toggle('actionable', !!action);
   el.onclick = e => {
     if (/** @type {Element} */ (e.target).closest('.toast-close')) return hideToast(el);
@@ -98,7 +98,7 @@ export function closeModal() {
 export function confirmDialog({ title, body = '', confirm = 'Continue', cancel = 'Cancel', danger = false }) {
   return new Promise(resolve => {
     const dialog = $('#confirm');
-    dialog.innerHTML = `<h2>${esc(title)}</h2>${body ? `<p>${esc(body)}</p>` : ''}<div class="actions"><button type="button" class="${danger ? 'danger' : 'primary'}" data-answer="yes">${esc(confirm)}</button><button type="button" data-answer="no">${esc(cancel)}</button></div>`;
+    dialog.innerHTML = `<h2>${esc(title)}</h2>${body ? `<p>${esc(body)}</p>` : ''}<div class="actions"><button type="button" class="btn ${danger ? 'danger' : 'primary'}" data-answer="yes">${esc(confirm)}</button><button type="button" class="btn" data-answer="no">${esc(cancel)}</button></div>`;
     let answered = false;
     const finish = value => {
       if (answered) return;

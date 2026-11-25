@@ -54,7 +54,8 @@ function load(p, own) {
     made: 0,
     total: Math.ceil(p.line.length / 2),
     failed: false,
-    hint: 0,
+    hint: 0, // hints taken on this position: any makes the solve not clean
+    hintStep: 0, // hints taken on the move in hand: the first names the piece, the second shows the move
     shown: false,
     complete: false,
     offBook: false,
@@ -274,6 +275,7 @@ function reject(c, m, why) {
 
 async function accept(c, m, engineReply) {
   c.made++;
+  c.hintStep = 0;
   if (!c.offBook) c.ply++;
   c.lastMove = [m.from, m.to];
   c.marks = { [m.to]: 'good' };
@@ -347,6 +349,7 @@ async function hint() {
   const c = cur;
   if (!c || c.complete || c.busy || c.setupPending) return;
   c.hint++;
+  c.hintStep++;
   let move = c.offBook ? null : c.p.line[c.ply];
   if (!move) {
     c.busy = true;
@@ -359,7 +362,7 @@ async function hint() {
   }
   if (!move) return paint();
   const from = move.slice(0, 2);
-  if (c.hint === 1) {
+  if (c.hintStep === 1) {
     c.marks = { [from]: 'hint' };
     say(`${side(c.solver)} to move`, `Look at your ${NAMES[c.game.get(from)?.type] || 'piece'} on ${from}.`);
   } else {

@@ -5,6 +5,7 @@ import { app } from './app-context.js';
 import { engine } from './engine.js';
 import { analyseGame } from './analyse.js';
 import { fetchLichessNew, fetchChessComNew, selectNew, MAX_FAILED, MAX_REVIEWED } from './sync.js';
+import { loadGame } from './pgn.js';
 import { toast } from './ui.js';
 import { scheduleDeepAnalysis } from './deep.js';
 import { syncRatings } from './rating-sync.js';
@@ -13,6 +14,8 @@ const KEY = 'rankup-queue';
 const MAX_QUEUE = 400; // room for two months of games on the first sync
 const SYNC_GAP_MS = 10 * 60000; // do not poll the sites more often than this
 const FOREGROUND_GAP_MS = 60000; // opening the app checks for a game you just finished, at most once a minute
+const MAX_TRIES = 3; // a game the engine keeps failing on is given up after this many goes
+const RETRY_MS = 60000; // after an engine failure the queue rests this long
 
 let queue = load();
 let current = null; // the game being read
@@ -70,6 +73,14 @@ export function enqueue(items) {
   return added;
 }
 
+/** Forget every game waiting to be read (a reset, or a backup restored over this one). */
+export function clearQueue() {
+  queue = [];
+  batch = { games: 0, found: 0 };
+  persist();
+  notify();
+}
+
 /** Read the next queued game when the engine has nothing else to do. */
 export function runQueue(delay = 1500) {
   if (running || !queue.length || !engine.available) return;
@@ -83,23 +94,41 @@ export function runQueue(delay = 1500) {
     current = item;
     notify();
     const sync = app.state.sync;
+    // A game that cannot be read at all is dropped, and remembered so a later sync does not queue it again.
+    const giveUp = () => (sync.failed = [...sync.failed.filter(k => k !== item.key), item.key].slice(-MAX_FAILED));
+    let readable = true;
     try {
-      const { found } = await analyseGame(item.pgn, { colour: item.colour, background: true });
-      sync.reviewed = [...sync.reviewed.filter(k => k !== item.key), item.key].slice(-MAX_REVIEWED);
-      batch.games++;
-      batch.found += found;
-      scheduleDeepAnalysis();
+      loadGame(item.pgn);
     } catch {
-      // A game that cannot be read is dropped, and remembered so a later sync does not queue it again.
-      sync.failed = [...sync.failed.filter(k => k !== item.key), item.key].slice(-MAX_FAILED);
+      readable = false;
     }
+    let rest = 4000;
+    let done = true;
+    if (!readable) giveUp();
+    else
+      try {
+        const { found } = await analyseGame(item.pgn, { colour: item.colour, background: true });
+        sync.reviewed = [...sync.reviewed.filter(k => k !== item.key), item.key].slice(-MAX_REVIEWED);
+        batch.games++;
+        batch.found += found;
+        scheduleDeepAnalysis();
+      } catch {
+        // The engine failed, which may pass (not loaded yet, a crash): the game goes to the back to be tried again.
+        item.tries = (item.tries || 0) + 1;
+        if (item.tries >= MAX_TRIES) giveUp();
+        else done = false;
+        rest = RETRY_MS;
+      }
+    // The queue may have been emptied meanwhile (a reset): then nothing here is put back.
+    const still = queue.includes(item);
     queue = queue.filter(i => i !== item);
+    if (!done && still) queue.push(item);
     persist();
     app.save();
     current = null;
     running = false;
     notify();
-    if (queue.length) runQueue(4000);
+    if (queue.length) runQueue(rest);
     else reportBatch();
   }, delay);
 }

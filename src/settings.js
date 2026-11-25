@@ -5,10 +5,12 @@ import { parseState, defaults, dateKey, LEGACY_KEY } from './state.js';
 import { BOARD_THEMES, PIECE_SETS, applyBoardTheme, setPieceSet, pieceUrl } from './appearance.js';
 import { configure as configureFeedback, cue } from './sound.js';
 import { syncRatings } from './rating-sync.js';
-import { syncNow } from './queue.js';
+import { syncNow, clearQueue } from './queue.js';
 
 export const VERSION = '7.0.0';
 const THEME_KEY = 'rankup-theme';
+/** A message to show once the app has started again (after a reset or a restored backup). */
+export const NOTICE_KEY = 'rankup-notice';
 /** Set by main.js: shows the browser's install prompt, when it offered one. */
 export const install = { prompt: null };
 
@@ -35,6 +37,24 @@ export function applySettings() {
   setPieceSet(st.pieces);
   configureFeedback(st);
   applyTheme();
+}
+
+/**
+ * Replace everything saved with `state` and start the app again on the Train
+ * screen, so nothing of the old progress lingers in a screen, the queue of
+ * games or a search under way. `text` is shown once it is back.
+ */
+function startAfresh(state, text, { game = false } = {}) {
+  app.state = state;
+  app.save();
+  clearQueue();
+  try {
+    if (game) localStorage.removeItem('rankup-practice');
+    sessionStorage.setItem(NOTICE_KEY, text);
+  } catch {}
+  closeModal();
+  location.hash = 'train';
+  location.reload();
 }
 
 /** Swap the pieces on any board behind the dialog to the chosen set. */
@@ -74,8 +94,8 @@ export function openSettings({ onChange = () => {} } = {}) {
             `<button type="button" role="radio" class="piece-set" data-piece-set="${id}" aria-checked="${s.settings.pieces === id}" aria-label="${esc(p.label)}"><img src="./pieces/${id}/wN.svg" alt=""><img src="./pieces/${id}/bQ.svg" alt=""></button>`,
         )
         .join('')}</div>
-      <label class="check"><input type="checkbox" id="sound-on" ${s.settings.sound ? 'checked' : ''}> Move sounds</label>
-      <label class="check"><input type="checkbox" id="haptics-on" ${s.settings.haptics ? 'checked' : ''}> Vibration</label>
+      <label class="tick"><input type="checkbox" id="sound-on" ${s.settings.sound ? 'checked' : ''}> Move sounds</label>
+      <label class="tick"><input type="checkbox" id="haptics-on" ${s.settings.haptics ? 'checked' : ''}> Vibration</label>
     </fieldset>
     <fieldset><legend>Your data</legend>
       <p class="small" id="storage-state">${app.storageOK ? 'Progress is saved in this browser only. Export a backup before changing device or clearing browser data.' : 'This browser is not saving progress. Export a backup before you close the app.'}</p>
@@ -123,10 +143,14 @@ export function openSettings({ onChange = () => {} } = {}) {
   const saveName = (key, el) =>
     (el.onchange = () => {
       s.profiles[key] = el.value.trim();
-      // A different account: forget which ratings were followed and read the new ones now.
+      // A different account: forget the ratings shown and where its games were last fetched from,
+      // then read its ratings and its games now.
       s.sync.followed = [];
+      s.sync.perfs = {};
+      s.sync.last[key] = 0;
       app.save();
-      syncRatings({ force: true }).then(({ errors }) => {
+      Promise.all([syncRatings({ force: true }), syncNow({ force: true })]).then(([ratings, games]) => {
+        const errors = [...new Set([...ratings.errors, ...games.errors])];
         if (errors.length) toast(errors.join(' '));
         onChange();
       });
@@ -168,12 +192,7 @@ export function openSettings({ onChange = () => {} } = {}) {
       }))
     )
       return;
-    app.state = restored;
-    app.save();
-    applySettings();
-    closeModal();
-    app.navigate('train');
-    toast('Progress restored.');
+    startAfresh(restored, 'Progress restored.');
   };
   const copies = (downloadId, discardId, keys, name) => {
     $('#' + downloadId)?.addEventListener('click', () => {
@@ -199,18 +218,13 @@ export function openSettings({ onChange = () => {} } = {}) {
     if (
       !(await confirmDialog({
         title: 'Reset all progress?',
-        body: 'Your rating history, saved positions and accounts on this device are deleted. Export a backup first if you might want them.',
+        body: 'Your rating history, saved positions, accounts and game in progress on this device are deleted. Export a backup first if you might want them.',
         confirm: 'Reset everything',
         danger: true,
       }))
     )
       return;
-    app.state = defaults();
-    app.save();
-    applySettings();
-    closeModal();
-    app.navigate('train');
-    toast('Progress reset.');
+    startAfresh(defaults(), 'Progress reset.', { game: true });
   };
   $('#install')?.addEventListener('click', async e => {
     await install.prompt?.prompt();

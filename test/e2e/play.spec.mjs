@@ -44,7 +44,7 @@ test('when the game ends you are shown the one move that cost you most, and it b
   await expect.poll(() => moves(page), { timeout: 90000 }).toMatch(/3\. Qxe5\+ \S+/);
   await expect(page.locator('#p-status')).toContainText('Your move');
   // Not a word about it while the game is on.
-  await expect(page.locator('.lesson')).toHaveCount(0);
+  await expect(page.locator('#p-status')).not.toContainText('costliest');
   const s = await saved(page);
   expect(s.mistakes).toHaveLength(1);
   expect(s.mistakes[0]).toMatchObject({ played: 'Qxe5+', game: null });
@@ -55,9 +55,7 @@ test('when the game ends you are shown the one move that cost you most, and it b
   await page.click('#p-resign');
   await page.click('#confirm [data-answer="yes"]');
   await expect(page.locator('#p-status')).toContainText('You resigned.');
-  await expect(page.locator('.lesson')).toContainText('Your costliest move');
-  await expect(page.locator('.lesson strong')).toHaveText('3. Qxe5+');
-  await expect(page.locator('.lesson')).toContainText('was better');
+  await expect(page.locator('#p-status')).toContainText(/Your costliest move was 3\. Qxe5\+\. \S+ was better\./);
   // Train it: the position is on the Train board, with the move you played.
   await page.click('#p-train');
   await expect(page.locator('.tabs a.active')).toHaveText('Train');
@@ -65,13 +63,37 @@ test('when the game ends you are shown the one move that cost you most, and it b
   await expect(page.locator('#t-prompt')).toContainText('You played Qxe5+. Find the better move.');
   // Back on Play the result is still there; a new game gives you the other colour and Nemesis opens.
   await page.click('.tabs a[data-page="play"]');
-  await expect(page.locator('.lesson strong')).toHaveText('3. Qxe5+');
+  await expect(page.locator('#p-status')).toContainText('Your costliest move was 3. Qxe5+.');
   await page.click('#p-new');
-  await expect(page.locator('.lesson')).toHaveCount(0);
+  await expect(page.locator('#p-status')).not.toContainText('costliest');
   await expect.poll(() => moves(page), { timeout: 60000 }).toMatch(/^1\. \S+( \*)?$/);
   await expect(page.locator('#p-status')).toContainText('Your move');
   expect((await game(page)).color).toBe('b');
   await expect(page.locator('#board .square').first()).toHaveAttribute('data-square', 'h1');
+});
+
+test('resigning straight after a blunder still judges it, and Nemesis does not answer a resigned game', async ({ page }) => {
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('seeded')) return;
+    sessionStorage.setItem('seeded', '1');
+    localStorage.setItem(
+      'rankup-practice',
+      JSON.stringify({ v: 7, pgn: '1. e4 e5 2. Qh5 Nc6', color: 'w', traps: [], trap: null, worst: null }),
+    );
+  });
+  await open(page, 'play');
+  await expect(page.locator('#p-status')).toContainText('Your move');
+  await page.locator('#board [data-square="h5"]').click();
+  await page.locator('#board [data-square="e5"]').click();
+  await page.click('#p-resign');
+  await page.click('#confirm [data-answer="yes"]');
+  await expect(page.locator('#p-status')).toContainText('You resigned.');
+  await expect(page.locator('#p-status')).toContainText('Your costliest move was 3. Qxe5+.', { timeout: 60000 });
+  await expect(page.locator('#p-train')).toBeVisible();
+  expect(await moves(page)).toMatch(/3\. Qxe5\+( \*)?$/);
+  // A new game starts clean.
+  await page.click('#p-new');
+  await expect(page.locator('#p-status')).not.toContainText('resigned');
 });
 
 test('pieces can be dragged with a finger on a touch screen @mobile', async ({ page, browserName }) => {

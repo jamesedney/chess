@@ -7,7 +7,7 @@ import { Chess } from '../../vendor/chess.js';
 import { app } from '../app-context.js';
 import { engine, BUDGET } from '../engine.js';
 import { BoardView } from '../board.js';
-import { $, esc, choosePromotion, confirmDialog, toast, settle } from '../ui.js';
+import { $, esc, choosePromotion, confirmDialog, settle } from '../ui.js';
 import { moveToUci, playUci } from '../chess-utils.js';
 import { humanMoves } from '../maia.js';
 import { nemesisMove, likelyYours, maiaFor, trapWhat } from '../nemesis.js';
@@ -30,6 +30,7 @@ const play = {
   traps: [], // this game's traps: [{ san, loss, taken }]
   worst: null, // your costliest move so far: { id, ply, san, best, loss }
   resigned: false,
+  stalled: false, // the engine failed on Nemesis's move: the game waits for you to ask again
   prepared: null, // the engine's view of the position you are thinking about: { fen, promise }
   ahead: new Map(), // Nemesis's replies worked out while you think: fen -> { fen, dropped, promise }
 };
@@ -102,6 +103,7 @@ function newGame() {
   play.traps = [];
   play.worst = null;
   play.resigned = false;
+  play.stalled = false;
   play.prepared = null;
   engine.newGame();
   persist();
@@ -128,7 +130,6 @@ function draw() {
     <div class="side">
       <div class="context"><span>Nemesis · plays like a ${level()}</span><span id="p-tally" class="num"></span></div>
       <div class="prompt" id="p-status" aria-live="polite"></div>
-      <div id="p-result"></div>
       <div class="bar" id="p-bar"></div>
     </div>
   </section>`;
@@ -137,9 +138,17 @@ function draw() {
   paint();
 }
 
-/** The words under the board while the game is on. */
+/** What the game leaves you with: the one move that cost you most, which is now a position you train. */
+function lessonText() {
+  const w = play.worst;
+  if (w) return `Your costliest move was ${moveLabel(w.ply, w.san)}. ${w.best ? `${w.best} was better.` : 'A better move was there.'}`;
+  return play.game.history().length > 9 ? 'No serious mistakes in this game.' : '';
+}
+
+/** The words under the board. */
 function statusText() {
-  if (over()) return [resultText(), ''];
+  if (over()) return [resultText(), lessonText()];
+  if (play.stalled) return ['Nemesis could not move', 'The engine stopped. Nothing is lost: ask it again.'];
   if (play.thinking) return ['Nemesis is thinking…', play.note];
   if (!play.game.history().length && play.game.turn() === play.color)
     return ['Your move', `You play ${play.color === 'w' ? 'White' : 'Black'}.`];
@@ -167,27 +176,25 @@ function paint() {
     const set = play.traps.length;
     tally.textContent = set ? `${set - play.traps.filter(t => t.taken).length} of ${set} traps avoided` : '';
   }
-  const result = $('#p-result', root);
   const bar = $('#p-bar', root);
-  const mode = over() ? 'over' : g.history().length ? 'on' : 'start';
+  // The result is drawn again if the costliest move changes: a move played just before resigning is still judged.
+  const mode = over() ? `over:${play.worst?.id || ''}` : play.stalled ? 'stalled' : g.history().length ? 'on' : 'start';
   if (bar.dataset.mode === mode) return;
   bar.dataset.mode = mode;
-  if (mode === 'over') {
+  if (over()) {
     const w = play.worst;
     const known = w && app.state.mistakes.some(m => m.id === w.id);
-    result.innerHTML = w
-      ? `<div class="lesson"><span class="label">Your costliest move</span><strong>${esc(moveLabel(w.ply, w.san))}</strong><p>${w.best ? `${esc(w.best)} was better.` : 'A better move was there.'} It is now among the positions you train.</p></div>`
-      : g.history().length > 9
-        ? `<div class="lesson"><span class="label">Your play</span><strong>No serious mistakes</strong><p>Nothing from this game needs training.</p></div>`
-        : '';
     bar.innerHTML = `${known ? `<button type="button" id="p-train" class="btn">Train it</button>` : ''}<button type="button" id="p-new" class="btn primary${known ? '' : ' wide'}">New game</button>`;
     if (known) $('#p-train', bar).onclick = () => app.navigate('train', { id: w.id });
     $('#p-new', bar).onclick = () => {
       newGame();
       render(root);
     };
+  } else if (mode === 'stalled') {
+    bar.innerHTML = `<button type="button" id="p-resign" class="btn">Resign</button><button type="button" id="p-retry" class="btn primary">Try again</button>`;
+    $('#p-resign', bar).onclick = resign;
+    $('#p-retry', bar).onclick = engineTurn;
   } else {
-    result.innerHTML = '';
     bar.innerHTML = mode === 'on' ? `<button type="button" id="p-resign" class="btn quiet wide">Resign</button>` : '';
     if (mode === 'on') $('#p-resign', bar).onclick = resign;
   }
@@ -200,10 +207,12 @@ function moveLabel(ply, san) {
 
 async function resign() {
   if (over()) return;
-  if (!(await confirmDialog({ title: 'Resign this game?', confirm: 'Resign', cancel: 'Keep playing' }))) return;
-  play.token++;
+  if (!(await confirmDialog({ title: 'Resign this game?', confirm: 'Resign', cancel: 'Keep playing' })) || over()) return;
+  // A search still running for the move you just played is left to finish, so that move is judged;
+  // Nemesis does not answer a resigned game.
   dropAhead();
   play.thinking = false;
+  play.stalled = false;
   play.resigned = true;
   persist();
   paint();
@@ -250,7 +259,8 @@ async function prepareNemesis() {
   if (play.game.history().length) base.loadPgn(play.game.pgn());
   const maia = level();
   const yours = await humanMoves({ level: maia, game: base });
-  if (token !== play.token || play.game.fen() !== base.fen() || play.ahead.size) return;
+  // You may have left the screen while the network loaded: then nothing is prepared, and the engine stays free.
+  if (token !== play.token || app.page !== 'play' || play.game.fen() !== base.fen() || play.ahead.size) return;
   const specs = [];
   for (const y of likelyYours(yours)) {
     const after = new Chess(base.fen());
@@ -333,8 +343,8 @@ async function onMove(move) {
     if (token !== play.token) return;
     judge({ fen, m, ply, before, after });
     await engineMove(token, ready?.reply || null);
-  } catch (e) {
-    if (token === play.token) toast(e.message || 'The engine stopped. Try the move again.');
+  } catch {
+    if (token === play.token && !over()) play.stalled = true;
   } finally {
     if (token === play.token) {
       play.thinking = false;
@@ -349,7 +359,8 @@ function judge({ fen, m, ply, before, after }) {
   if (!before?.best || moveToUci(m) === before.best || !isTrainableMistake(before.score, after.score)) return;
   const loss = winPercentLoss(before.score, after.score);
   const saved = createMistake({ fen, played: m.san, before, after, loss });
-  if (!saved || (play.worst && play.worst.loss >= loss)) return;
+  // A position a deeper look set aside earlier is not held against you again.
+  if (!saved || saved.mistake.archived || (play.worst && play.worst.loss >= loss)) return;
   let best = null;
   try {
     best = playUci(new Chess(fen), saved.mistake.line[0]).san;
@@ -377,7 +388,7 @@ async function engineMove(token, ready = null) {
       r = { uci: (await engine.analyse(fen, { elo: Math.max(1320, maia), movetime: 500 })).best, trap: null };
     }
   }
-  if (token !== play.token || !r?.uci) return;
+  if (token !== play.token || over() || !r?.uci) return;
   const m = playUci(g, r.uci);
   play.trap = r.trap || null;
   play.lastMove = [m.from, m.to];
@@ -386,13 +397,15 @@ async function engineMove(token, ready = null) {
 }
 
 async function engineTurn() {
+  if (play.thinking || over() || play.game.turn() === play.color) return;
   const token = play.token;
   play.thinking = true;
+  play.stalled = false;
   paint();
   try {
     await engineMove(token);
-  } catch (e) {
-    if (token === play.token) toast(e.message || 'The engine stopped.');
+  } catch {
+    if (token === play.token && !over()) play.stalled = true;
   } finally {
     if (token === play.token) {
       play.thinking = false;

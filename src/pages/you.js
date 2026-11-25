@@ -64,6 +64,7 @@ async function connect(e) {
   if (!chesscom && !lichess) return toast('Enter the name you play under on either site.');
   s.profiles = { chesscom, lichess };
   s.sync.followed = [];
+  s.sync.perfs = {};
   app.save();
   draw();
   const [games, ratings] = await Promise.all([syncNow({ force: true }), syncRatings({ force: true })]);

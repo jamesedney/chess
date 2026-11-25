@@ -12,15 +12,13 @@ import { MAX_MISTAKES } from './state.js';
  * unreliable), except for forced mates, which run to mate. `game` says where
  * it came from: { opp, date } for an online game, null for a game against
  * Nemesis. Returns { mistake, created } or null; created is false when the
- * position was already saved.
+ * position was already saved (it may be one set aside: check `archived`).
  */
 export function createMistake({ fen, played, before, after, loss, game = null }) {
   if (!before?.pv?.length || !before.best) return null;
+  // A position already saved is not saved twice. One set aside (a deeper look found your move fine) stays set aside.
   const existing = app.state.mistakes.find(p => p.fen === fen);
-  if (existing) {
-    delete existing.archived;
-    return { mistake: existing, created: false };
-  }
+  if (existing) return { mistake: existing, created: false };
   let line = [before.pv[0]];
   let mate = 0;
   if (before.mate > 0 && before.mate <= 4) {

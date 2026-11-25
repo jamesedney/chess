@@ -5,7 +5,7 @@ import { $, $$, toast, closeModal } from './ui.js';
 import * as train from './pages/train.js';
 import * as play from './pages/play.js';
 import * as you from './pages/you.js';
-import { VERSION, applySettings, applyTheme, install } from './settings.js';
+import { VERSION, NOTICE_KEY, applySettings, applyTheme, install } from './settings.js';
 import { startRatingSync, onRatingsChange } from './rating-sync.js';
 import { scheduleDeepAnalysis } from './deep.js';
 import { startAutoSync } from './queue.js';
@@ -93,7 +93,13 @@ function boot() {
   startRatingSync();
   scheduleDeepAnalysis(15000);
   onRatingsChange(() => you.refresh());
-  if (app.restored) toast('Your progress is back. An update had set it aside by mistake.', { duration: 9000 });
+  let notice = null;
+  try {
+    notice = sessionStorage.getItem(NOTICE_KEY);
+    sessionStorage.removeItem(NOTICE_KEY);
+  } catch {}
+  if (notice) toast(notice);
+  else if (app.restored) toast('Your progress is back. An update had set it aside by mistake.', { duration: 9000 });
   else if (app.recovered) toast('Saved progress could not be read, so a copy was kept. See Settings to download it.', { duration: 9000 });
   else if (!app.storageOK) toast('This browser is not saving progress (private mode?). Export a backup in Settings.');
 }

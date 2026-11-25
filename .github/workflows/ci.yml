@@ -8,7 +8,8 @@ permissions:
   contents: read
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Pinned: the Playwright version in package.json installs its browsers on Ubuntu 24.04, not on newer images.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +38,7 @@ jobs:
 
   browsers:
     # The same end-to-end suite in Firefox and WebKit (desktop Safari, iPhone, iPad).
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4

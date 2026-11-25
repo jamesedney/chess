@@ -14,8 +14,11 @@ export const DEFAULT_SYNC = () => ({
   failed: [], // keys of games the engine could not read
   backfillAt: 0, // when the first, two-month fetch was done (ms); 0 until then
 });
-/** Keys of read games kept, so a game is never read twice. */
-export const MAX_REVIEWED = 600;
+/**
+ * Keys of read games kept, so a game is never read twice. It must outlast the
+ * review window: 3,000 is fifty games a day for the two months a sync looks back.
+ */
+export const MAX_REVIEWED = 3000;
 const FIRST_SYNC_DAYS = 7;
 const MAX_SEEN = 300;
 /** Every game this recent is reviewed, including games from earlier syncs that never were. */

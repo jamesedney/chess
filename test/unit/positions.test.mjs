@@ -20,12 +20,12 @@ test('a missed move becomes a position: the better move, the move you played, an
   assert.match(m.id, /^m[a-z0-9]+$/);
   assert.match(m.explanation, /Nxd5/);
   assert.equal(validate(app.state), null, 'what it saves loads again');
-  // The same position again is not saved twice, and comes back if it had been set aside.
+  // The same position again is not saved twice; one a deeper look set aside stays set aside.
   m.archived = true;
   const again = createMistake({ fen: FEN, played: 'Nxd5', before: line('c6a5'), after: line('g5f7', 250), loss: 30 });
   assert.equal(again.created, false);
   assert.equal(again.mistake, m);
-  assert.equal(m.archived, undefined);
+  assert.equal(m.archived, true);
   assert.equal(app.state.mistakes.length, 1);
   // No engine line, or a line that is not playable: nothing to train.
   assert.equal(createMistake({ fen: FEN, played: 'Nxd5', before: { best: null, pv: [] }, after: null, loss: 30 }), null);
