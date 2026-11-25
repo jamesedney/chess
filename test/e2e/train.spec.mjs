@@ -1,4 +1,4 @@
-import { test, expect, sq, move, open, state, seed, saved, BACK_RANK } from './helpers.mjs';
+import { test, expect, sq, move, open, state, seed, saved, quietSites, BACK_RANK } from './helpers.mjs';
 import { Chess } from '../../vendor/chess.js';
 import { puzzles } from '../../data/puzzles.js';
 
@@ -67,7 +67,7 @@ test('a position from your game: your move is shown, a wrong move is refused on 
   page,
 }) => {
   await seed(page, state({ mistakes: [BACK_RANK], profiles: { lichess: 'me', chesscom: '' }, sync: { auto: false } }));
-  await page.route(/lichess\.org|chess\.com/, r => r.abort());
+  await quietSites(page);
   await open(page, 'train');
   await expect(page.locator('#t-source')).toHaveText(/^Your game against rival · /);
   await expect(page.locator('#t-count')).toHaveText('1 to fix');

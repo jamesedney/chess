@@ -90,7 +90,10 @@ test('resigning straight after a blunder still judges it, and Nemesis does not a
   await expect(page.locator('#p-status')).toContainText('You resigned.');
   await expect(page.locator('#p-status')).toContainText('Your costliest move was 3. Qxe5+.', { timeout: 60000 });
   await expect(page.locator('#p-train')).toBeVisible();
-  expect(await moves(page)).toMatch(/3\. Qxe5\+( \*)?$/);
+  // Whether or not Nemesis had already answered when you resigned, it plays nothing after.
+  const atResign = await moves(page);
+  await page.waitForTimeout(1500);
+  expect(await moves(page)).toBe(atResign);
   // A new game starts clean.
   await page.click('#p-new');
   await expect(page.locator('#p-status')).not.toContainText('resigned');

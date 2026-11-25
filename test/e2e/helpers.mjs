@@ -85,6 +85,28 @@ export async function seed(page, saved) {
   }, saved);
 }
 
+/**
+ * Answer every call to Lichess and Chess.com with an account that has no games,
+ * so a test with a linked account makes no real request and logs no error.
+ */
+export async function quietSites(page) {
+  await page.route(/lichess\.org|chess\.com/, route => {
+    const url = route.request().url();
+    const body = url.includes('lichess.org/api/games')
+      ? ''
+      : url.endsWith('/archives')
+        ? { archives: [] }
+        : url.includes('/rating-history')
+          ? []
+          : {};
+    return route.fulfill(
+      typeof body === 'string'
+        ? { status: 200, contentType: 'application/x-chess-pgn', body }
+        : { status: 200, contentType: 'application/json', body: JSON.stringify(body) },
+    );
+  });
+}
+
 /** The progress the app has saved. */
 export const saved = page => page.evaluate(() => JSON.parse(localStorage.getItem('rankup-v1')));
 

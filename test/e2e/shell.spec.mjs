@@ -45,7 +45,7 @@ test('unreadable saved data is kept for recovery, and Settings hands it over', a
 });
 
 for (const screen of ['train', 'play', 'you']) {
-  test(`on a phone the ${screen} screen fits the width, with the tabs under the thumb @mobile`, async ({ page }) => {
+  test(`on a phone or tablet the ${screen} screen fits the width, with the tabs under the thumb @mobile`, async ({ page }) => {
     await seed(page, state({ mistakes: [BACK_RANK] }));
     await open(page, screen);
     const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
@@ -55,9 +55,12 @@ for (const screen of ['train', 'play', 'you']) {
     expect(Math.round(tabs.y + tabs.height)).toBe(view.height);
     expect(tabs.width).toBe(view.width);
     if (screen !== 'you') {
-      // The board runs edge to edge, and what you press sits between it and the tabs.
+      // The board runs edge to edge on a phone and is centred and large on a tablet;
+      // what you press sits between it and the tabs.
       const board = await page.locator('#board').boundingBox();
-      expect([Math.round(board.x), Math.round(board.width)]).toEqual([0, view.width]);
+      expect(Math.round(board.x * 2 + board.width)).toBe(view.width);
+      if (view.width <= 600) expect(Math.round(board.width)).toBe(view.width);
+      else expect(board.width).toBeGreaterThan(700);
       expect(board.y + board.height).toBeLessThan(tabs.y);
       if (screen === 'train') {
         const bar = await page.locator('#t-bar').boundingBox();

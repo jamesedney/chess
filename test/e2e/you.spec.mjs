@@ -1,4 +1,4 @@
-import { test, expect, open, state, seed, saved, BACK_RANK } from './helpers.mjs';
+import { test, expect, open, state, seed, saved, quietSites, BACK_RANK } from './helpers.mjs';
 
 const DAY = 86400000;
 const day = n => new Date(Date.now() - n * DAY).toISOString().slice(0, 10);
@@ -72,7 +72,7 @@ test('the first visit asks only for your name; then your rating shows and your g
 });
 
 test('You shows one number: your real rating, how it moved in 30 days, and a line of it', async ({ page }) => {
-  await page.route(/chess\.com|lichess\.org/, r => r.abort());
+  await quietSites(page);
   const ratings = [
     [80, 1190],
     [45, 1200],
@@ -154,7 +154,7 @@ test('settings: the board changes at once, a backup round-trips, and a reset cle
 test('progress from 6.0 opens in 7.0 with its positions and rating, and the old data is kept until you discard it', async ({
   page,
 }, info) => {
-  await page.route(/chess\.com|lichess\.org/, r => r.abort());
+  await quietSites(page);
   const old = {
     version: 11,
     records: { mback1: { tries: 1, clean: 0, box: 0, due: 1, last: 1 } },

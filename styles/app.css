@@ -232,7 +232,9 @@ main {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas: 'context' 'stage' 'prompt' 'bar' 'nudge';
-  max-width: 560px;
+  /* The board is as wide as the screen allows, up to a tablet's width, but never so tall
+     that the words and buttons under it leave the screen. */
+  max-width: min(760px, max(280px, calc(100dvh - var(--tabs) - 196px - env(safe-area-inset-top) - env(safe-area-inset-bottom))));
   margin: 0 auto;
   animation: screen-in 180ms ease-out;
 }
@@ -420,6 +422,7 @@ main {
 
 .you {
   display: block;
+  max-width: 560px;
   padding: calc(18px + env(safe-area-inset-top)) 16px 24px;
 }
 .hero {
