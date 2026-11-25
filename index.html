@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#efede8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#f3f1ec" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#262421" media="(prefers-color-scheme: dark)" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="description" content="A guided training plan that takes your chess rating where you want it." />
+    <meta name="description" content="A chess trainer built from your own games: one position at a time." />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -28,71 +28,32 @@
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
-    <header>
-      <a class="brand" href="#today" aria-label="Rankup home"
-        ><img class="brand-icon" src="./icons/icon-192-bw.png" alt="" width="30" height="30" /> Rankup</a
+    <nav class="tabs" aria-label="Main navigation">
+      <span class="brand"><img src="./icons/icon-192-bw.png" alt="" width="26" height="26" />Rankup</span>
+      <a href="#train" data-page="train"
+        ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.5" />
+          <circle cx="12" cy="12" r="4.5" />
+          <circle cx="12" cy="12" r="0.9" fill="currentColor" /></svg
+        ><span>Train</span></a
       >
-      <div class="header-right">
-        <span id="offline" class="small"></span>
-        <button type="button" id="install" class="header-button" hidden>Install app</button>
-        <button type="button" id="settings" class="header-button" aria-haspopup="dialog" aria-label="Settings">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />
-            <circle cx="15" cy="7" r="2" />
-            <circle cx="9" cy="17" r="2" /></svg
-          ><span class="label">Settings</span>
-        </button>
-      </div>
-    </header>
-    <div class="shell">
-      <aside class="sidebar">
-        <nav aria-label="Main navigation">
-          <a href="#today" data-page="today"
-            ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
-              <path d="M3.5 9.5h17M8 3v4M16 3v4M9 14.5l2 2 4-4" /></svg
-            ><span>Today</span></a
-          >
-          <a href="#path" data-page="path"
-            ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="6" cy="18" r="2.5" />
-              <circle cx="18" cy="6" r="2.5" />
-              <path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5" /></svg
-            ><span>Library</span></a
-          >
-          <a href="#play" data-page="play"
-            ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="12" r="8.5" />
-              <path d="M10.2 8.8v6.4l5-3.2z" /></svg
-            ><span>Play</span></a
-          >
-          <a href="#review" data-page="review"
-            ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M3.5 12a8.5 8.5 0 1 0 2.5-6" />
-              <path d="M3.5 4v4h4" />
-              <path d="M12 8v4.2l2.8 1.8" /></svg
-            ><span>Games</span></a
-          >
-          <a href="#progress" data-page="progress"
-            ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="8.5" r="3.5" />
-              <path d="M5 20c1.2-3.6 3.8-5.5 7-5.5s5.8 1.9 7 5.5" /></svg
-            ><span>You</span></a
-          >
-        </nav>
-        <div class="sidebar-bottom">
-          <div class="goal-line" aria-hidden="true"><span id="goal-bar"></span></div>
-          <small id="goal-text">Puzzle rating</small>
-        </div>
-      </aside>
-      <div class="content">
-        <div id="session-bar" class="session-bar" role="region" aria-label="Today’s session" hidden></div>
-        <main id="main" tabindex="-1"></main>
-      </div>
-    </div>
+      <a href="#play" data-page="play"
+        ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 20.5h6M8 17.5h8M9.5 17.5c.3-2.6.3-4.4-.9-6.4h6.8c-1.2 2-1.2 3.8-.9 6.4" />
+          <circle cx="12" cy="7" r="3.2" /></svg
+        ><span>Play</span></a
+      >
+      <a href="#you" data-page="you"
+        ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 18.5l5.2-6 3.6 3.4L20 7.5" />
+          <path d="M15.5 7.5H20V12" /></svg
+        ><span>You</span></a
+      >
+    </nav>
+    <main id="main" tabindex="-1"></main>
     <dialog id="modal" aria-labelledby="modal-content">
       <div id="modal-content"></div>
-      <button type="button" id="close-modal" class="secondary">Close</button>
+      <button type="button" id="close-modal" class="btn">Done</button>
     </dialog>
     <dialog id="confirm"></dialog>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>

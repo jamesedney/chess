@@ -1,11 +1,11 @@
-// Deeper second opinions on reviewed mistakes, computed while the engine is idle.
-// A short search flags candidate mistakes during review; this pass re-checks each
-// marked move with a much larger budget, corrects the suggested move, and clears
-// marks that turn out to be fine.
+// A second, deeper opinion on each saved position, computed while the engine
+// is idle. A short search finds candidate mistakes when a game is read; this
+// pass looks again with a much larger budget, corrects the suggested move, and
+// drops positions where the move you played turns out to be fine.
 import { Chess } from '../vendor/chess.js';
 import { engine, BUDGET } from './engine.js';
 import { app } from './app-context.js';
-import { playUci, moveToUci } from './chess-utils.js';
+import { moveToUci } from './chess-utils.js';
 import { diagnoseMistake } from './tagger.js';
 import { winPercentLoss, classifyLoss } from './evaluation.js';
 
@@ -15,79 +15,64 @@ let running = false;
 let done = 0;
 let timer = null;
 
-/** Positions before each move of a review. */
-function fenBefore(review, ply) {
-  const g = new Chess(review.startFen);
-  for (let i = 0; i < ply; i++) g.move(review.moves[i]);
-  return g;
-}
-
-/** The next mark that has not had a deep check, newest review first. */
-export function nextPending(reviews) {
-  for (const r of reviews) {
-    if (!r.complete) continue;
-    const mark = r.marks.find(m => !m.deep && m.cls !== 'inaccuracy');
-    if (mark) return { review: r, mark };
-  }
-  return null;
+/** The next saved position that has not had a deep check, newest first. */
+export function nextPending(mistakes) {
+  return mistakes.find(m => !m.deep && !m.archived && m.played) || null;
 }
 
 /**
- * Apply a deep result to a mark (and its saved position when untouched).
- * Pure apart from mutating the objects passed in; exported for tests.
- * Returns 'confirmed', 'corrected' or 'cleared'.
+ * Apply a deep result to a saved position. `before` is the engine's view of
+ * the position, `after` its view once your move is played (null when the move
+ * ended the game). Pure apart from mutating the position; exported for tests.
+ * Returns 'cleared' (your move was fine: the caller removes an untried
+ * position, a tried one is set aside), 'corrected' (the better move changed)
+ * or 'confirmed'.
  */
-export function applyDeepResult({ review, mark, mistake, record, fen, before, after }) {
-  const played = review.moves[mark.ply];
-  const g = new Chess(fen);
-  const playedUci = moveToUci(g.move(played));
-  mark.deep = true;
-  // The deeper search prefers the move that was played, or the loss is small: not a mistake.
+export function applyDeepResult({ mistake, record, before, after }) {
+  mistake.deep = true;
+  let playedUci;
+  try {
+    playedUci = moveToUci(new Chess(mistake.fen).move(mistake.played));
+  } catch {
+    return 'confirmed';
+  }
   const loss = after ? winPercentLoss(before.score, after.score) : null;
   if (before.best === playedUci || (loss !== null && classifyLoss(loss) === 'good')) {
-    mark.cleared = true;
-    if (mistake && !record?.tries) mistake.archived = true;
+    mistake.archived = true;
     return 'cleared';
   }
-  if (loss !== null) {
-    mark.loss = Math.round(loss);
-    mark.cls = classifyLoss(loss);
-  }
-  // The deeper search's reply is the better refutation.
-  mark.refute = after?.best ?? mark.refute ?? null;
-  if (before.best && before.best !== mark.best) {
-    mark.best = before.best;
-    mark.bestSan = playUci(new Chess(fen), before.best).san;
-    if (mistake && !record?.tries) {
-      mistake.line = [before.best];
-      const d = diagnoseMistake({ fen, played, before, after });
-      mistake.explanation = d.text;
-      mistake.kind = d.kind;
-      mark.explanation = d.text;
-    }
+  if (loss !== null) mistake.loss = Math.round(loss);
+  // A position you have already worked on keeps the answer you were taught.
+  if (before.best && before.best !== mistake.line[0] && !record?.tries && !mistake.mate) {
+    mistake.line = [before.best];
+    mistake.explanation = diagnoseMistake({ fen: mistake.fen, played: mistake.played, before, after }).text;
     return 'corrected';
   }
   return 'confirmed';
 }
 
 async function checkOne() {
-  const pending = nextPending(app.state.reviews);
-  if (!pending) return false;
-  const { review, mark } = pending;
-  const g = fenBefore(review, mark.ply);
-  const fen = g.fen();
-  const before = await engine.analyse(fen, { nodes: BUDGET.deep, background: true });
+  const mistake = nextPending(app.state.mistakes);
+  if (!mistake) return false;
+  const before = await engine.analyse(mistake.fen, { nodes: BUDGET.deep, background: true });
   if (before.interrupted) return true;
-  g.move(review.moves[mark.ply]);
+  const g = new Chess(mistake.fen);
   let after = null;
-  if (!g.isGameOver()) {
-    after = await engine.analyse(g.fen(), { nodes: BUDGET.deep / 2, background: true });
-    if (after.interrupted) return true;
+  try {
+    g.move(mistake.played);
+    if (!g.isGameOver()) {
+      after = await engine.analyse(g.fen(), { nodes: BUDGET.deep / 2, background: true });
+      if (after.interrupted) return true;
+    }
+  } catch {}
+  // The position may have been removed while the engine worked.
+  if (!app.state.mistakes.includes(mistake)) return true;
+  const record = app.state.records[mistake.id];
+  const verdict = applyDeepResult({ mistake, record, before, after });
+  if (verdict === 'cleared' && !record?.tries) {
+    app.state.mistakes = app.state.mistakes.filter(m => m !== mistake);
+    delete app.state.records[mistake.id];
   }
-  // The review may have been deleted while the engine worked.
-  if (!app.state.reviews.includes(review) || !review.marks.includes(mark)) return true;
-  const mistake = mark.mistakeId ? app.state.mistakes.find(m => m.id === mark.mistakeId) : null;
-  applyDeepResult({ review, mark, mistake, record: mistake && app.state.records[mistake.id], fen, before, after });
   app.save();
   done++;
   return true;

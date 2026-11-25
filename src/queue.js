@@ -1,33 +1,27 @@
-// The import queue: games waiting for analysis, analysed one at a time while
-// the engine is otherwise idle. Lives outside the saved state (and backups)
-// under its own storage key, because PGNs are bulky and the queue is transient.
+// The import queue: your games waiting to be read, one at a time while the
+// engine is otherwise idle. Lives outside the saved state (and backups) under
+// its own storage key, because PGNs are bulky and the queue is transient.
 import { app } from './app-context.js';
 import { engine } from './engine.js';
 import { analyseGame } from './analyse.js';
-import { fetchLichessNew, fetchChessComNew, selectNew, MAX_FAILED } from './sync.js';
-import { describeGame } from './pgn.js';
+import { fetchLichessNew, fetchChessComNew, selectNew, MAX_FAILED, MAX_REVIEWED } from './sync.js';
 import { toast } from './ui.js';
 import { scheduleDeepAnalysis } from './deep.js';
-import { mergeNewGames } from './session.js';
 import { syncRatings } from './rating-sync.js';
-import { needsDebrief } from './debrief.js';
-import { ledgerFrom, recordLedger, MAX_LEDGER, keyFromSite } from './ledger.js';
 
 const KEY = 'rankup-queue';
-const MAX_QUEUE = 400; // room for two months of games on the first sync after 5.4
+const MAX_QUEUE = 400; // room for two months of games on the first sync
 const SYNC_GAP_MS = 10 * 60000; // do not poll the sites more often than this
 const FOREGROUND_GAP_MS = 60000; // opening the app checks for a game you just finished, at most once a minute
 
 let queue = load();
-let current = null; // { item, progress }
+let current = null; // the game being read
 let running = false;
 let lastSync = 0;
-let lastSuccess = 0; // the last sync that reached every linked site
 let syncing = false;
 const listeners = new Set();
-const ledgerListeners = new Set();
-// Games reviewed since the queue last emptied: reported once, together.
-let batch = { games: 0, found: 0, last: null };
+// Games read since the queue last emptied: reported once, together.
+let batch = { games: 0, found: 0 };
 
 function load() {
   try {
@@ -54,36 +48,16 @@ export function subscribe(fn) {
   return () => listeners.delete(fn);
 }
 
-/** Be told when a sync added games to the ledger (Today redraws the stop line). */
-export function onLedgerChange(fn) {
-  ledgerListeners.add(fn);
-  return () => ledgerListeners.delete(fn);
-}
-
-/** When the ledger was last brought up to date with every linked site, in ms; 0 if never. */
-export function lastSyncAt() {
-  return lastSuccess;
-}
-
+/** { pending, reading, syncing }: games waiting, whether one is being read, whether the sites are being asked. */
 export function snapshot() {
-  return {
-    pending: queue.length,
-    items: queue.map(i => ({ key: i.key, source: i.source, label: label(i) })),
-    current: current ? { label: label(current.item), progress: current.progress } : null,
-    syncing,
-  };
-}
-
-function label(item) {
-  const d = describeGame(item.pgn);
-  return `${d.white} – ${d.black}`;
+  return { pending: queue.length + (current ? 1 : 0), reading: !!current, syncing };
 }
 
 /** Add games to the queue. Returns how many were added (duplicates are skipped). */
 export function enqueue(items) {
   let added = 0;
   for (const it of items) {
-    if (queue.some(q => q.key === it.key) || current?.item.key === it.key) continue;
+    if (queue.some(q => q.key === it.key) || current?.key === it.key) continue;
     if (queue.length >= MAX_QUEUE) break;
     queue.push(it);
     added++;
@@ -96,13 +70,7 @@ export function enqueue(items) {
   return added;
 }
 
-export function remove(key) {
-  queue = queue.filter(i => i.key !== key);
-  persist();
-  notify();
-}
-
-/** Analyse the next queued game when the engine has nothing else to do. */
+/** Read the next queued game when the engine has nothing else to do. */
 export function runQueue(delay = 1500) {
   if (running || !queue.length || !engine.available) return;
   running = true;
@@ -112,37 +80,22 @@ export function runQueue(delay = 1500) {
       return;
     }
     const item = queue[0];
-    current = { item, progress: 'Waiting for the engine…' };
+    current = item;
     notify();
+    const sync = app.state.sync;
     try {
-      const { review, found, duplicate } = await analyseGame(item.pgn, {
-        colour: item.colour,
-        background: true,
-        playedAt: item.at ?? null,
-        onProgress: text => {
-          if (current?.item === item) {
-            current.progress = text;
-            notify();
-          }
-        },
-      });
-      queue = queue.filter(i => i !== item);
-      persist();
-      if (!duplicate) {
-        batch.games++;
-        batch.found += found || 0;
-        batch.last = { id: review.id, label: label(item), debrief: needsDebrief(review) };
-      }
+      const { found } = await analyseGame(item.pgn, { colour: item.colour, background: true });
+      sync.reviewed = [...sync.reviewed.filter(k => k !== item.key), item.key].slice(-MAX_REVIEWED);
+      batch.games++;
+      batch.found += found;
       scheduleDeepAnalysis();
-    } catch (e) {
-      // A game that cannot be analysed is dropped, and remembered so a later sync does not queue it again.
-      queue = queue.filter(i => i !== item);
-      persist();
-      const sync = app.state.sync;
-      sync.failed = [...(sync.failed || []).filter(k => k !== item.key), item.key].slice(-MAX_FAILED);
-      app.save();
-      toast(`Could not review ${label(item)}: ${e.message || 'analysis failed.'}`);
+    } catch {
+      // A game that cannot be read is dropped, and remembered so a later sync does not queue it again.
+      sync.failed = [...sync.failed.filter(k => k !== item.key), item.key].slice(-MAX_FAILED);
     }
+    queue = queue.filter(i => i !== item);
+    persist();
+    app.save();
     current = null;
     running = false;
     notify();
@@ -151,24 +104,14 @@ export function runQueue(delay = 1500) {
   }, delay);
 }
 
-/** One message for everything reviewed in the background, and today's plan picks the games up. */
+/** One message for everything read in the background. */
 function reportBatch() {
-  const { games, found, last } = batch;
-  batch = { games: 0, found: 0, last: null };
-  if (!games) return;
-  mergeNewGames();
-  if (app.page === 'review') return;
-  const positions = found ? `${found} new position${found === 1 ? '' : 's'} to practise` : 'no serious mistakes';
-  if (games === 1)
-    toast(`${last.label} reviewed: ${positions}.`, {
-      action: last.debrief
-        ? { label: 'Debrief', onClick: () => app.navigate('review', { review: last.id, debrief: 1 }) }
-        : { label: 'Open', onClick: () => app.navigate('review', { review: last.id, ply: 0 }) },
-    });
-  else
-    toast(`${games} games reviewed: ${positions}.${found ? ' They are in today’s session.' : ''}`, {
-      action: { label: 'Today', onClick: () => app.navigate('today') },
-    });
+  const { games, found } = batch;
+  batch = { games: 0, found: 0 };
+  if (!games || !found) return;
+  toast(`${found} new position${found === 1 ? '' : 's'} from your last ${games === 1 ? 'game' : games + ' games'}.`, {
+    action: app.page === 'train' ? null : { label: 'Train', onClick: () => app.navigate('train') },
+  });
 }
 
 /**
@@ -190,45 +133,24 @@ export async function syncNow({ force = false, gap = SYNC_GAP_MS, fetchImpl = fe
   const jobs = [];
   if (s.profiles.lichess) jobs.push(['lichess', () => fetchLichessNew(s.profiles.lichess, s.sync, { fetchImpl, now })]);
   if (s.profiles.chesscom) jobs.push(['chesscom', () => fetchChessComNew(s.profiles.chesscom, s.sync, { fetchImpl, now })]);
-  let ledgered = 0;
   let added = 0;
   try {
     for (const [source, run] of jobs) {
       try {
         const fetched = await run();
-        // Every finished game goes in the ledger, reviewed or not. A full ledger
-        // skips games older than its oldest row before parsing them.
-        s.ledger ||= [];
-        const after = s.ledger.length >= MAX_LEDGER ? s.ledger[0].t : 0;
-        const known = new Set(s.ledger.map(r => r.k));
-        ledgered += recordLedger(s.ledger, ledgerFrom(fetched, { usernames: names, known, after }));
-        // Reviews from before game keys were saved are matched by their Site header, as the diagnosis does.
-        const reviewed = new Set([
-          ...s.reviews.flatMap(r => [r.gameKey, r.site ? keyFromSite(r.site) : null]).filter(Boolean),
-          ...queue.map(q => q.key),
-        ]);
+        const reviewed = new Set([...s.sync.reviewed, ...queue.map(q => q.key)]);
         items.push(...selectNew(fetched, { usernames: names, sync: s.sync, source, now, reviewed }));
         // The backfill is Lichess's: it is done once Lichess has answered, whatever the other site did.
-        if (source === 'lichess' && !s.sync.ledgerAt) s.sync.ledgerAt = now;
+        if (source === 'lichess' && !s.sync.backfillAt) s.sync.backfillAt = now;
       } catch (e) {
         errors.push(e.message);
       }
     }
-    if (!s.profiles.lichess && !s.sync.ledgerAt && !errors.length) s.sync.ledgerAt = now;
-    if (!errors.length) lastSuccess = now;
+    if (!s.profiles.lichess && !s.sync.backfillAt && !errors.length) s.sync.backfillAt = now;
     app.save();
-    if (ledgered)
-      for (const fn of ledgerListeners) {
-        try {
-          fn();
-        } catch (e) {
-          console.error(e);
-        }
-      }
     added = enqueue(items);
-    // A new game means a new rating: read it now rather than at the next check,
-    // whether or not the game is queued for review.
-    if (items.length || ledgered) syncRatings({ force: true, fetchImpl, now }).catch(() => {});
+    // A new game means a new rating: read it now rather than at the next check.
+    if (items.length) syncRatings({ force: true, fetchImpl, now }).catch(() => {});
   } finally {
     syncing = false;
     notify();
@@ -238,7 +160,6 @@ export async function syncNow({ force = false, gap = SYNC_GAP_MS, fetchImpl = fe
 
 /** Sync when the app opens, comes back online or returns to the foreground. */
 export function startAutoSync() {
-  if (!app.state.sync?.auto) return;
   const go = () => {
     if (app.state.sync?.auto) syncNow({ gap: FOREGROUND_GAP_MS }).catch(() => {});
   };

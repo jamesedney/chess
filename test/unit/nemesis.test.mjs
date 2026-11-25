@@ -8,7 +8,7 @@ import {
   likelyYours,
   maiaFor,
   trapText,
-  trapTally,
+  trapWhat,
   TRAP_LOSS,
   TRAP_COST,
   REPLY_LINES,
@@ -132,11 +132,22 @@ test('Nemesis plays the candidate whose trap is worth most within its cost, else
   assert.equal(r.cost, 40);
   assert.equal(r.considered, 3);
   assert.deepEqual(seen, [nf3, qh5, ba6], 'one analysis per candidate');
-  // Without a trap in reach it plays the likeliest candidate.
+  // Without a trap in reach it plays as a person would: one of its candidates, drawn by how likely each is.
   const plain = await nemesisMove(fen, [{ uci: 'g1f3', p: 0.5 }], analyse, predict);
   assert.equal(plain.uci, 'g1f3');
   assert.equal(plain.trap, null);
   assert.equal(plain.cost, 0);
+  const noTrap = async f => (f === nf3 ? REPLIES[nf3] : [{ uci: 'b8c6', p: 0.5 }]);
+  const two = [
+    { uci: 'g1f3', p: 0.6 },
+    { uci: 'd1h5', p: 0.2 },
+  ];
+  assert.equal((await nemesisMove(fen, two, analyse, noTrap, { rng: () => 0 })).uci, 'g1f3');
+  assert.equal((await nemesisMove(fen, two, analyse, noTrap, { rng: () => 0.74 })).uci, 'g1f3', 'three quarters of the time');
+  const second = await nemesisMove(fen, two, analyse, noTrap, { rng: () => 0.76 });
+  assert.equal(second.uci, 'd1h5');
+  assert.equal(second.trap, null);
+  assert.equal(second.cost, 40, 'what the less likely move gives up is still reported');
   // Candidates below the probability floor are not judged once one has been.
   const few = await nemesisMove(
     fen,
@@ -195,8 +206,7 @@ test('Nemesis plays like the Maia level nearest your rating, and says what a tra
   assert.equal(maiaFor(1800), 1900);
   assert.equal(trapText({ san: 'Re8', loss: 429, best: 'Nxc4' }), 'Re8 would have lost a piece; Nxc4 was the move.');
   assert.equal(trapText({ san: 'Kf1', loss: 9999, best: null }), 'Kf1 would have lost the game.');
-  assert.equal(trapTally([]), '');
-  assert.equal(trapTally([{ taken: true }, { taken: false }, { taken: false }]), 'Traps 3, taken 1.');
+  assert.deepEqual([150, 250, 450, 800, 9990].map(trapWhat), ['material', 'a piece', 'a rook', 'the queen', 'the game']);
   assert.equal(TRAP_LOSS, 150);
 });
 

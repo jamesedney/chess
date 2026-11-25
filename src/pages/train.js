@@ -1,627 +1,220 @@
-// Today's training: adaptive puzzle sessions, personal mistakes, vision sprints,
-// Safe or hanging? and the clock drills.
+// Train: one position at a time. Positions from your own games come first,
+// puzzles at your level fill in. You move a piece; the board says whether it
+// was right. There is nothing else on the screen to learn.
 import { Chess } from '../../vendor/chess.js';
 import { app } from '../app-context.js';
 import { engine, BUDGET } from '../engine.js';
-import { BoardView, turnLabel } from '../board.js';
-import { $, $$, esc, choosePromotion, plural, showModal, closeModal, settle } from '../ui.js';
-import { schedule, choosePuzzle, dueCount, isMistake } from '../srs.js';
-import { updateRating, pushHistory, weakestTheme } from '../rating.js';
-import { judgeAlternative, rejectionMessage } from '../verify.js';
-import { moveToUci, playUci, tryUci, uciLineToSan, opposite, NAMES } from '../chess-utils.js';
-import { hintForTags, displayTags, TAG_LABELS } from '../themes.js';
-import { dateKey, streaks, logAttempt } from '../state.js';
-import { makeVisionDrill, isVisionAnswer } from '../vision.js';
-import { archiveMistake } from '../mistakes.js';
+import { BoardView } from '../board.js';
+import { $, esc, choosePromotion, settle } from '../ui.js';
+import { moveToUci, playUci, opposite, NAMES } from '../chess-utils.js';
+import { schedule, nextPosition, ownCounts } from '../srs.js';
+import { updateRating, pushHistory } from '../rating.js';
+import { judgeAlternative } from '../verify.js';
+import { dateKey } from '../state.js';
 import { cue } from '../sound.js';
-import { nextStep } from '../guide.js';
-import { snapshot as queueSnapshot, subscribe as watchQueue } from '../queue.js';
-import { recordSkillPuzzle } from '../skills.js';
-import { activeBlock, continueSession } from '../session.js';
-import { CLOCK_DRILLS } from '../timeprofile.js';
-import { safeItems, hasSafeBank, judgeSafe, runSummary, recordSafeRun, SAFE_SECONDS } from '../safecheck.js';
-import { pressurePositions, promptFor, recordRealRun, MIN_POSITIONS } from '../pressure.js';
 
-const wait = ms => new Promise(r => setTimeout(r, ms));
-const SPRINT_MS = 60000;
-const PENALTY_MS = 3000;
+/** A puzzle solved cleanly moves on by itself after this long. */
+export const AUTO_NEXT_MS = 1100;
 
 let root = null;
-let session = null;
-let current = null;
 let board = null;
-let vision = null;
-/** @type {{ phase: 'ready' | 'running' | 'done', items: any[], i: number, answers: any[], deadline: number | null, timer: any, started?: number, locked?: boolean, summary?: any } | null} */
-let safe = null;
-let seeds = null;
-let unwatch = null;
-let clockTimer = null; // the pace countdown or the pause lock
+let cur = null; // the position on the board and how the attempt is going
+let turn = 0; // positions served this sitting
+let seen = []; // their ids, so one missed a moment ago is not asked again at once
+let autoTimer = null;
 
-/**
- * Session options: tags (focus, or the only tags when strict), review (one
- * game's positions), limit (positions before the session ends), unit (the
- * curriculum unit being trained), rating (the level to pick puzzles near),
- * due (only positions due for recall).
- */
-function newSession(
-  mode = 'daily',
-  theme = null,
-  { tags = [], review = null, step = null, limit = null, strict = false, unit = null, rating = null, due = false, clock = null } = {},
-) {
-  stopClock();
-  // Same clock: your own decisive positions, one pass, with the seconds you had.
-  const set = clock === 'real' ? pressurePositions(app.state, { limit: limit || 6 }) : null;
-  if (set) fitBlock(b => b.type === 'clock' && b.params?.clock === 'real', set.length);
-  session = {
-    mode,
-    theme,
-    tags,
-    review,
-    step,
-    strict,
-    unit,
-    // The pace drill picks easier positions: speed comes from simple ones.
-    rating: rating || (clock === 'pace' ? app.state.puzzle.rating - 250 : null),
-    due,
-    clock,
-    done: 0,
-    clean: 0,
-    seen: [],
-    finished: false,
-    total: set ? set.length : null,
-    limit: set ? set.length || limit : limit,
-    set,
-    setIndex: 0,
-    real: { n: 0, inTime: 0, first: 0, firstInTime: 0, recorded: false },
-    ratingStart: app.state.puzzle.rating,
-  };
-  current = null;
-}
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const side = c => (c === 'w' ? 'White' : 'Black');
 
-/** Session options from address or navigation parameters. */
-function optionsFrom(params) {
-  const list = v => (Array.isArray(v) ? v : typeof v === 'string' && v ? v.split(',') : []);
-  return {
-    tags: list(params.tags),
-    review: params.review || null,
-    step: params.step || null,
-    limit: Number(params.limit) || null,
-    strict: !!Number(params.strict || 0),
-    unit: params.unit || null,
-    rating: Number(params.rating) || null,
-    due: !!Number(params.due || 0),
-    clock: ['pace', 'pause', 'real'].includes(params.clock) ? params.clock : null,
-    // The leak's decisive positions come first; only navigation passes them, never the address.
-    first: Array.isArray(params.first) ? params.first.filter(id => typeof id === 'string') : [],
-  };
-}
-
-/** The guided next step, computed from the saved state and the import queue. */
-function guideStep() {
-  return nextStep(app.state, { queue: queueSnapshot(), puzzles: app.allPuzzles() });
-}
-
-/** Start the session a guide step asks for. */
-function followStep(step) {
-  const p = step.action.params || {};
-  if (step.action.page === 'settings') return app.openSettings();
-  if (step.action.page !== 'train') return app.navigate(step.action.page, p);
-  startSession(p.mode || 'daily', p.theme || null, { tags: p.tags || [], review: p.review || null, step: step.id });
-}
-
-function loadNext() {
-  // A fixed set (Same clock): the next saved position, finished when the set is used up.
-  if (session.set) {
-    while (session.setIndex < session.set.length) {
-      const item = session.set[session.setIndex++];
-      const p = app.findPuzzle(item.id);
-      if (p) return loadPuzzle(p, item);
-    }
-    session.finished = true;
-    current = null;
-    return;
-  }
-  const target = (session.rating || app.state.puzzle.rating) + app.state.difficulty;
-  let pool = app.allPuzzles();
-  // Drilling one game: only the positions saved from that review.
-  if (session.review) pool = pool.filter(x => x.source?.reviewId === session.review);
-  // A mistakes session is one pass over the positions: once each has been
-  // seen, it ends rather than repeating the same position to fill the goal.
-  if (session.mode === 'mistakes') {
-    const mine = pool.filter(x => isMistake(x) && !x.archived);
-    session.total = mine.length;
-    if (mine.length && mine.every(x => session.seen.includes(x.id))) {
-      if (!session.limit) {
-        session.finished = true;
-        current = null;
-        return;
-      }
-      session.seen = []; // a second pass was asked for
-    }
-  }
-  const p = choosePuzzle({
-    puzzles: pool,
-    records: app.state.records,
-    mode: session.mode,
-    theme: session.theme,
-    seen: session.seen,
-    target,
-    weakTheme: weakestTheme(app.state.themes),
-    focusTags: session.tags,
-    strictTags: session.strict,
-    dueOnly: session.due,
-    now: Date.now(),
-  });
-  // A due-only block with nothing left to recall is simply finished.
-  if (!p && session.due && session.done) {
-    session.finished = true;
-    current = null;
-    return;
-  }
-  loadPuzzle(p);
-}
-
-function loadPuzzle(p, real = null) {
+/** Start a position: `p` is one of your saved positions or a puzzle. */
+function load(p, own) {
+  clearTimeout(autoTimer);
   if (!p) {
-    current = null;
+    cur = null;
     return;
   }
-  session.seen.push(p.id);
+  seen.push(p.id);
+  if (seen.length > 40) seen.shift();
+  turn++;
   const game = new Chess(p.fen);
   const solver = p.setup ? opposite(game.turn()) : game.turn();
-  current = {
-    puzzle: p,
+  let playedArrow = null;
+  if (own && p.played) {
+    try {
+      const m = new Chess(p.fen).move(p.played);
+      playedArrow = { from: m.from, to: m.to, kind: 'played' };
+    } catch {}
+  }
+  cur = {
+    p,
+    own,
     game,
     solver,
     ply: 0,
-    solverMade: 0,
-    solverMoves: Math.ceil(p.line.length / 2),
+    made: 0,
+    total: Math.ceil(p.line.length / 2),
     failed: false,
     hint: 0,
+    shown: false,
     complete: false,
     offBook: false,
     busy: false,
     setupPending: !!p.setup,
-    real, // the Same clock item: the seconds you had, and whether this is a first attempt
     lastMove: [],
     marks: {},
-    arrows: [],
-    message: p.setup ? 'Watch the opponent’s move, then find the reply.' : 'Your move. Scan checks, captures and threats first.',
+    arrows: playedArrow ? [playedArrow] : [],
+    playedArrow,
+    head: '',
+    sub: '',
     tone: '',
+    delta: null,
   };
-  if (!p.setup) startClock(current);
+  say(...opening(cur));
 }
 
-// ---------- Clock drills ----------
-
-function stopClock() {
-  if (clockTimer) clearInterval(clockTimer);
-  clockTimer = null;
+function loadNext() {
+  const s = app.state;
+  const next = nextPosition({
+    mistakes: s.mistakes,
+    puzzles: app.puzzles,
+    records: s.records,
+    rating: s.puzzle.rating,
+    turn,
+    seen,
+  });
+  load(next?.position || null, !!next?.own);
 }
 
-const countdown = clock => clock === 'pace' || clock === 'real';
-
-/** Pace and Same clock: a countdown for the position. Pause: the board stays locked while you look. */
-function startClock(c) {
-  stopClock();
-  if (!session?.clock || c !== current || c.complete) return;
-  if (countdown(session.clock)) {
-    const seconds = session.clock === 'real' && c.real ? c.real.seconds : CLOCK_DRILLS.pace.seconds;
-    c.deadline = Date.now() + seconds * 1000;
-    if (session.clock === 'real' && c.real) feedback(promptFor(c.real));
-  } else {
-    c.lockUntil = Date.now() + CLOCK_DRILLS.pause.lock * 1000;
-    c.locked = true;
-    c.message = `Hands off for ${CLOCK_DRILLS.pause.lock} seconds. What does their last move threaten? What are your checks and captures?`;
-    c.tone = '';
-  }
-  clockTimer = setInterval(() => tickClock(c), 250);
-  tickClock(c);
+/** The first words under the board: whose move, and what is asked. */
+function opening(c) {
+  const head = `${side(c.solver)} to move`;
+  if (c.setupPending) return [head, 'Watch their move first.'];
+  if (c.own) return [head, c.p.played ? `You played ${c.p.played}. Find the better move.` : 'Find the better move.'];
+  const mate = c.p.mate || ((c.p.tags || []).includes('mate') ? c.total : 0);
+  return [head, mate ? `Mate in ${mate}.` : 'Find the best move.'];
 }
 
-function tickClock(c) {
-  if (c !== current || c.complete || app.page !== 'train') return stopClock();
-  const el = $('#drill-clock');
-  if (countdown(session.clock)) {
-    const left = c.deadline - Date.now();
-    if (el) {
-      el.textContent = `${Math.max(0, Math.ceil(left / 1000))}s`;
-      el.classList.toggle('urgent', left < 5000);
-    }
-    if (left <= 0 && !c.busy && !c.setupPending) {
-      stopClock();
-      c.timedOut = true;
-      feedback(session.clock === 'real' ? 'Out of time, as in the game.' : 'Out of time.', 'error');
-      showSolution();
-    }
-  } else {
-    const left = c.lockUntil - Date.now();
-    if (el) el.textContent = left > 0 ? `${Math.ceil(left / 1000)}s` : 'Go';
-    if (left <= 0 && c.locked) {
-      c.locked = false;
-      stopClock();
-      refreshBoard();
-      feedback('Now choose your move.');
-    }
-  }
+/** Where the position came from, for the line above the board. */
+function sourceText(c) {
+  if (!c.own) return `Puzzle · ${c.p.rating || '?'}`;
+  const g = c.p.game;
+  if (!g) return 'Your game against Nemesis';
+  const d = g.date ? new Date(g.date + 'T12:00:00') : null;
+  const when = d && !isNaN(d.getTime()) ? ` · ${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}` : '';
+  return `Your game${g.opp ? ` against ${g.opp}` : ''}${when}`;
 }
 
 export function render(main, params = {}) {
   root = main;
-  if (params.puzzle) {
-    const p = app.findPuzzle(params.puzzle);
-    newSession(p && isMistake(p) ? 'mistakes' : 'daily');
-    if (p) loadPuzzle(p);
-  } else if (params.mode) {
-    startSession(params.mode, params.theme || null, { ...optionsFrom(params), redraw: false });
+  if (params.id) {
+    const p = app.state.mistakes.find(m => m.id === params.id) || app.puzzles.find(x => x.id === params.id);
+    if (p) load(p, p.id.startsWith('m'));
   }
-  if (!session) startSession('daily', null, { redraw: false });
-  if (!unwatch) unwatch = watchQueue(() => app.page === 'train' && refreshGuide());
+  if (!cur || (cur.complete && !params.id)) loadNext();
   draw();
 }
 
 export function leave() {
-  stopClock();
-  // A sprint cannot pause: leaving the page abandons it.
-  if (vision?.phase === 'running' || vision?.phase === 'countdown') {
-    stopVisionTimer();
-    vision = { phase: 'ready', score: 0, misses: 0 };
-  }
-  stopVisionTimer();
-  // Nor can a Safe or hanging? run: it starts over from the ready screen.
-  if (safe?.phase === 'running') {
-    stopSafeTimer();
-    safe = { ...safe, phase: 'ready', i: 0, answers: [], deadline: null, timer: null, locked: false };
-  }
-}
-
-/**
- * @param {string} mode
- * @param {string | null} [theme]
- * @param {{ redraw?: boolean, tags?: string[], review?: string | null, step?: string | null, limit?: number | null,
- *   strict?: boolean, unit?: string | null, rating?: number | null, due?: boolean, clock?: 'pace' | 'pause' | 'real' | null,
- *   first?: string[] }} [options]
- */
-function startSession(mode, theme, { redraw = true, first = [], ...options } = {}) {
-  stopVisionTimer();
-  stopSafeTimer();
-  newSession(mode, theme, options);
-  vision = null;
-  safe = null;
-  if (mode === 'vision') vision = { phase: 'ready', score: 0, misses: 0 };
-  else if (mode === 'safe') {
-    const items = safeItems(app.state, { limit: options.limit || 10, first, Chess });
-    fitBlock(b => b.type === 'safe' || (b.type === 'reset' && b.params?.mode === 'safe'), items.length);
-    safe = { phase: 'ready', items, i: 0, answers: [], deadline: null, timer: null };
-  } else loadNext();
-  if (redraw) draw();
-}
-
-/**
- * A session block planned over a bank that has since shrunk (a mark cleared by
- * the deep pass, a review rotated out) asks for what is there now, so one run
- * completes it.
- */
-function fitBlock(matches, available) {
-  const block = activeBlock();
-  if (!block || !matches(block) || !available || available >= (block.count || 0)) return;
-  block.count = available;
-  app.save();
-}
-
-/** How many positions this session runs to: the daily goal, one pass over a mistakes pool, or more if you chose to keep going. */
-function sessionGoal() {
-  if (session.limit) return session.limit;
-  return session.mode === 'mistakes' && session.total ? Math.min(session.total, app.state.goal) : app.state.goal;
-}
-
-/** Carry on past the goal: another block of positions, with a mistakes pool allowed to repeat. */
-function keepGoing() {
-  session.limit = sessionGoal() + app.state.goal;
-  session.finished = false;
-  if (session.mode === 'mistakes') session.seen = [];
-  if (session.set) session.setIndex = 0; // a second pass over the same positions
-  loadNext();
-  draw();
-}
-
-/** The thin line above the board: where you are in the session, and the menu. */
-function topLine() {
-  const s = app.state;
-  const goal = sessionGoal();
-  let progress;
-  if (session.mode === 'vision') progress = esc(`Vision sprint · best ${s.vision.best}`);
-  else if (session.mode === 'safe')
-    progress = safe?.phase === 'running' ? progressHTML(safe.i + 1, safe.items.length, null) : 'Safe or hanging?';
-  else {
-    const n = Math.min(session.done + (current && !current.complete ? 1 : 0), goal) || Math.min(session.done, goal);
-    progress = progressHTML(Math.max(1, n), goal, s.puzzle.rating);
-  }
-  const chip =
-    session.clock && !activeBlock()
-      ? `<span class="chip">${esc(CLOCK_DRILLS[session.clock].title)}</span>`
-      : session.mode === 'safe'
-        ? safe?.phase === 'running' && !activeBlock()
-          ? '<span class="chip">Safe or hanging?</span>'
-          : ''
-        : session.theme
-          ? `<span class="chip">${esc(session.theme)} <button type="button" class="chip-close" id="clear-theme" aria-label="Clear theme filter">×</button></span>`
-          : session.mode === 'mistakes'
-            ? `<span class="chip">${session.review ? 'This game’s mistakes' : 'My mistakes'}</span>`
-            : activeBlock()
-              ? '' // the session bar above already names the block
-              : session.tags?.length
-                ? `<span class="chip">${esc(tagSummary(session.tags))}</span>`
-                : '';
-  return `<div class="focus-top">
-    <span id="focus-progress" class="focus-progress">${progress}</span>
-    ${chip}
-    <button type="button" id="train-menu" class="secondary focus-menu" aria-haspopup="dialog" aria-label="Training menu: modes and today’s numbers">Mode</button>
-  </div>`;
-}
-
-/** "04/12" in large type, read out as "4 of 12", then the puzzle rating when there is one. */
-function progressHTML(n, goal, rating) {
-  const pad = v => String(v).padStart(2, '0');
-  return `<span class="count" aria-hidden="true">${pad(n)}</span><span class="of" aria-hidden="true">/${pad(goal)}</span><span class="visually-hidden">${n} of ${goal}</span>${rating ? `<span class="small"> · rating ${rating}</span>` : ''}`;
-}
-
-/** Two readable tag names and how many more, e.g. "Quiet move · Advanced pawn +3". */
-function tagSummary(tags) {
-  const names = tags.map(t => TAG_LABELS[t] || t);
-  return names.slice(0, 2).join(' · ') + (names.length > 2 ? ` +${names.length - 2}` : '');
-}
-
-/** Stats and modes, shown on request rather than above the board. */
-function openMenu() {
-  const s = app.state;
-  const today = s.days[dateKey()];
-  const streak = streaks(s.days);
-  const due = dueCount(app.allPuzzles(), s.records, Date.now());
-  const active = app.activeMistakes().length;
-  showModal(`<h2>Training</h2>
-    <div class="stat-row four compact">
-      <div class="stat"><small>Today’s reps</small><strong>${today?.attempts || 0}<span class="small"> / ${s.goal}</span></strong></div>
-      <div class="stat"><small>Streak</small><strong>${plural(streak.current, 'day')}</strong></div>
-      <div class="stat"><small>Ready to revisit</small><strong>${due}</strong></div>
-      <div class="stat"><small>Puzzle rating</small><strong>${s.puzzle.rating}</strong></div>
-    </div>
-    <h3>Mode</h3>
-    <div class="pill-row" role="group" aria-label="Training mode">
-      <button type="button" data-mode="daily" class="${session.mode === 'daily' && !session.theme ? 'active' : ''}">Adaptive session</button>
-      <button type="button" data-mode="mistakes" class="${session.mode === 'mistakes' ? 'active' : ''}">My mistakes · ${active}</button>
-      <button type="button" data-mode="vision" class="${session.mode === 'vision' ? 'active' : ''}">Vision sprint</button>
-      ${hasSafeBank(app.state, { Chess }) ? `<button type="button" data-mode="safe" class="${session.mode === 'safe' ? 'active' : ''}">Safe or hanging?</button>` : ''}
-    </div>
-    <h3>Drills</h3>
-    <div class="pill-row" role="group" aria-label="Drills">
-      <button type="button" data-drill="endgames">Endgames vs Stockfish</button>
-      <button type="button" data-drill="visualise">Visualisation</button>
-      <button type="button" data-drill="checks">Find every check</button>
-      <button type="button" data-drill="assess">Assess the position</button>
-      <button type="button" data-drill="repertoire">Your repertoire</button>
-      <button type="button" data-drill="openings">Openings you struggle with</button>
-      <button type="button" data-clock="pace">Pace drill</button>
-      <button type="button" data-clock="pause">Pause drill</button>
-      ${pressurePositions(s, { limit: MIN_POSITIONS }).length >= MIN_POSITIONS ? '<button type="button" data-clock="real">Same clock</button>' : ''}
-    </div>
-    ${session.theme ? `<p class="small">Theme filter: ${esc(session.theme)}. Choosing a mode clears it.</p>` : ''}
-    <div class="actions"><button type="button" id="menu-flip">Flip board</button><button type="button" id="menu-progress">See progress</button></div>`);
-  $$('#modal [data-mode]').forEach(
-    b =>
-      (b.onclick = () => {
-        closeModal();
-        startSession(b.dataset.mode);
-      }),
-  );
-  $$('#modal [data-drill]').forEach(
-    b =>
-      (b.onclick = () => {
-        closeModal();
-        app.navigate('drills', { drill: b.dataset.drill });
-      }),
-  );
-  $$('#modal [data-clock]').forEach(
-    b =>
-      (b.onclick = () => {
-        closeModal();
-        const clock = b.dataset.clock;
-        const own = clock === 'real' || (clock === 'pause' && app.activeMistakes().length >= 3);
-        startSession(own ? 'mistakes' : 'daily', null, { clock, limit: clock === 'pace' ? 10 : 6 });
-      }),
-  );
-  $('#menu-progress').onclick = () => {
-    closeModal();
-    app.navigate('progress');
-  };
-  $('#menu-flip').onclick = () => {
-    closeModal();
-    if (board) board.set({ orientation: opposite(board.orientation) });
-  };
+  clearTimeout(autoTimer);
 }
 
 function draw() {
-  if (!root || app.page !== 'train') return;
-  root.innerHTML = '<div class="focus">' + topLine() + '<div id="guide"></div><div id="train-body"></div></div>';
-  $('#train-menu', root).onclick = openMenu;
-  refreshGuide();
-  $('#clear-theme', root)?.addEventListener('click', () => startSession('daily'));
-  const body = $('#train-body', root);
-  if (session.mode === 'vision') return drawVision(body);
-  if (session.mode === 'safe') return drawSafe(body);
-  if (session.finished) return drawFinished(body);
-  if (!current) return drawEmpty(body);
-  drawPuzzle(body);
-}
-
-/** The next-step strip, hidden while you are doing the step it suggests. */
-function refreshGuide() {
-  const el = $('#guide', root);
-  if (!el || !session) return;
-  // During today's session the session bar leads; the old next-step strip steps aside.
-  if (activeBlock() || app.state.onboarded) {
-    el.innerHTML = '';
+  if (app.page !== 'train' || !root) return;
+  const c = cur;
+  if (!c) {
+    root.innerHTML = `<section class="screen"><div class="empty"><h1>Nothing to train</h1><p>No positions could be loaded. Reload the app while online.</p></div></section>`;
+    board = null;
     return;
   }
-  const step = guideStep();
-  const sameDrill = step.id === 'drill' && session.mode === 'mistakes' && (!session.review || session.review === step.action.params.review);
-  const sameDaily = ['puzzles', 'due'].includes(step.id) && session.mode === 'daily' && !session.theme;
-  const doingIt = (session.step === step.id || sameDrill || sameDaily) && !session.finished;
-  if (doingIt || session.mode === 'vision' || session.mode === 'safe') {
-    el.innerHTML = step.note && !session.finished ? `<p class="guide-note small">${esc(step.note)}</p>` : '';
-    return;
-  }
-  el.innerHTML = `<div class="guide" role="region" aria-label="Next step">
-    <div class="guide-text"><span class="eyebrow">Next</span><strong>${esc(step.title)}</strong><span class="small">${esc(step.text)}</span>${step.note ? `<span class="small muted">${esc(step.note)}</span>` : ''}</div>
-    <button type="button" class="primary" id="guide-go">Go</button>
-  </div>`;
-  $('#guide-go', el).onclick = () => followStep(step);
-}
-
-function drawEmpty(body) {
-  const mistakes = session.mode === 'mistakes';
-  body.innerHTML = `<div class="empty">
-    <strong>${mistakes ? 'Your mistake bank is empty.' : session.theme ? 'No positions for this theme yet.' : 'Nothing to train right now.'}</strong>
-    <p class="muted">${mistakes ? 'Play a practice game or review one of your games. Missed opportunities become personal exercises here.' : 'Try an adaptive session or review one of your games.'}</p>
-    <div class="actions center"><button type="button" class="primary" id="go-review">Review a game</button><button type="button" id="go-play">Play a practice game</button></div>
-  </div>`;
-  $('#go-review', body).onclick = () => app.navigate('review');
-  $('#go-play', body).onclick = () => app.navigate('play');
-}
-
-function drawFinished(body) {
-  const change = app.state.puzzle.rating - session.ratingStart;
-  const block = activeBlock();
-  // One Same clock run is recorded once, however many times the screen is drawn.
-  if (session.clock === 'real' && !session.real.recorded && session.real.n) {
-    const { n, inTime, first, firstInTime } = session.real;
-    recordRealRun(app.state, { n, inTime, first, firstInTime });
-    session.real.recorded = true;
-    app.save();
-  }
-  if (block) {
-    body.innerHTML = `<div class="panel dark-panel"><div class="eyebrow">Block complete</div><h2>${esc(block.title)}</h2>
-      <p>${session.clean} of ${session.done} solved without help.${change ? ` Puzzle rating ${change > 0 ? '+' : '−'}${Math.abs(change)}.` : ''}</p>
-      <div class="actions"><button type="button" id="session-next" class="lime">Continue session</button><button type="button" id="keep-going">Keep going here</button></div></div>`;
-    $('#session-next', body).onclick = continueSession;
-    $('#keep-going', body).onclick = keepGoing;
-    $('#session-next', body).focus({ preventScroll: true });
-    return;
-  }
-  const step = guideStep();
-  body.innerHTML = `<div class="panel dark-panel"><div class="eyebrow">Session complete</div><h2>Good work. Let it settle.</h2>
-    <p>${session.clean} of ${session.done} positions solved without help.${change ? ` Puzzle rating ${change > 0 ? '+' : '−'}${Math.abs(change)} this session.` : ''} Missed and hinted positions return sooner.</p>
-    <p class="small"><strong>Next:</strong> ${esc(step.title)}. ${esc(step.why)}</p>
-    <div class="actions"><button type="button" id="next-step" class="lime">${esc(step.id === 'done' ? 'Try a drill' : step.title)}</button><button type="button" id="keep-going">Keep going</button><button type="button" id="to-progress">See progress</button></div></div>`;
-  $('#next-step', body).onclick = () => followStep(step);
-  $('#keep-going', body).onclick = keepGoing;
-  $('#to-progress', body).onclick = () => app.navigate('progress');
-}
-
-function drawPuzzle(body) {
-  const c = current;
-  const p = c.puzzle;
-  const tags = c.complete ? displayTags(p.tags || []) : [];
-  const ratingText = isMistake(p) ? 'your game' : p.rating ? `rated ${p.rating}` : '';
-  body.innerHTML = `
-    <div class="focus-prompt">
-      <strong id="board-title">${esc(c.complete ? 'Position complete' : p.goal)}</strong>
-      ${session.clock && !c.complete ? '<span class="chip sprint-clock" id="drill-clock" role="timer" aria-live="off"></span>' : '<span class="chip" id="board-chip"></span>'}
+  const s = app.state;
+  const linked = !!(s.profiles.lichess || s.profiles.chesscom);
+  root.innerHTML = `<section class="screen train">
+    <div class="stage"><div class="board-frame"><div id="board"></div></div></div>
+    <div class="side">
+      <div class="context"><span id="t-source">${esc(sourceText(c))}</span><span id="t-count" class="num"></span></div>
+      <div class="prompt" id="t-prompt" aria-live="polite"></div>
+      <div class="bar" id="t-bar"></div>
+      ${linked ? '' : `<a class="nudge" href="#you">Add your Chess.com or Lichess name to train on your own games</a>`}
     </div>
-    <div class="focus-board"><div id="board"></div></div>
-    <div class="focus-meta small">${esc(p.theme)}${ratingText ? ' · ' + ratingText : ''}${isMistake(p) ? ` · you played ${esc(p.played || 'a weaker move')}` : ''}</div>
-    <div id="feedback" class="status ${c.tone}" role="status" aria-live="polite">${esc(c.message)}</div>
-    ${tags.length ? `<div class="tag-row">${tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
-    <div class="focus-actions">
-      ${
-        c.complete
-          ? `${c.game.isGameOver() ? '' : '<button type="button" id="play-out">Play it out</button>'}
-             ${isMistake(p) ? '<button type="button" id="archive" class="secondary" aria-label="Remove from my mistakes">Remove</button>' : ''}
-             <button type="button" class="primary" id="next">Next position</button>`
-          : `<button type="button" id="hint">${c.hint ? 'More help' : 'Hint'}</button>
-             <button type="button" id="solution">Solution</button>
-             <button type="button" class="secondary" id="skip" aria-label="Skip to the next position">Skip</button>`
-      }
-    </div>`;
-  board = new BoardView($('#board', body), { onMove: handleMove, askPromotion: choosePromotion, label: 'Puzzle board' });
-  refreshBoard();
-  if (c.complete) {
-    $('#next', body).onclick = next;
-    $('#play-out', body)?.addEventListener('click', () => app.navigate('play', { fen: c.game.fen(), from: p.title, colour: c.solver }));
-    $('#archive', body)?.addEventListener('click', () => {
-      archiveMistake(p.id);
-      next();
-    });
-    $('#next', body).focus({ preventScroll: true });
-  } else {
-    $('#hint', body).onclick = hint;
-    $('#solution', body).onclick = showSolution;
-    $('#skip', body).onclick = skip;
-  }
+  </section>`;
+  board = new BoardView($('#board', root), { onMove, askPromotion: choosePromotion, label: 'Training board' });
+  paint();
   if (c.setupPending) playSetup(c);
 }
 
-/** Give up on this position without recording an attempt; it stays in the pool. */
-function skip() {
-  const c = current;
-  if (!c || c.complete) return;
-  if (session.done >= sessionGoal()) session.finished = true;
-  else loadNext();
-  draw();
-}
-
-function refreshBoard() {
-  const c = current;
-  if (!board || !c || app.page !== 'train') return;
+/** Refresh the board, the words under it and the buttons from the attempt's state. */
+function paint() {
+  if (app.page !== 'train' || !board || !cur) return;
+  const c = cur;
   board.set({
     game: c.game,
-    orientation: board.game ? board.orientation : c.solver,
-    interactive: !c.complete && !c.setupPending && !c.busy && !c.locked,
+    orientation: c.solver,
+    interactive: !c.complete && !c.setupPending && !c.busy,
     movable: c.solver,
     lastMove: c.lastMove,
     marks: c.marks,
     arrows: c.arrows,
   });
-  const chip = $('#board-chip');
-  if (chip) chip.textContent = turnLabel(c.game);
-  const prog = $('#focus-progress');
-  if (prog)
-    prog.innerHTML = progressHTML(
-      Math.max(1, Math.min(session.done + (c.complete ? 0 : 1), sessionGoal())),
-      sessionGoal(),
-      app.state.puzzle.rating,
-    );
+  const frame = $('.board-frame', root);
+  if (frame) frame.dataset.tone = c.complete ? c.tone : '';
+  const prompt = $('#t-prompt', root);
+  if (prompt) {
+    const dot = c.complete ? '' : `<span class="turn ${c.solver}"></span>`;
+    const delta =
+      c.delta === null ? '' : `<span class="delta ${c.delta < 0 ? 'down' : 'up'}">${c.delta < 0 ? '−' : '+'}${Math.abs(c.delta)}</span>`;
+    const html = `<div class="prompt-head">${dot}<strong>${esc(c.head)}</strong>${delta}</div>${c.sub ? `<p>${esc(c.sub)}</p>` : ''}`;
+    if (prompt.innerHTML !== html) {
+      prompt.innerHTML = html;
+      settle(prompt);
+    }
+    prompt.dataset.tone = c.tone;
+  }
+  const count = $('#t-count', root);
+  if (count) {
+    const own = ownCounts(app.state.mistakes, app.state.records).waiting;
+    count.textContent = c.own ? (own ? `${own} to fix` : 'All fixed') : `You · ${app.state.puzzle.rating}`;
+    count.title = c.own ? 'Positions from your games still to fix' : 'Your puzzle rating';
+  }
+  const bar = $('#t-bar', root);
+  if (!bar) return;
+  const want = c.complete ? 'done' : 'solving';
+  if (bar.dataset.mode !== want) {
+    bar.dataset.mode = want;
+    bar.innerHTML = c.complete
+      ? `<button type="button" id="t-next" class="btn primary wide">Next</button>`
+      : `<button type="button" id="t-hint" class="btn">Hint</button><button type="button" id="t-show" class="btn">Show me</button>`;
+    if (c.complete) {
+      $('#t-next', bar).onclick = next;
+      $('#t-next', bar).focus({ preventScroll: true });
+    } else {
+      $('#t-hint', bar).onclick = hint;
+      $('#t-show', bar).onclick = showSolution;
+    }
+  }
+  if (!c.complete) for (const b of bar.querySelectorAll('button')) b.disabled = c.busy || c.setupPending;
+  $('#t-next', bar)?.classList.toggle('auto', !!c.auto);
 }
 
-function feedback(message, tone = '') {
-  current.message = message;
-  current.tone = tone;
-  if (app.page !== 'train') return;
-  const el = $('#feedback');
-  if (el) {
-    el.textContent = message;
-    el.className = 'status ' + tone;
-    settle(el);
-  }
+function say(head, sub = '', tone = '') {
+  if (!cur) return;
+  cur.head = head;
+  cur.sub = sub;
+  cur.tone = tone;
+  paint();
 }
 
 async function playSetup(c) {
-  await wait(700);
-  if (c !== current || !c.setupPending) return;
-  const m = playUci(c.game, c.puzzle.setup);
+  await wait(650);
+  if (c !== cur || !c.setupPending) return;
+  const m = playUci(c.game, c.p.setup);
   c.lastMove = [m.from, m.to];
   c.setupPending = false;
-  refreshBoard();
-  feedback(`${c.solver === 'w' ? 'Black' : 'White'} played ${m.san}. Your move.`);
-  board.announce(`Opponent played ${m.san}. Your move.`);
-  if (session.clock) {
-    startClock(c);
-    if (c.locked) feedback(c.message);
-  }
+  say(...opening(c));
+  board?.announce(`${side(opposite(c.solver))} played ${m.san}. Your move.`);
 }
 
-async function handleMove(move) {
-  const c = current;
+async function onMove(move) {
+  const c = cur;
   if (!c || c.complete || c.busy || c.setupPending) return;
   const beforeFen = c.game.fen();
   let m;
@@ -631,541 +224,191 @@ async function handleMove(move) {
     return;
   }
   c.marks = {};
-  c.arrows = [];
-  const expected = c.offBook ? null : c.puzzle.line[c.ply];
-  if (c.game.isCheckmate() || (expected && moveToUci(m) === expected)) return acceptMove(c, m, null, false);
-  if (!engine.available) return rejectMove(c, m, null);
+  c.arrows = c.playedArrow ? [c.playedArrow] : [];
+  const expected = c.offBook ? null : c.p.line[c.ply];
+  if (c.game.isCheckmate() || (expected && moveToUci(m) === expected)) return accept(c, m, null);
+  if (!engine.available) return reject(c, m, '');
+  // Not the stored answer: it may still be as good. The engine decides.
   c.busy = true;
   c.lastMove = [m.from, m.to];
-  refreshBoard();
-  feedback('Checking your move with Stockfish…');
+  say('Checking…');
   try {
     const before = await engine.analyse(beforeFen, { nodes: BUDGET.verify });
     const after = c.game.isGameOver() ? null : await engine.analyse(c.game.fen(), { nodes: BUDGET.verify });
-    if (c !== current) return;
+    if (c !== cur) return;
     c.busy = false;
+    const mate = c.p.mate || (c.p.tags || []).includes('mate');
     const verdict = judgeAlternative({
       before,
       after,
-      mateExpected: (c.puzzle.tags || []).includes('mate'),
-      remainingMoves: c.solverMoves - c.solverMade - 1,
+      mateExpected: !!mate,
+      remainingMoves: c.total - c.made - 1,
+      // Positions from real games are often level: a move about as good as the best counts.
+      minWin: c.own ? 0 : 60,
     });
     if (verdict.accepted) {
       c.offBook = true;
-      return acceptMove(c, m, after?.best || null, true);
+      return accept(c, m, after?.best || null);
     }
-    rejectMove(c, m, verdict.reason);
+    reject(
+      c,
+      m,
+      verdict.reason === 'weaker' ? 'A fair move, but there is better.' : verdict.reason === 'slower-mate' ? 'That mates more slowly.' : '',
+    );
   } catch {
-    if (c !== current) return;
+    if (c !== cur) return;
     c.busy = false;
-    rejectMove(c, m, null);
+    reject(c, m, '');
   }
 }
 
-function rejectMove(c, m, reason) {
+function reject(c, m, why) {
   c.game.undo();
   c.failed = true;
   c.lastMove = [];
-  refreshBoard();
-  board.flash(m.to);
+  say(`${side(c.solver)} to move`, why || 'Not that one. Look again.', 'bad');
+  board?.flash(m.to);
   cue('error');
-  feedback(rejectionMessage(reason), 'error');
-  board.announce('Not the solution. Try again.');
+  board?.announce('Not the move. Try again.');
 }
 
-async function acceptMove(c, m, engineReply, alternative) {
-  c.solverMade++;
+async function accept(c, m, engineReply) {
+  c.made++;
   if (!c.offBook) c.ply++;
   c.lastMove = [m.from, m.to];
-  refreshBoard();
-  if (c.game.isGameOver() || c.solverMade >= c.solverMoves) return finish(c, false);
+  c.marks = { [m.to]: 'good' };
+  if (c.game.isGameOver() || c.made >= c.total) return finish(c);
   c.busy = true;
-  refreshBoard();
-  feedback(alternative ? 'That works too. Now the opponent replies…' : 'Good. Now the opponent replies…', 'success');
-  await wait(500);
-  if (c !== current) return;
-  let reply = c.offBook ? engineReply : c.puzzle.line[c.ply];
+  say('Right. Keep going.', '', 'good');
+  await wait(450);
+  if (c !== cur) return;
+  let reply = c.offBook ? engineReply : c.p.line[c.ply];
   if (c.offBook && !reply) {
     try {
       reply = (await engine.analyse(c.game.fen(), { nodes: BUDGET.verify })).best;
     } catch {}
   }
-  if (c !== current) return;
+  if (c !== cur) return;
   c.busy = false;
-  if (!reply) return finish(c, false);
+  if (!reply) return finish(c);
   const r = playUci(c.game, reply);
   if (!c.offBook) c.ply++;
   c.lastMove = [r.from, r.to];
-  refreshBoard();
-  board.announce(`Opponent played ${r.san}. Your move.`);
-  if (c.game.isGameOver()) return finish(c, false);
-  feedback(`Opponent played ${r.san}. Find your next move.`);
+  c.marks = {};
+  if (c.game.isGameOver()) return finish(c);
+  say(`${side(c.solver)} to move`, `They played ${r.san}.`);
+  board?.announce(`They played ${r.san}. Your move.`);
 }
 
-function finish(c, revealed) {
+function finish(c) {
   if (c.complete) return;
-  stopClock();
   c.complete = true;
   c.busy = false;
-  const clean = !c.failed && !c.hint && !revealed;
-  const p = c.puzzle;
+  const clean = !c.failed && !c.hint && !c.shown;
+  const p = c.p;
   const s = app.state;
   const prev = s.records[p.id];
-  s.records[p.id] = schedule(prev, clean, Date.now());
-  let ratingNote = '';
-  if (!prev?.tries && !isMistake(p) && p.rating) {
-    const t = s.themes[p.theme] || { rating: s.puzzle.rating, count: 0 };
+  // A position dropped while it was on the board (a deeper check cleared it) keeps no record.
+  if (!c.own || s.mistakes.includes(p)) s.records[p.id] = schedule(prev, clean, Date.now());
+  if (!c.own && !prev?.tries && p.rating) {
     const u = updateRating(s.puzzle.rating, s.puzzle.count, p.rating, clean ? 1 : 0);
     s.puzzle = { rating: u.rating, count: s.puzzle.count + 1, history: pushHistory(s.puzzle.history, dateKey(), u.rating) };
-    const tu = updateRating(t.rating, t.count, p.rating, clean ? 1 : 0);
-    s.themes[p.theme] = { rating: tu.rating, count: t.count + 1 };
-    recordSkillPuzzle(s.skills, p.tags || [], p.rating, clean);
-    ratingNote = ` Puzzle rating ${u.rating} (${u.delta >= 0 ? '+' : '−'}${Math.abs(u.delta)}).`;
-  }
-  const today = app.today();
-  today.attempts++;
-  if (clean) today.clean++;
-  logAttempt(s, {
-    kind: isMistake(p) && !session.clock ? 'm' : 'p',
-    theme: session.clock || (isMistake(p) ? p.kind || 'positional' : p.theme),
-    clean,
-  });
-  session.done++;
-  if (clean) session.clean++;
-  if (session.clock === 'real') {
-    session.real.n++;
-    if (clean) session.real.inTime++;
-    if (c.real?.first) {
-      session.real.first++;
-      if (clean) session.real.firstInTime++;
-    }
+    c.delta = u.delta;
   }
   app.save();
-  const lead = c.timedOut
-    ? 'Out of time: here is the line.'
-    : clean
-      ? 'Solved without help.'
-      : revealed
-        ? 'Study this line, then try it again later.'
-        : 'Good recovery. This position will return soon.';
-  let mainLine = '';
-  if (c.offBook) {
-    const start = new Chess(p.fen);
-    if (p.setup) playUci(start, p.setup);
-    mainLine = ` The stored line was ${uciLineToSan(Chess, start.fen(), p.line).join(' ')}.`;
-  }
-  c.message = `${lead}${ratingNote} ${p.explanation || ''}${mainLine}`.replace(/\s+/g, ' ').trim();
-  c.tone = 'success';
-  if (clean) cue('success');
-  draw();
+  c.arrows = [];
+  const answer = !c.offBook && p.line[0] ? sanOf(p, 0) : null;
+  const why = c.own || !clean ? p.explanation || '' : '';
+  if (clean) {
+    cue('success');
+    // A puzzle solved cleanly needs no reading: move on. Your own games get a moment.
+    c.auto = !c.own;
+    say('Solved', why, 'good');
+    if (c.auto) autoTimer = setTimeout(() => c === cur && app.page === 'train' && next(), AUTO_NEXT_MS);
+  } else if (c.shown) say(answer ? `The move was ${answer}` : 'That was the line', why, 'bad');
+  else say('Solved, with help', why || 'It will come back so you can get it clean.', 'good');
 }
 
+/** The SAN of the i-th move of a position's line. */
+function sanOf(p, i) {
+  try {
+    const g = new Chess(p.fen);
+    if (p.setup) playUci(g, p.setup);
+    let san = '';
+    for (let k = 0; k <= i; k++) san = playUci(g, p.line[k]).san;
+    return san;
+  } catch {
+    return null;
+  }
+}
+
+/** First tap: the piece to move. Second: the move itself. Either way the solve is no longer clean. */
 async function hint() {
-  const c = current;
+  const c = cur;
   if (!c || c.complete || c.busy || c.setupPending) return;
   c.hint++;
-  let move = c.offBook ? null : c.puzzle.line[c.ply];
-  if (!move && c.hint > 1) {
+  let move = c.offBook ? null : c.p.line[c.ply];
+  if (!move) {
+    c.busy = true;
+    paint();
     try {
-      c.busy = true;
       move = (await engine.analyse(c.game.fen(), { nodes: BUDGET.hint })).best;
     } catch {}
+    if (c !== cur) return;
     c.busy = false;
-    if (c !== current) return;
   }
+  if (!move) return paint();
+  const from = move.slice(0, 2);
   if (c.hint === 1) {
-    feedback(hintForTags(c.puzzle.tags || []) + (isMistake(c.puzzle) ? ' Compare it with the move you played.' : ''));
-  } else if (c.hint === 2 && move) {
-    c.marks = { [move.slice(0, 2)]: 'hint' };
-    const piece = c.game.get(move.slice(0, 2));
-    feedback(`Move the ${NAMES[piece?.type] || 'piece'} on ${move.slice(0, 2)}.`);
-  } else if (move) {
-    c.arrows = [{ from: move.slice(0, 2), to: move.slice(2, 4), kind: 'hint' }];
-    feedback(`Play the arrow: ${move.slice(0, 2)} to ${move.slice(2, 4)}.`);
+    c.marks = { [from]: 'hint' };
+    say(`${side(c.solver)} to move`, `Look at your ${NAMES[c.game.get(from)?.type] || 'piece'} on ${from}.`);
+  } else {
+    c.marks = {};
+    c.arrows = [...(c.playedArrow ? [c.playedArrow] : []), { from, to: move.slice(2, 4), kind: 'hint' }];
+    say(`${side(c.solver)} to move`, 'Play the arrow.');
   }
-  refreshBoard();
-  const h = $('#hint');
-  if (h) h.textContent = 'More help';
 }
 
+/** Play the answer out on the board. */
 async function showSolution() {
-  const c = current;
+  const c = cur;
   if (!c || c.complete || c.busy) return;
   c.busy = true;
-  c.failed = true;
+  c.shown = true;
   c.marks = {};
   c.arrows = [];
-  const p = c.puzzle;
+  const p = c.p;
   c.game = new Chess(p.fen);
+  c.lastMove = [];
   if (p.setup) {
     const s = playUci(c.game, p.setup);
     c.lastMove = [s.from, s.to];
   }
   c.setupPending = false;
-  const sans = [];
-  refreshBoard();
+  c.offBook = false;
+  say('Watch');
   for (const u of p.line) {
-    await wait(650);
-    if (c !== current) return;
+    await wait(600);
+    if (c !== cur) return;
     const m = playUci(c.game, u);
-    sans.push(m.san);
     c.lastMove = [m.from, m.to];
-    refreshBoard();
-    feedback(
-      (c.timedOut ? (session.clock === 'real' ? 'Out of time, as in the game. Solution: ' : 'Out of time. Solution: ') : 'Solution: ') +
-        sans.join(' '),
-    );
+    paint();
   }
-  finish(c, true);
+  finish(c);
 }
 
 function next() {
-  if (session.done >= sessionGoal()) session.finished = true;
-  else loadNext();
+  clearTimeout(autoTimer);
+  loadNext();
   draw();
 }
 
-// ---------- Vision sprint ----------
-
-function visionSeeds() {
-  if (!seeds) {
-    seeds = app.builtIn.map(p => {
-      if (!p.setup) return p.fen;
-      const g = new Chess(p.fen);
-      playUci(g, p.setup);
-      return g.fen();
-    });
-  }
-  return seeds;
-}
-
-function stopVisionTimer() {
-  if (vision?.timer) clearInterval(vision.timer);
-  if (vision) vision.timer = null;
-}
-
-function drawVision(body) {
-  const v = vision;
-  const best = app.state.vision.best;
-  body.innerHTML = `
-    <div class="focus-prompt"><strong id="board-title">${v.phase === 'countdown' ? 'Get ready' : 'Find the free piece'}</strong>${
-      v.phase === 'running'
-        ? `<span class="chip sprint-clock" id="sprint-time" role="timer" aria-live="off">${clockText(SPRINT_MS)}</span>`
-        : v.phase === 'countdown'
-          ? `<span class="chip sprint-clock" id="sprint-count" role="timer" aria-live="polite">${v.count}</span>`
-          : '<span class="chip" id="board-chip"></span>'
-    }</div>
-    <div class="focus-board"><div id="board"></div></div>
-    ${
-      v.phase === 'running'
-        ? `<div class="sprint-bar" aria-hidden="true"><span id="sprint-fill"></span></div>
-           <div class="sprint"><div><small>Time left</small><strong id="sprint-left">${clockText(SPRINT_MS)}</strong></div><div><small>Found</small><strong id="sprint-score">${v.score}</strong></div></div>
-           <div id="feedback" class="status" role="status" aria-live="polite">Capture the one enemy piece that is free to take.</div>`
-        : v.phase === 'countdown'
-          ? `<div id="feedback" class="status" role="status" aria-live="polite">Starting in ${v.count}… Each position has one enemy piece free to take.</div>`
-          : `<div class="status" role="status">${
-              v.phase === 'done'
-                ? `${plural(v.score, 'piece')} found. ${v.score >= best && v.score > 0 ? 'A new best score.' : `Your best is ${best}.`}`
-                : 'One minute. Each position has exactly one enemy piece you can take for free. Find it and capture it. A wrong move costs three seconds.'
-            }</div>
-           <div class="focus-actions"><span class="small">Best ${best} · ${plural(app.state.vision.runs, 'sprint')}</span><button type="button" class="primary" id="sprint-start">${v.phase === 'done' ? 'Go again' : 'Start sprint'}</button></div>`
-    }`;
-  board = new BoardView($('#board', body), { onMove: visionMove, askPromotion: async () => 'q', label: 'Vision sprint board' });
-  $('#sprint-start', body)?.addEventListener('click', startSprint);
-  if (v.phase === 'running' && v.drill) showDrill();
-  else board.set({ game: new Chess(), interactive: false });
-}
-
-/** "0:47" for a number of milliseconds. */
-function clockText(ms) {
-  const s = Math.max(0, Math.ceil(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
-
-/** Three, two, one, then the sprint begins. */
-function startSprint() {
-  stopVisionTimer();
-  vision = { phase: 'countdown', count: 3, score: 0, misses: 0, timer: null };
-  draw();
-  vision.timer = setInterval(() => {
-    const v = vision;
-    if (!v || v.phase !== 'countdown') return stopVisionTimer();
-    v.count--;
-    if (v.count > 0) {
-      const chip = $('#sprint-count');
-      if (chip) chip.textContent = String(v.count);
-      const fb = $('#feedback');
-      if (fb) fb.textContent = `Starting in ${v.count}… Each position has one enemy piece free to take.`;
-      cue('move');
-      return;
+// On a keyboard, Enter or the space bar moves on once a position is done.
+if (typeof document !== 'undefined')
+  document.addEventListener('keydown', e => {
+    if (app.page !== 'train' || !cur?.complete || document.querySelector('dialog[open]')) return;
+    if ((e.key === 'Enter' || e.key === ' ') && !(/** @type {Element} */ (e.target).closest('button, a, input, select'))) {
+      e.preventDefault();
+      next();
     }
-    stopVisionTimer();
-    beginSprint();
-  }, 1000);
-}
-
-function beginSprint() {
-  vision = { phase: 'running', score: 0, misses: 0, endsAt: Date.now() + SPRINT_MS, drill: null, timer: null, locked: false };
-  vision.drill = makeVisionDrill(visionSeeds());
-  draw();
-  cue('success');
-  vision.timer = setInterval(tickSprint, 200);
-  tickSprint();
-}
-
-function showDrill(marks = {}) {
-  const g = new Chess(vision.drill.fen);
-  board.set({ game: g, orientation: g.turn(), interactive: !vision.locked, movable: g.turn(), marks, lastMove: [] });
-  const chip = $('#board-chip');
-  if (chip) chip.textContent = turnLabel(g);
-}
-
-function tickSprint() {
-  const left = Math.max(0, vision.endsAt - Date.now());
-  const text = clockText(left);
-  for (const id of ['#sprint-time', '#sprint-left']) {
-    const el = $(id);
-    if (el && el.textContent !== text) el.textContent = text;
-  }
-  const fill = $('#sprint-fill');
-  if (fill) fill.style.width = `${(left / SPRINT_MS) * 100}%`;
-  $('#sprint-time')?.classList.toggle('urgent', left <= 10000);
-  if (left <= 0) endSprint();
-}
-
-async function visionMove(move) {
-  const v = vision;
-  if (!v || v.phase !== 'running' || v.locked) return;
-  const g = new Chess(v.drill.fen);
-  let m;
-  try {
-    m = g.move(move);
-  } catch {
-    return;
-  }
-  v.locked = true;
-  if (isVisionAnswer(v.drill, m)) {
-    v.score++;
-    $('#sprint-score').textContent = v.score;
-    feedbackVision(`Yes: ${m.san} wins the ${NAMES[v.drill.piece]}.`, 'success');
-    showDrill({ [v.drill.target]: 'good' });
-    await wait(350);
-  } else {
-    v.misses++;
-    v.endsAt -= PENALTY_MS;
-    feedbackVision(`Not that one. The free piece was the ${NAMES[v.drill.piece]} on ${v.drill.target} (${v.drill.answer}).`, 'error');
-    showDrill({ [v.drill.target]: 'answer' });
-    await wait(1100);
-  }
-  if (vision !== v || v.phase !== 'running') return;
-  v.drill = makeVisionDrill(visionSeeds());
-  v.locked = false;
-  showDrill();
-}
-
-function feedbackVision(text, tone) {
-  const el = $('#feedback');
-  if (el) {
-    el.textContent = text;
-    el.className = 'status ' + tone;
-  }
-}
-
-function endSprint() {
-  const v = vision;
-  if (!v || v.phase !== 'running') return;
-  stopVisionTimer();
-  v.phase = 'done';
-  const s = app.state;
-  s.vision = {
-    best: Math.max(s.vision.best, v.score),
-    runs: s.vision.runs + 1,
-    last: [...(s.vision.last || []), { date: dateKey(), score: v.score }].slice(-60),
-  };
-  const today = app.today();
-  today.vision = (today.vision || 0) + 1;
-  logAttempt(s, { kind: 'v', theme: 'sprint', clean: v.score > 0 });
-  app.save();
-  if (app.page === 'train') draw();
-}
-
-// ---------- Safe or hanging? ----------
-
-function stopSafeTimer() {
-  if (safe?.timer) clearInterval(safe.timer);
-  if (safe) safe.timer = null;
-}
-
-/** "Best 80% · 4 runs" from the saved runs. */
-function safeBestText() {
-  const s = app.state.calc.safe;
-  return `Best ${s.best}% · ${plural(s.runs, 'run')}`;
-}
-
-function drawSafe(body) {
-  const v = safe;
-  const n = v.items.length;
-  const block = activeBlock();
-  if (v.phase === 'done') {
-    const summary = v.summary || runSummary(v.answers);
-    body.innerHTML = `<div class="panel dark-panel"><div class="eyebrow">${block ? 'Block complete' : 'Run complete'}</div><h2>${esc(summary.text)}</h2>
-      <p>${esc(safeBestText())}</p>
-      <div class="actions">${
-        block
-          ? '<button type="button" id="session-next" class="lime">Continue session</button><button type="button" id="safe-again">Go again</button>'
-          : '<button type="button" id="safe-again" class="lime">Go again</button><button type="button" id="to-progress">See progress</button>'
-      }</div></div>`;
-    $('#session-next', body)?.addEventListener('click', continueSession);
-    $('#safe-again', body).onclick = startSafe;
-    $('#to-progress', body)?.addEventListener('click', () => app.navigate('progress'));
-    ($('#session-next', body) || $('#safe-again', body)).focus({ preventScroll: true });
-    return;
-  }
-  if (v.phase === 'ready') {
-    body.innerHTML = `
-      <div class="focus-prompt"><strong id="board-title">Safe or hanging?</strong><span class="chip" id="board-chip"></span></div>
-      <div class="focus-board"><div id="board"></div></div>
-      <div class="status" role="status">${
-        n
-          ? `${n} of your positions. The move you played is drawn. Five seconds: safe, or hanging?`
-          : 'No positions yet. Review a few of your games first: this drill is built from them.'
-      }</div>
-      <div class="focus-actions"><span class="small">${esc(safeBestText())}</span>${n ? '<button type="button" class="primary" id="safe-start">Start</button>' : ''}</div>`;
-    board = new BoardView($('#board', body), { label: 'Safe or hanging board' });
-    board.set({ game: new Chess(), interactive: false });
-    $('#safe-start', body)?.addEventListener('click', startSafe);
-    return;
-  }
-  body.innerHTML = `
-    <div class="focus-prompt"><strong id="board-title">Safe or hanging?</strong><span class="chip sprint-clock" id="drill-clock" role="timer" aria-live="off">${SAFE_SECONDS}s</span></div>
-    <div class="focus-board"><div id="board"></div></div>
-    <div class="focus-meta small" id="safe-meta"></div>
-    <div id="feedback" class="status" role="status" aria-live="polite"></div>
-    <div class="focus-actions safe-actions">
-      <button type="button" id="safe-yes">Safe</button>
-      <button type="button" id="safe-no">Hanging</button>
-    </div>`;
-  board = new BoardView($('#board', body), { label: 'Safe or hanging board' });
-  $('#safe-yes', body).onclick = () => answerSafe('safe');
-  $('#safe-no', body).onclick = () => answerSafe('hanging');
-  showSafeItem();
-}
-
-function startSafe() {
-  stopSafeTimer();
-  if (!safe?.items.length) return;
-  safe = { ...safe, phase: 'running', i: 0, answers: [], deadline: null, timer: null, locked: false, summary: null };
-  draw();
-}
-
-/** The position after the move you played: where the refutation is searched and played. */
-function fenAfterPlayed(item) {
-  const g = new Chess(item.fen);
-  playUci(g, item.uci);
-  return g;
-}
-
-/** Show the item, with the played move drawn, and start its five seconds (after one search for an old mark without a refutation). */
-async function showSafeItem() {
-  const v = safe;
-  const item = v.items[v.i];
-  if (!item) return endSafe();
-  v.locked = true;
-  const chip = $('#drill-clock');
-  for (const id of ['#safe-yes', '#safe-no']) $(id)?.removeAttribute('disabled');
-  const meta = $('#safe-meta');
-  if (meta) meta.textContent = `Your game against ${item.opponent} · you played ${item.played}`;
-  feedbackVision('', '');
-  board.set({ game: new Chess(item.fen), orientation: item.colour, interactive: false, lastMove: [], marks: {}, arrows: [] });
-  if (item.needsRefute && engine.available) {
-    if (chip) chip.textContent = 'loading';
-    try {
-      const after = fenAfterPlayed(item);
-      const r = await engine.analyse(after.fen(), { nodes: BUDGET.hint });
-      if (safe !== v || v.phase !== 'running') return;
-      if (r?.best) {
-        const mark = app.state.reviews.find(x => x.id === item.reviewId)?.marks.find(m => m.ply === item.ply);
-        if (mark) {
-          mark.refute = r.best;
-          app.save();
-        }
-        item.refute = r.best;
-        item.refuteSan = tryUci(after, r.best)?.san ?? null;
-      }
-    } catch {}
-    item.needsRefute = false;
-    if (safe !== v || v.phase !== 'running') return;
-  }
-  board.set({ arrows: [{ from: item.uci.slice(0, 2), to: item.uci.slice(2, 4), kind: 'played' }] });
-  board.announce(`Your game against ${item.opponent}: you played ${item.played}. Safe or hanging?`);
-  const prog = $('#focus-progress');
-  if (prog) prog.innerHTML = progressHTML(v.i + 1, v.items.length, null);
-  v.locked = false;
-  v.started = Date.now();
-  v.deadline = v.started + SAFE_SECONDS * 1000;
-  v.timer = setInterval(tickSafe, 100);
-  tickSafe();
-}
-
-function tickSafe() {
-  const v = safe;
-  if (!v || v.phase !== 'running' || app.page !== 'train') return stopSafeTimer();
-  const left = v.deadline - Date.now();
-  const el = $('#drill-clock');
-  if (el) {
-    el.textContent = `${Math.max(0, Math.ceil(left / 1000))}s`;
-    el.classList.toggle('urgent', left < 2000);
-  }
-  if (left <= 0) answerSafe(null);
-}
-
-/** Judge the answer (null on a timeout), show the verdict, then the next item. */
-async function answerSafe(answer) {
-  const v = safe;
-  if (!v || v.phase !== 'running' || v.locked) return;
-  const item = v.items[v.i];
-  stopSafeTimer();
-  v.locked = true;
-  for (const id of ['#safe-yes', '#safe-no']) $(id)?.setAttribute('disabled', '');
-  const verdict = judgeSafe(item, answer, answer === null ? null : Date.now() - v.started);
-  v.answers.push(verdict);
-  const s = app.state;
-  const today = app.today();
-  today.attempts++;
-  if (verdict.correct) today.clean++;
-  logAttempt(s, { kind: 'p', theme: 'safe', clean: verdict.correct });
-  app.save();
-  cue(verdict.correct ? 'success' : 'error');
-  feedbackVision(verdict.text, verdict.correct ? 'success' : 'error');
-  board.announce(verdict.text);
-  if (item.answer === 'hanging' && item.refute) {
-    const g = fenAfterPlayed(item);
-    const m = tryUci(g, item.refute);
-    board.set({ game: g, lastMove: m ? [m.from, m.to] : [] });
-  }
-  // The answer stays until you have read it: Next moves on.
-  const actions = $('.safe-actions');
-  if (!actions) return;
-  actions.innerHTML = '<button type="button" id="safe-next" class="primary">Next</button>';
-  const next = $('#safe-next', actions);
-  next.onclick = () => {
-    if (safe !== v || v.phase !== 'running') return;
-    actions.innerHTML = '<button type="button" id="safe-yes">Safe</button><button type="button" id="safe-no">Hanging</button>';
-    $('#safe-yes', actions).onclick = () => answerSafe('safe');
-    $('#safe-no', actions).onclick = () => answerSafe('hanging');
-    v.i++;
-    showSafeItem();
-  };
-  next.focus({ preventScroll: true });
-}
-
-function endSafe() {
-  const v = safe;
-  if (!v || v.phase !== 'running') return;
-  stopSafeTimer();
-  v.phase = 'done';
-  v.summary = runSummary(v.answers);
-  recordSafeRun(app.state, v.summary);
-  app.save();
-  if (app.page === 'train') draw();
-}
+  });

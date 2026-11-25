@@ -1,5 +1,18 @@
 # Changelog
 
+## 7.0.0
+
+One loop. Forty-nine releases had each added a layer and removed nothing: eight pages, eleven kinds of block in a daily plan, twenty-one settings. This one deletes everything that is not the loop.
+
+- **Train.** Open the app and you are on a board. One position at a time: positions from your own games first, with the move you played drawn on the board and one question, what was better; puzzles at your level fill in, two of yours to one of theirs while any of yours are waiting. The square you move to says right or wrong with a tick or a cross. A puzzle solved cleanly moves on by itself; your own games wait for Next, with one line on why. Two buttons while you think (Hint, Show me), one when you are done.
+- **Play.** Nemesis is the only opponent, with no options and no gate. Nothing is said about your play during the game. When it ends you are shown the one move that cost you most, and it is already among the positions you train. Nemesis no longer opens the same way every game: with no trap in reach it plays one of its candidate moves drawn by how likely a person is to play it. Colours alternate.
+- **You.** Your real rating, how it moved in 30 days, a line of three months, your other time controls small. Under it: how many positions from your games are still to fix, and your puzzle rating. The first visit asks for the name you play under, which is all the setting up there is.
+- **A new look.** Three tabs, under the thumb on a phone and along the top on a wide screen. The board runs edge to edge on a phone, and beside the words and buttons on a wide screen. One accent colour; green and red mean right and wrong and nothing else. No page titles, no cards, no header. One stylesheet of about a thousand lines replaces 4,565.
+- **Gone.** The daily plan and its session bar, the Library and every lesson, the drills (vision, safe or hanging, same clock, endgames, visualisation, checks, assessment, repertoire, opening practice), the Coach page, the game viewer and debrief, Play it again, the ladder of Stockfish opponents, the practice clock, takebacks, candidate moves, the gate and its experiment, Proof, the losing-streak diagnosis and stop line, the goal and its projection, and most of the settings. Seven are left: two usernames, appearance, board, pieces, sound, vibration.
+- **Your games are read, not kept.** Every rated blitz, rapid and classical game of the last two months is still read in the background, losses first, and each move that threw away a clearly better one becomes a position. The games themselves are no longer stored, only the positions and which games were read. The deeper second look now works on the positions directly and removes the ones where your move was fine.
+- **Your data.** Saved progress carries over: accounts, real ratings, puzzle rating, every saved position with when it is due, which games were already read, board and pieces. Everything else is dropped from the saved state, which is why it is far smaller. The whole of your pre-7.0 data is set aside once on the first load; Settings offers it as a download until you discard it. Backups from any earlier version still import.
+- **Fixed on the way.** The settings sheet no longer opens the phone keyboard on its first field.
+
 ## 6.0.1
 
 - **The gate asks nothing.** It no longer stops you to tap where the reply lands. A capture or check now waits two seconds before it is played, shown on the board as it will be, with Take it back to hand; left alone, it is played and judged safe or not against the engine. The pause is the habit; the verdict is the lesson.

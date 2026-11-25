@@ -1,9 +1,8 @@
-// Pull your real ratings from the linked accounts and keep the goal in step.
+// Pull your real ratings from the linked accounts, so the You page shows
+// where you stand without being asked.
 import { app } from './app-context.js';
 import { lichessRatings, chessComRatings, mergeRatings } from './ratings.js';
-import { updateGoal } from './progress-model.js';
 import { dateKey } from './state.js';
-import { toast } from './ui.js';
 
 // Ratings move after every game, so check often but not on every focus.
 // A sync that finds a new game also forces a check at once.
@@ -11,7 +10,7 @@ const GAP_MS = 10 * 60000;
 let running = false;
 const listeners = new Set();
 
-/** Be told when a sync changed the ratings (Today redraws its goal). */
+/** Be told when a sync changed the ratings. */
 export function onRatingsChange(fn) {
   listeners.add(fn);
   return () => listeners.delete(fn);
@@ -28,23 +27,20 @@ export async function syncRatings({ force = false, fetchImpl = fetch, now = Date
   let changed = 0;
   const errors = [];
   const results = [];
-  const prefer = s.settings.perf || 'auto';
-  if (names.lichess) results.push(lichessRatings(names.lichess, fetchImpl, now, prefer).catch(e => errors.push(e.message)));
-  if (names.chesscom) results.push(chessComRatings(names.chesscom, fetchImpl, prefer, now).catch(e => errors.push(e.message)));
+  if (names.lichess) results.push(lichessRatings(names.lichess, fetchImpl, now).catch(e => errors.push(e.message)));
+  if (names.chesscom) results.push(chessComRatings(names.chesscom, fetchImpl, 'auto', now).catch(e => errors.push(e.message)));
   const fetched =
     /** @type {{ perf: string, rating: number, history: { date: string, rating: number }[], all?: Record<string, number> }[]} */ (
       (await Promise.all(results)).filter(r => r && typeof r === 'object')
     );
   for (const r of fetched) changed += mergeRatings(s.ratings, r, dateKey(new Date(now)));
+  // The time control you play most on each site is the one followed; the rest are shown small.
   if (fetched.length) s.sync.followed = fetched.map(r => r.perf);
-  // Every time control's current rating, for the tiles on Today.
   for (const r of fetched) if (r.all) s.sync.perfs = { ...(s.sync.perfs || {}), ...r.all };
   s.sync.ratingsAt = now;
-  const milestone = updateGoal(s, new Date(now));
   app.save();
   running = false;
-  if (changed || milestone) for (const fn of listeners) fn();
-  if (milestone) toast(`Target reached: ${milestone.target}! Your next target is ${s.target.target}.`, { duration: 9000 });
+  if (changed) for (const fn of listeners) fn();
   return { changed, errors };
 }
 

@@ -20,18 +20,3 @@ export function judgeAlternative({ before, after, mateExpected = false, remainin
   if (loss <= tolerance && winPercent(-after.score) >= minWin) return { accepted: true, loss };
   return { accepted: false, loss, reason: loss <= 25 ? 'weaker' : 'mistake' };
 }
-
-export function rejectionMessage(reason) {
-  switch (reason) {
-    case 'slower-mate':
-      return 'That still mates, but more slowly. Find the fastest mate.';
-    case 'no-mate':
-      return 'That lets the king escape. Look for a forcing move that keeps the mating net.';
-    case 'weaker':
-      return 'A reasonable move, but there is something stronger. Look again.';
-    case 'mistake':
-      return 'That gives away the advantage. Check the opponent’s best reply, then try again.';
-    default:
-      return 'That is not the solution. Check the opponent’s best reply, then try again.';
-  }
-}

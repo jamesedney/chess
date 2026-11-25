@@ -23,13 +23,3 @@ export function pushHistory(history, date, rating) {
   out.push({ date, rating });
   return out.slice(-365);
 }
-
-/** The theme with the lowest rating among those with enough attempts. */
-export function weakestTheme(themes, minCount = 3) {
-  let weakest = null;
-  for (const [name, t] of Object.entries(themes)) {
-    if (t.count < minCount) continue;
-    if (!weakest || t.rating < themes[weakest].rating) weakest = name;
-  }
-  return weakest;
-}

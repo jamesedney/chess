@@ -35,7 +35,7 @@ function moduleGraph(entry) {
 test('versions agree across package.json, the app and the service worker', () => {
   const { VERSION } = serviceWorker();
   assert.equal(VERSION, JSON.parse(read('package.json')).version);
-  assert.match(read('src/main.js'), new RegExp(`VERSION = '${VERSION.replace(/\./g, '\\.')}'`));
+  assert.match(read('src/settings.js'), new RegExp(`VERSION = '${VERSION.replace(/\./g, '\\.')}'`));
 });
 
 test('every precached file exists', () => {
@@ -47,9 +47,9 @@ test('every precached file exists', () => {
 
 test('every Maia level has its network deployed, and the staged site contains every file', async () => {
   const { FILES, LAZY_FILES } = serviceWorker();
-  const { LEVELS } = await import('../../src/strength.js');
-  for (const l of LEVELS.filter(l => l.mode === 'maia'))
-    assert.ok(LAZY_FILES.includes(`./maia/maia-${l.maia}.bin`), `maia ${l.maia} not deployed`);
+  const { maiaFor } = await import('../../src/nemesis.js');
+  for (const rating of [600, 1299, 1300, 1699, 1700, 2600])
+    assert.ok(LAZY_FILES.includes(`./maia/maia-${maiaFor(rating)}.bin`), `maia ${maiaFor(rating)} not deployed`);
   for (const f of LAZY_FILES) assert.ok(fs.existsSync(path.join(root, f)), 'missing ' + f);
   // Stage the site exactly as the Pages workflow does and check nothing the app fetches is left out.
   const { execFileSync } = await import('node:child_process');

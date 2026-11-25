@@ -1,5 +1,5 @@
-// Shared application state and helpers used by every page.
-import { loadState, saveState, recoveryKeys, dateKey } from './state.js';
+// Shared application state and helpers used by every screen.
+import { loadState, saveState, recoveryKeys } from './state.js';
 import { puzzles } from '../data/puzzles.js';
 import { toast } from './ui.js';
 
@@ -28,49 +28,22 @@ export const app = {
   storageOK: !!storage && loaded.storageOK,
   recovered: loaded.recovered,
   restored: loaded.restored,
-  builtIn: puzzles,
+  puzzles,
   page: null,
   /** @type {(name: string, params?: Record<string, any>) => void} */
   navigate: () => {},
-  /** Opens the settings dialog; set by main.js. */
-  openSettings: () => {},
 
   save() {
     try {
       if (!storage) throw new Error('no storage');
-      try {
-        saveState(storage, this.state);
-      } catch (e) {
-        // Storage full: the oldest reviews go first (their saved positions stay), then try once more.
-        const reviews = this.state.reviews;
-        if (!storage || reviews.length <= 50) throw e;
-        this.state.reviews = reviews.slice(0, Math.floor(reviews.length * 0.7));
-        saveState(storage, this.state);
-      }
+      saveState(storage, this.state);
     } catch {
+      if (this.storageOK) toast('Progress could not be saved. Storage is unavailable or full. Export a backup in Settings.');
       this.storageOK = false;
-      toast('Progress could not be saved. Storage is unavailable or full. Export a backup in Settings.');
     }
   },
 
   recoveryKeys() {
     return storage ? recoveryKeys(storage) : [];
-  },
-
-  activeMistakes() {
-    return this.state.mistakes.filter(m => !m.archived);
-  },
-
-  allPuzzles() {
-    return [...this.activeMistakes(), ...puzzles];
-  },
-
-  findPuzzle(id) {
-    return this.state.mistakes.find(m => m.id === id) || puzzles.find(p => p.id === id) || null;
-  },
-
-  today() {
-    const k = dateKey();
-    return (this.state.days[k] ||= { attempts: 0, clean: 0 });
   },
 };

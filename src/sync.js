@@ -8,13 +8,14 @@ export const DEFAULT_SYNC = () => ({
   auto: true,
   ratedOnly: true,
   controls: ['blitz', 'rapid', 'classical'],
-  minMoves: 10,
-  dailyCap: 5,
-  last: { lichess: 0, chesscom: 0 },
-  seen: [],
-  today: { d: '', n: 0 },
-  ledgerAt: 0, // when the game ledger was first filled (ms); 0 until the first sync after 5.0
+  last: { lichess: 0, chesscom: 0 }, // where the next fetch from each site starts (ms)
+  seen: [], // keys of games already looked at
+  reviewed: [], // keys of games already read for mistakes
+  failed: [], // keys of games the engine could not read
+  backfillAt: 0, // when the first, two-month fetch was done (ms); 0 until then
 });
+/** Keys of read games kept, so a game is never read twice. */
+export const MAX_REVIEWED = 600;
 const FIRST_SYNC_DAYS = 7;
 const MAX_SEEN = 300;
 /** Every game this recent is reviewed, including games from earlier syncs that never were. */
@@ -23,9 +24,9 @@ export const REVIEW_DAYS = 60;
 export const REVIEW_MIN_MOVES = 5;
 /** Games the engine could not review, kept so they are not queued again every sync. */
 export const MAX_FAILED = 100;
-/** The ledger's first fill reaches back this far, this many games; later syncs fetch SYNC_MAX. */
-export const LEDGER_DAYS = 60;
-export const LEDGER_MAX = 200;
+/** The first fetch reaches back this far, this many games; later syncs fetch SYNC_MAX. */
+export const BACKFILL_DAYS = 60;
+export const BACKFILL_MAX = 200;
 export const SYNC_MAX = 60;
 const DAY = 86400000;
 
@@ -91,7 +92,7 @@ export function acceptGame(pgn, usernames, sync, { rated = null, control = null 
     return { ok: false, reason: 'unreadable' };
   }
   const loss = h.Result === (colour === 'w' ? '0-1' : '1-0');
-  if (moves < Math.min(sync.minMoves, REVIEW_MIN_MOVES) * 2) return { ok: false, reason: 'too short' };
+  if (moves < Math.min(sync.minMoves ?? REVIEW_MIN_MOVES, REVIEW_MIN_MOVES) * 2) return { ok: false, reason: 'too short' };
   return { ok: true, colour, loss, plies: moves };
 }
 
@@ -104,18 +105,18 @@ function startMs(pgn) {
 }
 
 /**
- * Fetch games from Lichess. The first sync after 5.0 reaches back LEDGER_DAYS
- * to fill the game ledger; games before the normal window are returned with
- * `fresh: false` so they feed the ledger but are not queued for review.
+ * Fetch games from Lichess. The first sync of an account reaches back
+ * BACKFILL_DAYS; games from before the normal window come back with
+ * `fresh: false`, and selectNew queues the ones never read.
  */
 export async function fetchLichessNew(username, sync, { fetchImpl = fetch, now = Date.now() } = {}) {
   const normalSince = sync.last.lichess || now - FIRST_SYNC_DAYS * DAY;
-  // The 60-day backfill runs on the first sync after 5.0 and on the first sync of a Lichess account linked later.
-  const backfill = !sync.ledgerAt || !sync.last.lichess;
-  const since = backfill ? Math.min(normalSince, now - LEDGER_DAYS * DAY) : normalSince;
+  // The two-month backfill runs on the first sync, and on the first sync of a Lichess account linked later.
+  const backfill = !sync.backfillAt || !sync.last.lichess;
+  const since = backfill ? Math.min(normalSince, now - BACKFILL_DAYS * DAY) : normalSince;
   let res;
   try {
-    res = await fetchImpl(lichessUrl(username, sync, since, backfill ? LEDGER_MAX : SYNC_MAX), {
+    res = await fetchImpl(lichessUrl(username, sync, since, backfill ? BACKFILL_MAX : SYNC_MAX), {
       headers: { Accept: 'application/x-chess-pgn' },
     });
   } catch {
@@ -146,7 +147,7 @@ export async function fetchChessComNew(username, sync, { fetchImpl = fetch, now 
   for (const url of archives) {
     const r = await fetchImpl(url);
     if (!r.ok) continue;
-    // Every game in the two archives feeds the ledger; only games after `since` are fresh.
+    // Every game in the two newest archives comes back; only games after `since` are fresh.
     for (const g of ((await r.json()).games || []).reverse()) {
       if (!g.pgn || g.rules !== 'chess') continue;
       const control = g.time_class === 'daily' ? 'correspondence' : g.time_class || null;
@@ -192,7 +193,7 @@ export function selectNew(fetched, { usernames, sync, source, now = Date.now(), 
   });
   for (const g of fetched) {
     const key = gameKey(g.pgn);
-    // Older games feed the ledger; those not yet reviewed are queued, and they are not marked seen.
+    // Older games not yet read are queued, and they are not marked seen.
     if (g.fresh === false || sync.seen.includes(key)) {
       if (reviewed.has(key) || failed.has(key)) continue;
       const when = g.ended ?? startMs(g.pgn);

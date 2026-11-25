@@ -1,7 +1,7 @@
-// Read your real ratings from Lichess and Chess.com, so the goal tracks itself.
+// Read your real ratings from Lichess and Chess.com, so the You screen tracks itself.
 // Public endpoints only; nothing needs a login.
 
-/** Time controls a goal can follow. */
+/** Time controls a rating can be followed in. */
 export const RATING_PERFS = ['bullet', 'blitz', 'rapid', 'classical'];
 const AUTO = ['rapid', 'blitz', 'classical'];
 const CAP = s => s[0].toUpperCase() + s.slice(1);
@@ -143,4 +143,32 @@ export function mergeRatings(ratings, { perf, rating, history }, today) {
 /** The dated series for one platform, for charts and the projection. */
 export function seriesFor(ratings, perf) {
   return ratings.filter(r => r.platform === perf).map(r => ({ date: r.date, rating: r.rating }));
+}
+
+/**
+ * The rating the app follows: of the time controls the last sync named, the
+ * one with the most history. Returns { perf, series, rating } (series oldest
+ * first) or null when no real rating is known.
+ */
+export function mainRating(state) {
+  const followed = state.sync?.followed || [];
+  const names = followed.length ? followed : [...new Set(state.ratings.map(r => r.platform))];
+  let best = null;
+  for (const perf of names) {
+    const series = seriesFor(state.ratings, perf);
+    if (series.length && (!best || series.length > best.series.length)) best = { perf, series, rating: series.at(-1).rating };
+  }
+  return best;
+}
+
+/**
+ * How a dated series moved over the last `days`: { from, change } against the
+ * last value at least that old, or the oldest there is. Null with fewer than
+ * two points.
+ */
+export function trend(series, days = 30, today = new Date()) {
+  if (series.length < 2) return null;
+  const cut = new Date(today.getTime() - days * 86400000).toISOString().slice(0, 10);
+  const old = series.findLast(p => p.date <= cut) || series[0];
+  return { from: old.date, change: series.at(-1).rating - old.rating };
 }

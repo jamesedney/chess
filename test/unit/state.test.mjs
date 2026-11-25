@@ -2,237 +2,284 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   defaults,
-  migrate,
   validate,
+  migrate,
   parseState,
   loadState,
-  logAttempt,
-  RECOVERY_PREFIX,
-  STORAGE_KEY,
-  CURRENT_VERSION,
-  MIGRATIONS,
-  MAX_LOG,
-  streaks,
+  saveState,
+  recoveryKeys,
   dateKey,
+  CURRENT_VERSION,
+  STORAGE_KEY,
+  RECOVERY_PREFIX,
+  LEGACY_KEY,
 } from '../../src/state.js';
 
-// A backup in the format written by Rankup 1.0.
-const V1 = {
-  version: 1,
-  records: { p001: { tries: 2, clean: 1, box: 1, due: 1, last: 1 } },
-  mistakes: [
-    {
-      id: 'mabc',
-      title: 'Instead of Nf3',
-      fen: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2',
-      line: ['g1f3', 'b8c6', 'f1c4'],
-      theme: 'Personal mistakes',
-      level: 2,
-      goal: 'Find the improvement.',
-      explanation: 'x',
-      played: 'Qh5',
-      loss: 150,
-      created: 1,
-    },
-  ],
-  days: { '2026-10-01': { attempts: 8, clean: 6 } },
-  read: [0, 2],
-  ratings: [{ rating: 1210, platform: 'Chess.com rapid', date: '2026-10-01' }],
-  level: 2,
-  goal: 12,
-  coach: false,
-  skill: 8,
-};
-
-test('defaults are valid', () => {
-  assert.equal(validate(defaults()), null);
-});
-
-test('a version 1 backup migrates without losing progress', () => {
-  const s = migrate(V1);
-  assert.equal(validate(s), null);
-  assert.equal(s.version, CURRENT_VERSION);
-  assert.deepEqual(s.records, V1.records);
-  assert.equal(s.mistakes[0].id, 'mabc');
-  assert.deepEqual(s.mistakes[0].tags, []);
-  assert.equal(s.goal, 12);
-  assert.equal(s.coach, false);
-  assert.equal(s.strength, 'elo1600');
-  assert.equal(s.puzzle.rating, 1400, 'Calculation stage seeds the puzzle rating');
-  assert.deepEqual(s.ratings, V1.ratings);
-});
-
-test('invalid data is rejected', () => {
-  assert.throws(() => parseState(`{"version":${CURRENT_VERSION + 1}}`));
-  assert.throws(() => parseState('not json'));
-  const bad = defaults();
-  bad.mistakes.push({ id: 'mx', fen: '8/8/8/8/8/8/8/8 w - - 0 1', line: ['e2e4'] });
-  assert.notEqual(validate(bad), null);
-  const badMove = defaults();
-  badMove.mistakes.push({ id: 'my', fen: V1.mistakes[0].fen, line: ['e2e5'] });
-  assert.match(validate(badMove), /mistake/);
-});
-
-function fakeStorage(initial = {}) {
-  const data = { ...initial };
-  return {
-    data,
-    getItem: k => (k in data ? data[k] : null),
-    setItem: (k, v) => (data[k] = String(v)),
-    removeItem: k => delete data[k],
-    key: i => Object.keys(data)[i],
-    get length() {
-      return Object.keys(data).length;
-    },
-  };
+class FakeStorage {
+  constructor(initial = {}) {
+    this.map = new Map(Object.entries(initial));
+  }
+  get length() {
+    return this.map.size;
+  }
+  key(i) {
+    return [...this.map.keys()][i] ?? null;
+  }
+  getItem(k) {
+    return this.map.has(k) ? this.map.get(k) : null;
+  }
+  setItem(k, v) {
+    this.map.set(k, String(v));
+  }
+  removeItem(k) {
+    this.map.delete(k);
+  }
 }
 
-test('unreadable saved data is kept under a recovery key', () => {
-  const storage = fakeStorage({ [STORAGE_KEY]: '{broken' });
-  const out = loadState(storage, 42);
-  assert.equal(out.recovered, true);
-  assert.equal(storage.data[RECOVERY_PREFIX + 42], '{broken');
-  assert.equal(validate(out.state), null);
+const BACK_RANK = '6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1';
+const mistake = (extra = {}) => ({
+  id: 'mabc1',
+  title: 'Instead of h3',
+  fen: BACK_RANK,
+  line: ['e1e8'],
+  theme: 'Personal mistakes',
+  tags: ['mate'],
+  goal: 'Deliver checkmate in one.',
+  explanation: 'You had a forced mate in 1 starting with Re8#.',
+  kind: 'missed-mate',
+  played: 'h3',
+  loss: 61,
+  created: 1700000000000,
+  source: { reviewId: 'rxyz1', ply: 40 },
+  ...extra,
 });
 
-test('saved v1 data loads at the current version', () => {
-  const out = loadState(fakeStorage({ [STORAGE_KEY]: JSON.stringify(V1) }));
-  assert.equal(out.recovered, false);
-  assert.equal(out.state.version, CURRENT_VERSION);
+/** A state as 6.0 saved it (version 11), with the fields 7.0 reads and plenty it does not. */
+const v11 = (extra = {}) => ({
+  version: 11,
+  records: { mabc1: { tries: 2, clean: 1, box: 1, due: 5, last: 4 }, p001: { tries: 1, clean: 1, box: 1, due: 9, last: 8 } },
+  mistakes: [mistake(), mistake({ id: 'mprac', source: { practice: true }, fen: '7k/8/5KQ1/8/8/8/8/8 w - - 0 1', line: ['g6g7'] })],
+  ratings: [{ rating: 1254, platform: 'Chess.com blitz', date: '2026-10-27' }],
+  puzzle: { rating: 1420, count: 300, history: [{ date: '2026-10-27', rating: 1420, extra: 1 }] },
+  profiles: { lichess: '', chesscom: 'JamesAE95' },
+  reviews: [
+    {
+      id: 'rxyz1',
+      gameKey: 'www.chess.com/game/live/1',
+      white: 'JamesAE95',
+      black: 'rival',
+      colour: 'w',
+      date: '2026-10-26',
+      complete: true,
+      moves: ['e4'],
+      evals: [0, 0],
+      marks: [{ ply: 40, mistakeId: 'mabc1', deep: true }],
+    },
+    { id: 'rxyz2', site: 'https://lichess.org/abcd1234/black', complete: true, moves: [], evals: [], marks: [] },
+    { id: 'rxyz3', gameKey: 'lichess.org/half', complete: false, moves: [], evals: [], marks: [] },
+  ],
+  settings: { board: 'ocean', pieces: 'merida', sound: false, haptics: true, autoLevel: true, colour: 'r', nemesis: true },
+  sync: {
+    auto: true,
+    ratedOnly: true,
+    controls: ['blitz'],
+    minMoves: 10,
+    dailyCap: 5,
+    last: { lichess: 0, chesscom: 1761000000000 },
+    seen: ['www.chess.com/game/live/1'],
+    failed: ['www.chess.com/game/live/9'],
+    ledgerAt: 1760000000000,
+    followed: ['Chess.com blitz'],
+    perfs: { 'Chess.com blitz': 1254 },
+  },
+  log: [{ d: '2026-10-27', k: 'p', t: 'Tactics', c: 1 }],
+  ledger: [{ k: 'x' }],
+  gate: { stage: 3, set: 'proof', since: null },
+  session: { date: '2026-10-27', blocks: [] },
+  lessons: { forks: { step: 2, done: false } },
+  ...extra,
 });
 
-test('every version has exactly one migration to the next', () => {
-  for (let v = 1; v < CURRENT_VERSION; v++) assert.equal(MIGRATIONS.filter(m => m.from === v).length, 1, `from ${v}`);
-  assert.equal(MIGRATIONS.length, CURRENT_VERSION - 1);
+test('defaults are valid, and hold only what the app uses', () => {
+  const d = defaults();
+  assert.equal(validate(d), null);
+  assert.deepEqual(Object.keys(d).sort(), ['mistakes', 'profiles', 'puzzle', 'ratings', 'records', 'settings', 'sync', 'version']);
+  assert.equal(d.version, CURRENT_VERSION);
 });
 
-test('a version 2 state gains kinds, a log, drills and settings', () => {
-  const v2 = migrate(V1);
-  const asV2 = { ...v2, version: 2 };
-  for (const k of ['log', 'plan', 'endgames', 'calc', 'settings']) delete asV2[k];
-  asV2.mistakes = [
-    { ...V1.mistakes[0], tags: [], kind: undefined, explanation: 'Qh5 allowed a forced mate in 2, starting with Qxf2+.' },
-    { ...V1.mistakes[0], id: 'mdef', tags: [], explanation: 'Qh5 left your knight on c3 exposed: Bxc3 wins material.' },
-  ];
-  delete asV2.mistakes[0].kind;
-  const s = migrate(asV2);
+test('a 6.0 state keeps accounts, ratings, positions and their schedule, and drops the rest', () => {
+  const s = migrate(v11());
+  assert.equal(validate(s), null);
+  assert.equal(s.version, CURRENT_VERSION);
+  assert.deepEqual(s.profiles, { lichess: '', chesscom: 'JamesAE95' });
+  assert.deepEqual(s.puzzle, { rating: 1420, count: 300, history: [{ date: '2026-10-27', rating: 1420 }] });
+  assert.deepEqual(s.ratings, [{ rating: 1254, platform: 'Chess.com blitz', date: '2026-10-27' }]);
+  assert.deepEqual(Object.keys(s.records), ['mabc1', 'p001']);
+  // A position from an online game says who it was against; one from a practice game does not.
+  assert.deepEqual(s.mistakes[0], {
+    id: 'mabc1',
+    fen: BACK_RANK,
+    line: ['e1e8'],
+    played: 'h3',
+    explanation: 'You had a forced mate in 1 starting with Re8#.',
+    loss: 61,
+    created: 1700000000000,
+    deep: true,
+    game: { opp: 'rival', date: '2026-10-26' },
+  });
+  assert.equal(s.mistakes[1].game, null);
+  assert.equal(s.mistakes[1].deep, undefined);
+  // Games already read are not read again: by their key, or by their Site when the key was never saved.
+  assert.deepEqual(s.sync.reviewed, ['www.chess.com/game/live/1', 'lichess.org/abcd1234']);
+  assert.equal(s.sync.backfillAt, 1760000000000);
+  assert.deepEqual(s.sync.controls, ['blitz']);
+  assert.deepEqual(s.sync.failed, ['www.chess.com/game/live/9']);
+  assert.deepEqual(s.sync.followed, ['Chess.com blitz']);
+  assert.equal(s.sync.dailyCap, undefined);
+  assert.deepEqual(s.settings, { board: 'ocean', pieces: 'merida', sound: false, haptics: true });
+  for (const gone of ['reviews', 'log', 'ledger', 'gate', 'session', 'lessons']) assert.equal(s[gone], undefined, gone);
+});
+
+test('a version 1 backup still loads', () => {
+  const s = migrate({ version: 1, level: 2, mistakes: [mistake({ source: undefined, played: undefined })], records: {}, ratings: [] });
+  assert.equal(validate(s), null);
+  assert.equal(s.mistakes[0].played, 'h3', 'read from the old title');
+  assert.equal(s.puzzle.rating, defaults().puzzle.rating);
+  assert.equal(s.settings.board, defaults().settings.board);
+});
+
+test('the old default boards move to the current default; a board you chose stays', () => {
+  assert.equal(migrate(v11({ version: 7, settings: { board: 'walnut' } })).settings.board, 'green');
+  assert.equal(migrate(v11({ version: 9, settings: { board: 'grey' } })).settings.board, 'green');
+  assert.equal(migrate(v11({ version: 10, settings: { board: 'grey' } })).settings.board, 'grey');
+  assert.equal(migrate(v11({ version: 10, settings: { board: 'walnut' } })).settings.board, 'walnut');
+  assert.equal(migrate(v11({ settings: { board: 'no-such-board', pieces: 'nope' } })).settings.pieces, 'cburnett');
+});
+
+test('old data that 7.0 cannot use is dropped item by item, not the whole state', () => {
+  const s = migrate(
+    v11({
+      mistakes: [mistake(), mistake({ id: 'mbad1', line: ['a1a8'] }), mistake({ id: '<img>', line: ['e1e8'] }), null],
+      records: { ok1: { tries: 1, clean: 0, box: 0, due: 1 }, bad: { tries: -1 }, 'x<y': { tries: 1, clean: 0, box: 0, due: 1 } },
+      ratings: [{ rating: 1200, platform: 'Lichess blitz', date: '2026-01-01' }, { rating: 'x' }],
+    }),
+  );
   assert.equal(validate(s), null);
   assert.deepEqual(
-    s.mistakes.map(m => m.kind),
-    ['allowed-mate', 'hung-piece'],
+    s.mistakes.map(m => m.id),
+    ['mabc1'],
   );
-  assert.deepEqual(s.log, []);
-  assert.equal(s.settings.board, 'green');
-  assert.equal(s.settings.sound, true);
-  assert.deepEqual(s.calc.visual, { best: 0, runs: 0, last: [] });
+  assert.deepEqual(Object.keys(s.records), ['ok1']);
+  assert.equal(s.ratings.length, 1);
 });
 
-test('newer or malformed versions are refused', () => {
+test('invalid current data is rejected, and newer or malformed versions are refused', () => {
+  const bad = change => {
+    const s = defaults();
+    change(s);
+    return validate(s);
+  };
+  assert.equal(
+    bad(s => s.mistakes.push({ id: 'm1', fen: BACK_RANK, line: ['a1a8'], played: 'h3', explanation: '' })),
+    'mistake position',
+  );
+  assert.equal(
+    bad(s => s.mistakes.push({ id: '<b>', fen: BACK_RANK, line: ['e1e8'], played: 'h3', explanation: '' })),
+    'mistake',
+  );
+  assert.equal(
+    bad(s => (s.records['a<b'] = { tries: 1, clean: 0, box: 0, due: 0 })),
+    'record id',
+  );
+  assert.equal(
+    bad(s => (s.records.p1 = { tries: 1, clean: 0, box: 9, due: 0 })),
+    'record',
+  );
+  assert.equal(
+    bad(s => (s.settings.board = 'nope')),
+    'settings',
+  );
+  assert.equal(
+    bad(s => (s.sync.reviewed = [1])),
+    'sync',
+  );
+  assert.equal(
+    bad(s => (s.puzzle.rating = 9999)),
+    'puzzle rating',
+  );
   assert.throws(() => migrate({ version: CURRENT_VERSION + 1 }), /Unsupported/);
-  assert.throws(() => migrate({ version: '2' }), /Unsupported/);
+  assert.throws(() => migrate({ version: 'x' }), /Unsupported/);
+  assert.throws(() => migrate(null), /Not a Rankup state/);
+  assert.throws(() => parseState('{"version":12,"puzzle":5}'), /Invalid state/);
 });
 
-test('a backup missing a later-added setting gets the default', () => {
+test('a backup missing a later-added field gets the default', () => {
   const s = defaults();
   delete s.settings.haptics;
-  const out = migrate(s);
-  assert.equal(out.settings.haptics, true);
-  assert.equal(validate(out), null);
+  delete s.sync.failed;
+  const back = parseState(JSON.stringify(s));
+  assert.equal(back.settings.haptics, true);
+  assert.deepEqual(back.sync.failed, []);
 });
 
-test('the attempt log is validated and bounded', () => {
-  const s = defaults();
-  logAttempt(s, { kind: 'p', theme: 'Tactics', clean: true, date: '2026-10-01' });
-  assert.deepEqual(s.log, [{ d: '2026-10-01', k: 'p', t: 'Tactics', c: 1 }]);
-  assert.equal(validate(s), null);
-  for (let i = 0; i < MAX_LOG + 10; i++) logAttempt(s, { kind: 'p', theme: 'Tactics', clean: false, date: '2026-10-02' });
-  assert.equal(s.log.length, MAX_LOG);
-  s.log.push({ d: 'bad', k: 'p', t: '', c: 1 });
-  assert.equal(validate(s), 'log entry');
-  const t = defaults();
-  t.settings.board = 'neon';
-  assert.equal(validate(t), 'settings');
+test('data saved before 7.0 is copied aside once, whole, before it is slimmed', () => {
+  const raw = JSON.stringify(v11());
+  const storage = new FakeStorage({ [STORAGE_KEY]: raw });
+  const { state, recovered, restored } = loadState(storage, 1000);
+  assert.equal(state.version, CURRENT_VERSION);
+  assert.equal(recovered, false);
+  assert.equal(restored, false);
+  assert.equal(storage.getItem(LEGACY_KEY), raw);
+  assert.deepEqual(recoveryKeys(storage), [], 'it is not treated as unreadable data');
+  // Saving and loading again leaves the copy alone and adds no other.
+  saveState(storage, state);
+  storage.setItem(LEGACY_KEY, 'kept');
+  loadState(storage, 2000);
+  assert.equal(storage.getItem(LEGACY_KEY), 'kept');
+  // A storage too full for the copy still loads.
+  const full = new FakeStorage({ [STORAGE_KEY]: raw });
+  full.setItem = () => {
+    throw new Error('quota');
+  };
+  assert.equal(loadState(full, 1000).state.mistakes.length, 2);
+});
+
+test('unreadable saved data is kept under a recovery key', () => {
+  const storage = new FakeStorage({ [STORAGE_KEY]: '{not json' });
+  const { state, recovered } = loadState(storage, 1234);
+  assert.equal(recovered, true);
+  assert.equal(validate(state), null);
+  assert.equal(storage.getItem(RECOVERY_PREFIX + 1234), '{not json');
+  assert.equal(storage.getItem(STORAGE_KEY), null);
+});
+
+test('a recovery copy that reads again comes back when it holds more history, and broken copies are skipped', () => {
+  const heavy = migrate(v11());
+  const storage = new FakeStorage({
+    [RECOVERY_PREFIX + 1]: JSON.stringify(heavy),
+    [RECOVERY_PREFIX + 2]: '{broken',
+  });
+  const { state, restored } = loadState(storage, 5000);
+  assert.equal(restored, true);
+  assert.equal(state.mistakes.length, 2);
+  assert.equal(JSON.parse(storage.getItem(STORAGE_KEY)).puzzle.count, 300);
+  assert.deepEqual(recoveryKeys(storage), [RECOVERY_PREFIX + 2]);
+  // A lighter copy is not restored over more history.
+  const light = new FakeStorage({ [STORAGE_KEY]: JSON.stringify(heavy), [RECOVERY_PREFIX + 1]: JSON.stringify(defaults()) });
+  assert.equal(loadState(light, 5000).restored, false);
 });
 
 test('blocked storage is reported', () => {
-  const out = loadState({
+  const blocked = {
     getItem() {
       throw new Error('denied');
     },
-  });
-  assert.equal(out.storageOK, false);
-});
-
-test('streaks count consecutive active days, including vision sprints', () => {
-  const today = new Date(2026, 9, 7);
-  const day = n => dateKey(new Date(2026, 9, 7 - n));
-  const days = {
-    [day(0)]: { attempts: 3, clean: 1 },
-    [day(1)]: { attempts: 0, clean: 0, vision: 1 },
-    [day(2)]: { attempts: 5, clean: 5 },
-    [day(5)]: { attempts: 1, clean: 0 },
   };
-  assert.deepEqual(streaks(days, today), { current: 3, best: 3 });
-  const yesterdayOnly = { [day(1)]: { attempts: 1, clean: 1 } };
-  assert.equal(streaks(yesterdayOnly, today).current, 1, 'a streak survives until the day ends');
+  const { state, storageOK } = loadState(blocked);
+  assert.equal(storageOK, false);
+  assert.equal(validate(state), null);
 });
 
-test('debrief, replay and repertoire log entries are valid saved data', () => {
-  const s = defaults();
-  for (const k of ['b', 'r', 'o']) s.log.push({ d: '2026-10-11', k, t: 'x', c: 1 });
-  assert.equal(validate(s), null);
-});
-
-/** A state with some history: reviews and log entries from the v4 features. */
-function withHistory(n) {
-  const s = defaults();
-  s.onboarded = true;
-  for (let i = 0; i < n; i++) s.log.push({ d: '2026-10-11', k: ['b', 'r', 'o', 'p'][i % 4], t: 'chance', c: 1 });
-  return s;
-}
-
-test('a copy set aside by the 4.0 log bug is brought back when it holds more history', () => {
-  const lost = withHistory(40);
-  const fresh = withHistory(2);
-  const storage = fakeStorage({ [STORAGE_KEY]: JSON.stringify(fresh), [RECOVERY_PREFIX + 1]: JSON.stringify(lost) });
-  const out = loadState(storage, 100);
-  assert.equal(out.restored, true);
-  assert.equal(out.recovered, false);
-  assert.equal(out.state.log.length, 40);
-  assert.equal(JSON.parse(storage.data[STORAGE_KEY]).log.length, 40);
-  // The state it replaced is kept, and the restored copy is no longer a recovery copy.
-  assert.equal(storage.data[RECOVERY_PREFIX + 1], undefined);
-  assert.equal(JSON.parse(storage.data[RECOVERY_PREFIX + 101]).log.length, 2);
-  // Loading again changes nothing.
-  assert.equal(loadState(storage, 200).restored, false);
-});
-
-test('a recovery copy is not restored over more history, and broken copies are skipped', () => {
-  const storage = fakeStorage({
-    [STORAGE_KEY]: JSON.stringify(withHistory(10)),
-    [RECOVERY_PREFIX + 1]: JSON.stringify(withHistory(5)),
-    [RECOVERY_PREFIX + 2]: '{broken',
-  });
-  const out = loadState(storage, 100);
-  assert.equal(out.restored, false);
-  assert.equal(out.state.log.length, 10);
-});
-
-test('the heaviest readable recovery copy wins', () => {
-  const storage = fakeStorage({
-    [RECOVERY_PREFIX + 1]: JSON.stringify(withHistory(30)),
-    [RECOVERY_PREFIX + 2]: JSON.stringify(withHistory(3)),
-  });
-  const out = loadState(storage, 100);
-  assert.equal(out.restored, true);
-  assert.equal(out.state.log.length, 30);
-});
-
-test('the practice colour defaults to random, and only w, b or r are accepted', () => {
-  assert.equal(defaults().settings.colour, 'r');
-  const old = { ...defaults() };
-  old.settings = { ...old.settings };
-  delete old.settings.colour;
-  assert.equal(migrate(old).settings.colour, 'r');
-  assert.equal(validate({ ...defaults(), settings: { ...defaults().settings, colour: 'x' } }), 'settings');
+test('date keys are local calendar days', () => {
+  assert.equal(dateKey(new Date(2026, 0, 5, 23, 59)), '2026-01-05');
 });

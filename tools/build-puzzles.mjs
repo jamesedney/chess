@@ -9,8 +9,8 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { Chess } from '../vendor/chess.js';
 import { analyseLine, explainLine } from '../src/tagger.js';
-import { primaryTheme, displayTags } from '../src/themes.js';
-import { estimateRating } from '../src/difficulty.js';
+import { primaryTheme, displayTags } from './themes.mjs';
+import { estimateRating } from './difficulty.mjs';
 import { playUci } from '../src/chess-utils.js';
 
 const DATA = new URL('./data/', import.meta.url);

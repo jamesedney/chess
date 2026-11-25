@@ -15,6 +15,8 @@ export default defineConfig({
     baseURL: `http://localhost:${PORT}/rankup-chess/`,
     serviceWorkers: 'block',
     trace: 'retain-on-failure',
+    // PW_CHROMIUM points at a Chromium already on the machine, for places that cannot download Playwright's own.
+    ...(process.env.PW_CHROMIUM ? { launchOptions: { executablePath: process.env.PW_CHROMIUM } } : {}),
   },
   webServer: {
     // Serve the staged site, the exact files GitHub Pages publishes, so a file

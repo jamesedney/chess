@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { schedule, choosePuzzle, isDue, themeStats, DAY, RETRY_MS } from '../../src/srs.js';
-import { expectedScore, kFactor, updateRating, pushHistory, weakestTheme } from '../../src/rating.js';
+import { schedule, nextPosition, ownCounts, isDue, DAY, RETRY_MS } from '../../src/srs.js';
+import { expectedScore, kFactor, updateRating, pushHistory } from '../../src/rating.js';
 
 const NOW = Date.UTC(2026, 9, 7, 12);
 
@@ -23,50 +23,52 @@ test('errors and hints reset to a ten-minute retry', () => {
   assert.ok(isDue(r, NOW + RETRY_MS));
 });
 
-const puzzle = (id, rating, theme = 'Tactics') => ({ id, rating, theme });
-const pool = [
-  puzzle('a', 800),
-  puzzle('b', 1000),
-  puzzle('c', 1600),
-  puzzle('d', 1010, 'Endgames'),
-  { id: 'm1', theme: 'Personal mistakes' },
+const puzzles = [
+  { id: 'a', rating: 800 },
+  { id: 'b', rating: 1000 },
+  { id: 'c', rating: 1600 },
+  { id: 'd', rating: 1040 },
 ];
-const fixed = () => 0;
+const mistakes = [{ id: 'm2' }, { id: 'm1' }, { id: 'm0', archived: true }];
+const first = () => 0;
+const pick = (extra = {}) => nextPosition({ mistakes, puzzles, records: {}, rating: 1000, now: NOW, rng: first, ...extra });
 
-test('due personal mistakes come first', () => {
-  const records = { b: { tries: 1, due: NOW - 5, box: 0 }, m1: { tries: 1, due: NOW - 1, box: 0 } };
-  assert.equal(choosePuzzle({ puzzles: pool, records, target: 1000, now: NOW, rng: fixed }).id, 'm1');
+test('two of every three positions come from your own games while any are waiting, newest first', () => {
+  assert.deepEqual(pick({ turn: 0 }), { position: mistakes[0], own: true });
+  assert.equal(pick({ turn: 1, seen: ['m2'] }).position.id, 'm1');
+  assert.deepEqual(pick({ turn: 2 }), { position: puzzles[1], own: false });
+  assert.equal(pick({ turn: 3 }).own, true);
+  // A position set aside is never served; with none of yours left, puzzles fill every turn.
+  assert.equal(pick({ turn: 0, seen: ['m2', 'm1'] }).position.id, 'b');
+  assert.equal(pick({ mistakes: [], turn: 0 }).own, false);
+  // On a puzzle turn with no puzzle left to serve, one of yours is served instead.
+  assert.equal(pick({ puzzles: [], turn: 2 }).position.id, 'm2');
+  assert.equal(pick({ puzzles: [], mistakes: [] }), null);
 });
 
-test('new mistakes come before new puzzles some of the time', () => {
-  assert.equal(choosePuzzle({ puzzles: pool, records: {}, target: 1000, now: NOW, rng: () => 0.1 }).id, 'm1');
-  assert.notEqual(choosePuzzle({ puzzles: pool, records: {}, target: 1000, now: NOW, rng: () => 0.9 }).id, 'm1');
+test('a position of yours due again comes before one never tried', () => {
+  const records = {
+    m1: { tries: 1, clean: 0, box: 0, due: NOW - 5, last: 0 },
+    m2: { tries: 1, clean: 1, box: 1, due: NOW + DAY, last: 0 },
+  };
+  assert.equal(pick({ records }).position.id, 'm1');
+  // Solved and not yet due: nothing of yours is waiting, so a puzzle is served.
+  const done = { ...records, m1: { tries: 2, clean: 1, box: 1, due: NOW + DAY, last: 0 } };
+  assert.equal(pick({ records: done }).own, false);
+  assert.deepEqual(ownCounts(mistakes, records, NOW), { waiting: 1, solved: 1 });
+  assert.deepEqual(ownCounts(mistakes, {}, NOW), { waiting: 2, solved: 0 });
 });
 
-test('new puzzles are picked near the target rating', () => {
-  const records = { m1: { tries: 1, due: NOW + DAY, box: 1 } };
-  const picked = choosePuzzle({ puzzles: pool, records, target: 1550, now: NOW, rng: fixed });
-  assert.equal(picked.id, 'c');
-});
-
-test('the weakest theme is favoured', () => {
-  const records = { m1: { tries: 1, due: NOW + DAY, box: 1 } };
-  const picked = choosePuzzle({ puzzles: pool, records, target: 1000, weakTheme: 'Endgames', now: NOW, rng: () => 0.2 });
-  assert.equal(picked.id, 'd');
-});
-
-test('mistake mode, seen list and archived positions', () => {
-  assert.equal(choosePuzzle({ puzzles: pool, records: {}, mode: 'mistakes', now: NOW }).id, 'm1');
-  assert.equal(choosePuzzle({ puzzles: [{ ...pool[4], archived: true }], records: {}, mode: 'mistakes', now: NOW }), null);
-  const picked = choosePuzzle({ puzzles: pool.slice(0, 2), records: {}, seen: ['b'], target: 1000, now: NOW, rng: fixed });
-  assert.equal(picked.id, 'a');
-});
-
-test('theme recall counts attempted positions only', () => {
-  const stats = themeStats(pool, { a: { tries: 1, clean: 1, box: 3 }, b: { tries: 1, clean: 0, box: 0 } });
-  assert.equal(stats.Tactics.attempted, 2);
-  assert.equal(stats.Tactics.recall, 50);
-  assert.equal(stats.Endgames.recall, 0);
+test('puzzles: one due again first, else a new one near your rating, else the one seen longest ago', () => {
+  const solo = (extra = {}) => pick({ mistakes: [], ...extra });
+  assert.equal(solo().position.id, 'b', 'within 75 of 1000');
+  assert.equal(solo({ rng: () => 0.99 }).position.id, 'd', 'the band is drawn from at random');
+  assert.equal(solo({ rating: 1500 }).position.id, 'c');
+  assert.equal(solo({ seen: ['b', 'd'] }).position.id, 'a', 'the band widens when the near ones were just seen');
+  const tried = (due, last) => ({ tries: 1, clean: 1, box: 1, due, last });
+  assert.equal(solo({ records: { c: tried(NOW - 1, 0) } }).position.id, 'c', 'due again');
+  const all = { a: tried(NOW + DAY, 30), b: tried(NOW + DAY, 10), c: tried(NOW + DAY, 20), d: tried(NOW + DAY, 40) };
+  assert.equal(solo({ records: all }).position.id, 'b', 'every puzzle tried and none due');
 });
 
 test('rating updates follow the Elo expectation', () => {
@@ -87,9 +89,4 @@ test('rating history keeps one entry per day', () => {
     { date: '2026-10-06', rating: 1000 },
     { date: '2026-10-07', rating: 1030 },
   ]);
-});
-
-test('weakest theme needs enough attempts', () => {
-  assert.equal(weakestTheme({ Tactics: { rating: 900, count: 2 }, Endgames: { rating: 1100, count: 5 } }), 'Endgames');
-  assert.equal(weakestTheme({}), null);
 });

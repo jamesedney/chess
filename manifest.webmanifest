@@ -2,8 +2,8 @@
   "id": "./",
   "name": "Rankup — Chess Training",
   "short_name": "Rankup",
-  "description": "A guided training plan that takes your chess rating where you want it.",
-  "start_url": "./#today",
+  "description": "A chess trainer built from your own games: one position at a time.",
+  "start_url": "./#train",
   "scope": "./",
   "display": "standalone",
   "background_color": "#262421",
@@ -15,7 +15,7 @@
     { "src": "./icons/icon-maskable-512-bw.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "Today’s session", "url": "./#today" },
-    { "name": "Review a game", "url": "./#review" }
+    { "name": "Train", "url": "./#train" },
+    { "name": "Play Nemesis", "url": "./#play" }
   ]
 }

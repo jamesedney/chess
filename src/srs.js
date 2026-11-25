@@ -26,90 +26,52 @@ export function schedule(record, clean, now) {
   return r;
 }
 
-/** Per-theme recall: how far attempted positions have climbed the boxes. */
-export function themeStats(puzzles, records) {
-  const stats = {};
-  for (const p of puzzles) {
-    const s = (stats[p.theme] ||= { total: 0, attempted: 0, clean: 0, recallSum: 0 });
-    s.total++;
-    const r = records[p.id];
-    if (r?.tries) {
-      s.attempted++;
-      s.clean += r.clean > 0 ? 1 : 0;
-      s.recallSum += Math.min(r.box, 3) / 3;
-    }
-  }
-  for (const s of Object.values(stats)) s.recall = s.attempted ? Math.round((s.recallSum / s.attempted) * 100) : 0;
-  return stats;
-}
-
-export function dueCount(puzzles, records, now) {
-  return puzzles.filter(p => isDue(records[p.id], now)).length;
-}
-
 /**
- * Choose the next position.
- * Order: due reviews (personal mistakes first) → untried personal mistakes →
- * new puzzles near the target rating (preferring focus tags, else sometimes the weakest theme) →
- * extra practice: the least cleanly solved, least recently seen positions.
+ * Choose the next position to train. While positions from your own games are
+ * waiting (due again, or never tried), two of every three come from them and
+ * the third is a puzzle; `turn` counts positions served this sitting.
+ * Puzzles: one due for another look first, else a new one near your rating,
+ * else the one seen longest ago. `seen` holds ids already served this sitting,
+ * so a position missed a moment ago is not asked again at once.
+ * Returns { position, own } or null when there is nothing at all.
  */
-export function choosePuzzle({
-  puzzles,
-  records,
-  mode = 'daily',
-  theme = null,
-  seen = [],
-  target = 1000,
-  weakTheme = null,
-  focusTags = [],
-  strictTags = false,
-  dueOnly = false,
-  now = Date.now(),
-  rng = Math.random,
-}) {
-  let pool = puzzles.filter(p => !p.archived && (!theme || p.theme === theme) && (mode !== 'mistakes' || isMistake(p)));
-  // A skill block trains one skill: only puzzles with its tags, when there are any.
-  if (strictTags && focusTags.length) {
-    const tagged = pool.filter(p => (p.tags || []).some(t => focusTags.includes(t)));
-    if (tagged.length) pool = tagged;
-  }
-  if (dueOnly) pool = pool.filter(p => isDue(records[p.id], now));
-  if (!pool.length) return null;
-  const unseen = pool.filter(p => !seen.includes(p.id));
-  if (unseen.length) pool = unseen;
+export function nextPosition({ mistakes, puzzles, records, rating, turn = 0, seen = [], now = Date.now(), rng = Math.random }) {
+  const skip = new Set(seen);
   const rec = p => records[p.id];
-  // Extra practice when nothing is due: the positions solved cleanly fewest
-  // times, then the least recently seen, with a little variety so consecutive
-  // sessions do not replay the same order.
-  const leastRecent = list => {
-    const ranked = [...list].sort(
-      (a, b) => (rec(a)?.clean || 0) - (rec(b)?.clean || 0) || (rec(a)?.last || 0) - (rec(b)?.last || 0) || a.id.localeCompare(b.id),
-    );
-    const top = ranked.slice(0, Math.min(3, ranked.length));
-    return top[Math.floor(rng() * top.length)];
-  };
+  const mine = mistakes.filter(m => !m.archived && !skip.has(m.id));
+  const ownDue = mine.filter(m => isDue(rec(m), now)).sort((a, b) => rec(a).due - rec(b).due);
+  const own = ownDue[0] || mine.find(m => !rec(m)?.tries) || null;
 
-  const due = pool.filter(p => isDue(rec(p), now));
-  if (due.length) return due.sort((a, b) => isMistake(b) - isMistake(a) || rec(a).due - rec(b).due)[0];
-
-  const newMistakes = pool.filter(p => isMistake(p) && !rec(p)?.tries);
-  if (newMistakes.length && (mode === 'mistakes' || rng() < 0.5)) return newMistakes[0];
-  if (mode === 'mistakes') return leastRecent(pool);
-
-  let fresh = pool.filter(p => !isMistake(p) && !rec(p)?.tries);
-  if (fresh.length) {
-    // Tactics you missed in your own games come first; otherwise your weakest theme sometimes.
-    if (focusTags.length && !strictTags && rng() < 0.6) {
-      const focused = fresh.filter(p => (p.tags || []).some(t => focusTags.includes(t)));
-      if (focused.length) fresh = focused;
-    } else if (!theme && weakTheme && rng() < 0.35) {
-      const weak = fresh.filter(p => p.theme === weakTheme);
-      if (weak.length) fresh = weak;
-    }
-    for (const width of [100, 200, 350, 600, Infinity]) {
-      const near = fresh.filter(p => Math.abs((p.rating || 1000) - target) <= width);
-      if (near.length) return near[Math.floor(rng() * near.length)];
+  const pool = puzzles.filter(p => !skip.has(p.id));
+  const puzzleDue = pool.filter(p => isDue(rec(p), now)).sort((a, b) => rec(a).due - rec(b).due);
+  let puzzle = puzzleDue[0] || null;
+  if (!puzzle) {
+    const fresh = pool.filter(p => !rec(p)?.tries);
+    for (const width of [75, 150, 300, 600, Infinity]) {
+      const near = fresh.filter(p => Math.abs((p.rating || rating) - rating) <= width);
+      if (near.length) {
+        puzzle = near[Math.floor(rng() * near.length)];
+        break;
+      }
     }
   }
-  return leastRecent(pool);
+  // Every puzzle tried and none due: the one seen longest ago.
+  if (!puzzle && pool.length) puzzle = [...pool].sort((a, b) => (rec(a)?.last || 0) - (rec(b)?.last || 0))[0];
+
+  const wantOwn = turn % 3 !== 2;
+  const position = wantOwn ? own || puzzle : puzzle || own;
+  return position ? { position, own: isMistake(position) } : null;
+}
+
+/** Positions from your games still to fix (never solved cleanly, or due again) and those solved. */
+export function ownCounts(mistakes, records, now = Date.now()) {
+  let waiting = 0;
+  let solved = 0;
+  for (const m of mistakes) {
+    if (m.archived) continue;
+    const r = records[m.id];
+    if (r?.clean && !isDue(r, now)) solved++;
+    else waiting++;
+  }
+  return { waiting, solved };
 }

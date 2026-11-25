@@ -1,27 +1,18 @@
-// Game analysis shared by the Review page and the background import queue.
-// Produces a review record: evaluations per ply, marked moves and saved
-// personal mistakes. When the PGN carries Lichess [%eval] comments, those
-// evaluations are used and Stockfish only looks at the marked moves.
+// Reading one of your games for mistakes, in the background. Every move of
+// yours that threw away a clearly better one becomes a position to train.
+// When the PGN carries Lichess [%eval] comments those evaluations are used and
+// Stockfish only looks at the moves that lost ground; otherwise Stockfish
+// looks at every move of yours.
 import { Chess } from '../vendor/chess.js';
 import { engine, BUDGET } from './engine.js';
-import { app } from './app-context.js';
-import { loadGame, describeGame, readHeaders } from './pgn.js';
-import { moveToUci, playUci, opposite } from './chess-utils.js';
-import { whitePov, winPercentLoss, classifyLoss, isTrainableMistake } from './evaluation.js';
+import { loadGame, describeGame } from './pgn.js';
+import { moveToUci, opposite } from './chess-utils.js';
+import { winPercentLoss, classifyLoss, isTrainableMistake } from './evaluation.js';
 import { createMistake } from './mistakes.js';
-import { readClocks, parseTimeControl } from './clocks.js';
-import { identifyOpening } from './openings.js';
-import { MAX_REVIEWS } from './state.js';
-import { gameKey } from './sync.js';
 
 export const MAX_PLIES = 200;
 export const MATE_EVAL = 10000;
 const clampEval = v => Math.max(-MATE_EVAL, Math.min(MATE_EVAL, Math.round(v)));
-
-/** The key that identifies a game however it was imported. */
-export function reviewKey(colour, moves) {
-  return colour + ':' + (moves[0]?.before || '') + ':' + moves.map(m => m.san).join(' ');
-}
 
 /**
  * Lichess-style evaluations from PGN comments: one per move, from White's
@@ -41,66 +32,35 @@ export function readEvals(pgn, moveCount) {
 }
 
 /** Score for the side to move from a White-point-of-view evaluation. */
-function toMover(evalWhite, turn) {
-  return turn === 'w' ? evalWhite : -evalWhite;
+const toMover = (evalWhite, turn) => (turn === 'w' ? evalWhite : -evalWhite);
+
+/** Where a position came from, for the line above the board: the opponent and the day. */
+export function gameInfo(pgn, colour) {
+  const d = describeGame(pgn);
+  return { opp: colour === 'w' ? d.black : d.white, date: /^\d{4}-\d{2}-\d{2}$/.test(d.date) ? d.date : '' };
 }
 
 /**
- * Analyse one game. Options:
- *   colour: 'w' | 'b', the side the user played
+ * Read one game. Options:
+ *   colour: 'w' | 'b', the side you played
  *   onProgress(text): status updates
  *   isCancelled(): return true to stop early
- *   background: yield to anything the user is waiting for
- *   playedAt: when the game was played (ms), for a game reviewed later than
- *     that; `created` is the game's time, so every window by date sees it
- *     where it was played
- * Resolves with { review, found, duplicate } where duplicate is an existing
- * complete review of the same game, or rejects with a user-facing Error.
+ *   background: yield to anything you are waiting for
+ * Resolves with { found, complete }: how many new positions were saved, and
+ * whether the whole game was read. Rejects with a user-facing Error when the
+ * PGN cannot be read.
  */
 export async function analyseGame(
   pgn,
-  /** @type {{ colour: string, onProgress?: (text: string) => void, isCancelled?: () => boolean, background?: boolean, playedAt?: number | null }} */
-  { colour, onProgress = () => {}, isCancelled = () => false, background = false, playedAt = null },
+  /** @type {{ colour: string, onProgress?: (text: string) => void, isCancelled?: () => boolean, background?: boolean }} */
+  { colour, onProgress = () => {}, isCancelled = () => false, background = false },
 ) {
-  const game = loadGame(pgn);
-  const moves = game.history({ verbose: true });
+  const moves = loadGame(pgn).history({ verbose: true });
   const limit = Math.min(moves.length, MAX_PLIES);
-  const key = reviewKey(colour, moves);
-  const duplicate = app.state.reviews.find(r => r.key === key && r.complete);
-  if (duplicate) return { review: duplicate, found: 0, duplicate: true };
-  const d = describeGame(pgn);
-  const headers = readHeaders(pgn);
-  const fens = [moves[0].before, ...moves.map(m => m.after)];
-  const tc = parseTimeControl(headers.TimeControl);
-  const clocks = tc ? readClocks(pgn, moves.length) : null;
+  const game = gameInfo(pgn, colour);
   const given = readEvals(pgn, moves.length);
-  const review = {
-    id: 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
-    key,
-    gameKey: gameKey(pgn), // links the review to its ledger row
-    created: playedAt && playedAt <= Date.now() ? playedAt : Date.now(),
-    white: d.white,
-    black: d.black,
-    result: d.result,
-    date: d.date,
-    event: d.event,
-    site: headers.Site || '',
-    colour,
-    startFen: moves[0].before,
-    moves: moves.slice(0, limit).map(m => m.san),
-    evals: new Array(limit + 1).fill(null),
-    marks: [],
-    complete: false,
-    opening: identifyOpening(fens),
-    // The opponent's rating, so Play it again can match their strength.
-    ...(Number(headers[colour === 'w' ? 'BlackElo' : 'WhiteElo']) > 0
-      ? { oppElo: Number(headers[colour === 'w' ? 'BlackElo' : 'WhiteElo']) }
-      : {}),
-    ...(clocks ? { clocks: clocks.slice(0, limit), tc } : {}),
-    ...(given ? { source: 'lichess-evals' } : {}),
-  };
-  const truncated = moves.length > MAX_PLIES ? ` Only the first ${MAX_PLIES} half-moves are analysed.` : '';
   let found = 0;
+  let complete = true;
   const search = async fen => {
     for (;;) {
       const r = await engine.analyse(fen, { nodes: BUDGET.review, background });
@@ -108,108 +68,63 @@ export async function analyseGame(
       if (isCancelled()) return null;
     }
   };
+  /** Save the position before move i when the move threw away enough; `before` and `after` are engine results. */
+  const save = (m, before, after, loss) => {
+    const saved = createMistake({ fen: m.before, played: m.san, before, after, loss, game });
+    if (saved?.created) found++;
+  };
 
-  if (given) {
-    // Evaluations are known: find the losses, then ask Stockfish only about those moments.
-    // given[i] is the evaluation after move i; no evaluation precedes the first move,
-    // so the position before it borrows the first move's, which is never a mistake anyway.
-    review.evals[0] = given.length ? given[0] : 0;
-    for (let i = 0; i < limit; i++) review.evals[i + 1] = given[i] ?? review.evals[i];
-    for (let i = 0; i < limit; i++) {
-      const m = moves[i];
-      if (m.color !== colour || isCancelled()) continue;
-      const before = review.evals[i];
-      const after = review.evals[i + 1];
-      if (before === null || after === null) continue;
-      const loss = winPercentLoss(toMover(before, m.color), toMover(after, opposite(m.color)));
-      const cls = classifyLoss(loss);
-      if (cls === 'good') continue;
-      onProgress(`Checking move ${Math.floor(i / 2) + 1} with Stockfish · ${found} saved.${truncated}`);
-      const sf = await search(m.before);
-      if (!sf) break;
-      if (!sf.best || sf.best === moveToUci(m)) continue;
-      const mark = { ply: i, cls, loss: Math.round(loss), best: sf.best, bestSan: playUci(new Chess(m.before), sf.best).san, refute: null };
-      const afterGame = new Chess(m.after);
-      if (isTrainableMistake(toMover(before, m.color), toMover(after, opposite(m.color)))) {
-        const afterSf = afterGame.isGameOver() ? null : await search(m.after);
-        if (afterSf === null && !afterGame.isGameOver()) break;
-        // The opponent's punishment, for the Safe or hanging? drill.
-        mark.refute = afterSf?.best ?? null;
-        const mistake = createMistake({
-          fen: m.before,
-          played: m.san,
-          before: sf,
-          after: afterSf,
-          loss,
-          source: { reviewId: review.id, ply: i },
-        })?.mistake;
-        if (mistake) {
-          mark.mistakeId = mistake.id;
-          mark.explanation = mistake.explanation;
-          found++;
-        }
-      }
-      review.marks.push(mark);
+  for (let i = 0; i < limit; i++) {
+    const m = moves[i];
+    if (m.color !== colour) continue;
+    if (isCancelled()) {
+      complete = false;
+      break;
     }
-  } else {
-    for (let i = 0; i < limit; i++) {
-      if (isCancelled()) break;
-      const m = moves[i];
-      if (m.color !== colour) continue;
-      onProgress(`Analysing move ${Math.floor(i / 2) + 1} of ${Math.ceil(limit / 2)} · ${found} saved.${truncated}`);
+    onProgress(`Move ${Math.floor(i / 2) + 1} of ${Math.ceil(limit / 2)}`);
+    if (given) {
+      // Evaluations are known: given[i] is the evaluation after move i. No evaluation
+      // precedes the first move, which is never a mistake anyway.
+      if (i === 0) continue;
+      const evalBefore = given[i - 1];
+      const evalAfter = given[i] ?? evalBefore;
+      const scoreBefore = toMover(evalBefore, m.color);
+      const scoreAfter = toMover(evalAfter, opposite(m.color));
+      if (classifyLoss(winPercentLoss(scoreBefore, scoreAfter)) === 'good') continue;
+      if (!isTrainableMistake(scoreBefore, scoreAfter)) continue;
       const before = await search(m.before);
-      if (!before) break;
-      review.evals[i] = clampEval(whitePov(before.score, m.color));
-      if (moveToUci(m) === before.best) {
-        review.evals[i + 1] = review.evals[i];
-        continue;
+      if (!before) {
+        complete = false;
+        break;
       }
+      if (!before.best || before.best === moveToUci(m)) continue;
       const afterGame = new Chess(m.after);
-      let after;
-      if (afterGame.isCheckmate()) {
-        review.evals[i + 1] = m.color === 'w' ? MATE_EVAL : -MATE_EVAL;
-        continue;
-      } else if (afterGame.isDraw()) {
-        after = { score: 0, mate: null, pv: [], best: null };
-      } else {
-        after = await search(m.after);
-        if (!after) break;
+      const after = afterGame.isGameOver() ? null : await search(m.after);
+      if (!after && !afterGame.isGameOver()) {
+        complete = false;
+        break;
       }
-      review.evals[i + 1] = clampEval(whitePov(after.score, opposite(m.color)));
-      const loss = winPercentLoss(before.score, after.score);
-      const cls = classifyLoss(loss);
-      if (cls === 'good') continue;
-      const mark = {
-        ply: i,
-        cls,
-        loss: Math.round(loss),
-        best: before.best,
-        bestSan: playUci(new Chess(m.before), before.best).san,
-        refute: after.best ?? null, // the opponent's punishment, for the Safe or hanging? drill
-      };
-      if (isTrainableMistake(before.score, after.score)) {
-        const mistake = createMistake({
-          fen: m.before,
-          played: m.san,
-          before,
-          after,
-          loss,
-          source: { reviewId: review.id, ply: i },
-        })?.mistake;
-        if (mistake) {
-          mark.mistakeId = mistake.id;
-          mark.explanation = mistake.explanation;
-          found++;
-        }
-      }
-      review.marks.push(mark);
+      save(m, before, after, winPercentLoss(scoreBefore, scoreAfter));
+      continue;
     }
+    const before = await search(m.before);
+    if (!before) {
+      complete = false;
+      break;
+    }
+    if (moveToUci(m) === before.best) continue;
+    const afterGame = new Chess(m.after);
+    if (afterGame.isCheckmate()) continue;
+    let after;
+    if (afterGame.isDraw()) after = { score: 0, mate: null, pv: [], best: null };
+    else {
+      after = await search(m.after);
+      if (!after) {
+        complete = false;
+        break;
+      }
+    }
+    if (isTrainableMistake(before.score, after.score)) save(m, before, after, winPercentLoss(before.score, after.score));
   }
-  review.complete = !isCancelled();
-  // Newest game first, whatever order they were reviewed in; past the limit the oldest games go.
-  app.state.reviews = [review, ...app.state.reviews.filter(r => r.key !== key)]
-    .sort((a, b) => (b.created || 0) - (a.created || 0))
-    .slice(0, MAX_REVIEWS);
-  app.save();
-  return { review, found, duplicate: false };
+  return { found, complete };
 }

@@ -85,15 +85,17 @@ export function trapIn(fen, lines, replies) {
  * in a position. Each candidate costs one analysis and one prediction of the
  * position after it. The move is the candidate whose trap is worth most
  * (probability times loss) among those within TRAP_COST of the best
- * candidate, else the likeliest candidate. Resolves with { uci, trap, cost,
- * considered }, or null once `alive()` says the answer is no longer wanted.
+ * candidate; with no trap in reach it plays as a person would, one of the
+ * candidates drawn by how likely each is (`rng`), so no two games open the
+ * same way. Resolves with { uci, trap, cost, considered }, or null once
+ * `alive()` says the answer is no longer wanted.
  */
 export async function nemesisMove(
   fen,
   candidates,
   analyse,
   predict,
-  { nodes = NODES, alive = /** @type {() => boolean} */ (() => true) } = {},
+  { nodes = NODES, alive = /** @type {() => boolean} */ (() => true), rng = Math.random } = {},
 ) {
   const judged = [];
   for (const c of candidates.slice(0, MAX_CANDIDATES)) {
@@ -106,14 +108,14 @@ export async function nemesisMove(
       continue;
     }
     if (after.isGameOver()) {
-      judged.push({ uci: c.uci, ours: after.isCheckmate() ? 10000 : 0, trap: null });
+      judged.push({ uci: c.uci, p: c.p, ours: after.isCheckmate() ? 10000 : 0, trap: null });
       continue;
     }
     const r = await analyse(after.fen(), { multipv: REPLY_LINES, nodes });
     const lines = r.lines?.length ? r.lines : [r];
     const replies = await predict(after.fen());
     // The top line is your best reply, from your side; Nemesis's view is the opposite.
-    judged.push({ uci: c.uci, ours: -cp(lines[0]), trap: trapIn(after.fen(), lines, replies) });
+    judged.push({ uci: c.uci, p: c.p, ours: -cp(lines[0]), trap: trapIn(after.fen(), lines, replies) });
   }
   if (!alive()) return null;
   if (!judged.length) {
@@ -123,28 +125,25 @@ export async function nemesisMove(
   const top = Math.max(...judged.map(j => j.ours));
   const worth = j => j.trap.p * j.trap.loss;
   const set = judged.filter(j => j.trap && top - j.ours <= TRAP_COST).sort((a, b) => worth(b) - worth(a))[0];
-  const pick = set || judged[0];
+  const pick = set || judged.find(j => j.ours >= 9000) || drawn(judged, rng);
   return { uci: pick.uci, trap: pick.trap, cost: top - pick.ours, considered: judged.length };
 }
 
-/** "Re8 would have lost a rook; Nf6 was the move." for a trap, from its loss in centipawns. */
-export function trapText(trap) {
-  const what =
-    trap.loss >= 9000
-      ? 'the game'
-      : trap.loss >= 800
-        ? 'the queen'
-        : trap.loss >= 450
-          ? 'a rook'
-          : trap.loss >= 250
-            ? 'a piece'
-            : 'material';
-  return `${trap.san} would have lost ${what}${trap.best ? `; ${trap.best} was the move` : ''}.`;
+/** One of the judged candidates, drawn by probability. */
+function drawn(judged, rng) {
+  const total = judged.reduce((a, j) => a + (j.p || 0), 0);
+  if (!(total > 0)) return judged[0];
+  let x = rng() * total;
+  for (const j of judged) if ((x -= j.p || 0) < 0) return j;
+  return judged[judged.length - 1];
 }
 
-/** "Traps 5, taken 2." over a game's [{ taken }], or '' with none. */
-export function trapTally(traps) {
-  const set = traps.length;
-  if (!set) return '';
-  return `Traps ${set}, taken ${traps.filter(t => t.taken).length}.`;
+/** What a trap costs, in words, from its loss in centipawns. */
+export function trapWhat(loss) {
+  return loss >= 9000 ? 'the game' : loss >= 800 ? 'the queen' : loss >= 450 ? 'a rook' : loss >= 250 ? 'a piece' : 'material';
+}
+
+/** "Re8 would have lost a rook; Nf6 was the move." for a trap. */
+export function trapText(trap) {
+  return `${trap.san} would have lost ${trapWhat(trap.loss)}${trap.best ? `; ${trap.best} was the move` : ''}.`;
 }

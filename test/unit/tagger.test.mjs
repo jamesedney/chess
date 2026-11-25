@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { analyseLine, explainLine, explainMistake } from '../../src/tagger.js';
 import { hangingPieces } from '../../src/chess-utils.js';
 import { Chess } from '../../vendor/chess.js';
-import { primaryTheme, hintForTags, displayTags } from '../../src/themes.js';
-import { estimateRating } from '../../src/difficulty.js';
+import { primaryTheme, hintForTags, displayTags } from '../../tools/themes.mjs';
+import { estimateRating } from '../../tools/difficulty.mjs';
 
 test('knight fork', () => {
   const { tags } = analyseLine('3q3k/6pp/8/4N3/8/8/6PP/R5K1 w - - 0 1', ['e5f7', 'h8g8', 'f7d8']);
